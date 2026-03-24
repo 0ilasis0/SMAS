@@ -32,6 +32,11 @@ class XGBTrainer:
         """
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
 
+        if len(df_clean) <= n_splits:
+            dbg.error(f"資料量不足！目前可用樣本僅 {len(X)} 筆，不足以支撐 {n_splits} 折交叉驗證。")
+            dbg.error("請增加資料抓取範圍，或縮短特徵計算所需的週期（如 MA_YEAR）。")
+            return pd.Series(dtype=float)
+
         dbg.log(f"開始執行 XGBoost TimeSeriesSplit 交叉驗證 (Fold={n_splits})...")
 
         # 切分特徵 (X) 與標籤 (y)

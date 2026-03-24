@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 from data.variable import StockCol
 from debug import dbg
@@ -14,13 +15,20 @@ class XGBFeatureEngine:
 
     def process_pipeline(self, df: pd.DataFrame, lookahead: int) -> pd.DataFrame:
         """執行完整的 XGBoost 特徵管線"""
+        if df.empty:
+            dbg.war("輸入的 DataFrame 為空，跳過特徵工程。")
+            return df
+
         dbg.log("開始計算 XGBoost 技術特徵與標籤...")
 
         df_features = self._create_daily_features(df)
         df_labeled = self._create_labels(df_features, lookahead)
 
+        features = FeatureCol.get_features()
         initial_len = len(df_labeled)
-        df_clean = df_labeled.dropna()
+
+        df_labeled = df_labeled.replace([np.inf, -np.inf], np.nan)
+        df_clean = df_labeled.dropna(subset=features + [FeatureCol.TARGET])
         final_len = len(df_clean)
 
         dbg.log(f"特徵工程完成。移除了 {initial_len - final_len} 筆含 NaN 的無效資料，剩餘 {final_len} 筆可用樣本。")
@@ -33,10 +41,10 @@ class XGBFeatureEngine:
         data = df.copy()
 
         #  移動平均線
-        data[FeatureCol.MA_WEEK] = data[StockCol.CLOSE].rolling(window=self.params.MA_WEEK).mean()
-        data[FeatureCol.MA_MONTH] = data[StockCol.CLOSE].rolling(window=self.params.MA_MONTH).mean()
-        data[FeatureCol.MA_QUARTER] = data[StockCol.CLOSE].rolling(window=self.params.MA_QUARTER).mean()
-        data[FeatureCol.MA_YEAR] = data[StockCol.CLOSE].rolling(window=self.params.MA_YEAR).mean()
+        data[FeatureCol.MA_WEEK] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_WEEK).mean()
+        data[FeatureCol.MA_MONTH] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_MONTH).mean()
+        data[FeatureCol.MA_QUARTER] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_QUARTER).mean()
+        data[FeatureCol.MA_YEAR] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_YEAR).mean()
 
         # RSI (相對強弱指標)
         delta = data[StockCol.CLOSE].diff()

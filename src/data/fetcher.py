@@ -1,5 +1,4 @@
 import time
-from enum import IntEnum
 
 import pandas as pd
 import yfinance as yf
@@ -12,19 +11,18 @@ class Fetcher:
 
     DAILY_INDEX = StockCol.DATE
     INTRADAY_INDEX = 'Datetime'
-    CATALOG = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE, StockCol.VOLUME]
 
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 2
 
-    def fetch_daily_data(self, ticker_symbol: str, period_length: int, unit: str = TimeUnit.YEAR) -> pd.DataFrame:
+    def fetch_daily_data(self, ticker_symbol: str, period: int, unit: str = TimeUnit.YEAR) -> pd.DataFrame:
         """
         抓取指定標的的中長期日 K 線歷史資料。
         """
         if unit == TimeUnit.YEAR:
-            valid_period = MathTool.clamp(period_length, 1, DataLimit.DAILY_MAX_YEAR)
+            valid_period = MathTool.clamp(period, 1, DataLimit.DAILY_MAX_YEAR)
         elif unit == TimeUnit.MONTH:
-            valid_period = MathTool.clamp(period_length, 1, DataLimit.DAILY_MAX_MONTH)
+            valid_period = MathTool.clamp(period, 1, DataLimit.DAILY_MAX_MONTH)
         else:
             dbg.war("時間單位輸入錯誤")
             return pd.DataFrame()
@@ -36,7 +34,8 @@ class Fetcher:
             dbg.war(f"抓取失敗或無資料: {ticker_symbol}")
             return pd.DataFrame()
 
-        df = df[self.CATALOG]
+        df.columns = df.columns.str.lower()
+        df = df[StockCol.get_ohlcv()]
         df.index.name = self.DAILY_INDEX
 
         return df
@@ -54,7 +53,8 @@ class Fetcher:
             dbg.war("抓取失敗或無資料")
             return pd.DataFrame()
 
-        df = df[self.CATALOG]
+        df.columns = df.columns.str.lower()
+        df = df[StockCol.get_ohlcv()]
         df.index.name = self.INTRADAY_INDEX
 
         return df

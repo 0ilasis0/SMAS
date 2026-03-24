@@ -18,11 +18,11 @@ class YfInterval(StrEnum):
     INTRADAY_5M = "5m"
 
 class StockCol(StrEnum):
-    OPEN = "Open"
-    HIGH = "High"
-    LOW = "Low"
-    CLOSE = "Close"
-    VOLUME = "Volume"
+    OPEN = "open"
+    HIGH = "high"
+    LOW = "low"
+    CLOSE = "close"
+    VOLUME = "volume"
     TICKER = "ticker"
     DATE = "date"
 
