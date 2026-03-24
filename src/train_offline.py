@@ -6,6 +6,8 @@ from debug import dbg
 from ml.xgb_features import XGBFeatureEngine
 from ml.xgb_trainer import XGBTrainer
 
+from path import PathConfig
+
 if __name__ == "__main__":
     ticker = "0052.TW"
     db = DataManager()
@@ -31,13 +33,26 @@ if __name__ == "__main__":
 
     # --- 第三步：特徵工程與訓練 ---
     if not df_raw.empty:
-        # 特徵工程 (波段模式通常使用日 K)
+        # 特徵工程
         engine = XGBFeatureEngine()
         df_clean = engine.process_pipeline(df_raw, lookahead=20)
 
-        # 訓練與驗證
+        # 訓練與驗證，並用變數接住 OOF 預測結果
         trainer = XGBTrainer()
-        trainer.train_with_cv(df_clean, n_splits=5)
+        oof_preds = trainer.train_with_cv(df_clean, n_splits=5)
+
+        # 將預測結果與真實股價結合，進行初步分析
+        if not oof_preds.empty:
+            # 將機率序列新增為 df_clean 的一個新欄位
+            df_clean['predict_proba'] = oof_preds
+
+            # 找出那些 AI 極度有信心會漲的日子 (機率 > 0.7)
+            strong_buy_signals = df_clean[df_clean['predict_proba'] > 0.7]
+
+            dbg.log(f"回測分析：在歷史資料中，AI 共發出了 {len(strong_buy_signals)} 次強烈看漲訊號。")
+
+            # 你可以把這份帶有預測結果的資料存成 CSV，用 Excel 打開來看
+            df_clean.to_csv(PathConfig.BACKTEST_RESULT)
 
         # 存檔供 UI 使用
         trainer.train_and_save_final_model(df_clean)

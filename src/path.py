@@ -28,5 +28,6 @@ class PathBase:
 @dataclass(frozen = True)
 class PathConfig:
     IDSS_DATA = PathBase.processed / "idss_data.db"
+    BACKTEST_RESULT = PathBase.processed / "backtest_result.csv"
     GEMINI_KEY = PathBase.raw / ".env"
     XGB_MODEL = PathBase.model / "xgb_model.json"

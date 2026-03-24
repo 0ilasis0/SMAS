@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 from data.variable import StockCol
 from debug import dbg
+
 from path import PathConfig
 
 
