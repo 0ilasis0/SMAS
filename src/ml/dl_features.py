@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 from data.variable import StockCol
 from debug import dbg
-from ml.params import FeatureCol
+from ml.params import FeatureCol, IndicatorParams
+from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.preprocessing import MinMaxScaler
 
 
@@ -11,53 +12,69 @@ class DLFeatureEngine:
     專為時序深度學習模型 (TCN/LSTM) 設計的特徵工程。
     負責特徵縮放 (MinMaxScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
     """
-    def __init__(self, time_steps: int = 60, lookahead: int = 20):
-        self.time_steps = time_steps  # 模型要回看過去幾根 K 線 (例如 60 天)
-        self.lookahead = lookahead    # 預測未來幾天後的漲跌
+    def __init__(
+        self,
+        time_steps: int = IndicatorParams.MA_QUARTER,
+        lookahead: int = IndicatorParams.MA_MONTH
+    ):
+        # 模型要回看過去幾根(天) K 線
+        self.time_steps = time_steps
+        # 預測未來幾天後的漲跌
+        self.lookahead = lookahead
 
-    def process_pipeline(self, df: pd.DataFrame):
+    def process_pipeline(self, df: pd.DataFrame, scaler: MinMaxScaler = None):
         """
-        執行完整的 DL 特徵管線。
-        回傳: X (3D Numpy Array), y (1D Numpy Array), scaler (用來在線上推論時縮放新資料)
+        執行 DL 特徵管線。
+        :param df: 原始 DataFrame
+        :param scaler: 若傳入已訓練好的 Scaler，則進入「推論/測試模式」；若不傳入，則進入「訓練模式」。
+        :return: X (3D Numpy Array), y (1D Numpy Array), scaler (用來在線上推論時縮放新資料)
         """
         dbg.log("開始建立 Deep Learning 時序特徵矩陣 (Sliding Window)...")
 
-        if df.empty or len(df) <= self.time_steps + self.lookahead:
-            dbg.war("資料量不足以生成時序視窗。")
+        is_training = scaler is None
+        min_required_len = self.time_steps + self.lookahead if is_training else self.time_steps
+
+        if df.empty or len(df) <= min_required_len:
+            dbg.war(f"資料量不足。需要 {min_required_len} 筆，目前僅有 {len(df)} 筆。")
             return None, None, None
 
         data = df.copy()
 
-        # 1. 建立標籤 (與 XGBoost 邏輯完全一致，確保雙軌預測目標相同)
-        future_close = data[StockCol.CLOSE].shift(self.lookahead * (-1))
+        # 建立標籤
+        future_close = data[StockCol.CLOSE].shift(-self.lookahead)
         data[FeatureCol.TARGET] = (future_close > data[StockCol.CLOSE]).astype('Int64')
         data.loc[future_close.isna(), FeatureCol.TARGET] = pd.NA
 
-        # 2. 移除未來盲區產生的 NaN
-        data = data.dropna(subset=[FeatureCol.TARGET])
+        # 選取要餵給神經網路的原始特徵
+        features = StockCol.get_ohlcv()
 
-        # 3. 選取要餵給神經網路的原始特徵 (通常神經網路自己會學指標，所以我們只餵原始 OHLCV)
-        features = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE, StockCol.VOLUME]
+        # 特徵正規化 (Scaling 到 0 ~ 1)
+        if is_training:
+            # 產生全新的 Scaler，並從訓練資料中學習 (fit) 最大最小值
+            dbg.log("訓練模式：重新 Fit Scaler")
+            data = data.dropna(subset=features + [FeatureCol.TARGET])
+            scaler = MinMaxScaler(feature_range=(0, 1))
+            scaled_features = scaler.fit_transform(data[features])
+        else:
+            # 嚴格禁止使用 fit，只能使用訓練集傳過來的 Scaler 進行轉換
+            dbg.log("推論模式：使用既有 Scaler 進行 Transform")
+            data = data.dropna(subset=features)
+            scaled_features = scaler.transform(data[features])
 
-        # 4. 特徵正規化 (Scaling 到 0 ~ 1)
-        scaler = MinMaxScaler(feature_range=(0, 1))
-        scaled_features = scaler.fit_transform(data[features])
+        # 建立滑動視窗
+        X = sliding_window_view(scaled_features, window_shape=self.time_steps, axis=0)
+        X = np.transpose(X, (0, 2, 1))
 
-        # 5. 建立滑動視窗 (Sliding Window)
-        X, y = [], []
-        targets = data[FeatureCol.TARGET].values
+        if is_training:
+            # 回傳完整的 X 矩陣與對應的標籤 y
+            targets = data[FeatureCol.TARGET].values
+            y = targets[self.time_steps - 1:]
+            y = np.array(y).astype(int)
+        else:
+            # 實戰中，我們通常只需要拿「最後一個 Window (即最新資料)」去預測未來
+            X = X[-1:]
+            y = None   # 推論時沒有標準答案
 
-        # 迴圈邏輯：從第 time_steps-1 天開始，才能往前抓滿 time_steps 根 K 線
-        for i in range(self.time_steps - 1, len(scaled_features)):
-            # X: 擷取 [今天 - 59天 : 今天 + 1] (總共 60 根 K 線)
-            window_data = scaled_features[i - self.time_steps + 1 : i + 1]
-            X.append(window_data)
-
-            # y: 當天的標籤 (未來 lookahead 天是否上漲)
-            y.append(targets[i])
-
-        X = np.array(X)
-        y = np.array(y).astype(int)
-
-        dbg.log(f"時序矩陣建立完成！ X 形狀: {X.shape}, y 形狀: {y.shape}")
+        y_shape_str = str(y.shape) if y is not None else "None"
+        dbg.log(f"時序矩陣建立完成！ X 形狀: {X.shape}, y 形狀: {y_shape_str}")
         return X, y, scaler
