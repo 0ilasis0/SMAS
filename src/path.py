@@ -22,9 +22,11 @@ def resource_path(*paths):
 @dataclass(frozen = True)
 class PathBase:
     processed = resource_path("data", "processed")
+    model = resource_path("data", "processed", "model")
     raw = resource_path("data", "raw")
 
 @dataclass(frozen = True)
 class PathConfig:
     IDSS_DATA = PathBase.processed / "idss_data.db"
     GEMINI_KEY = PathBase.raw / ".env"
+    XGB_MODEL = PathBase.model / "xgb_model.json"

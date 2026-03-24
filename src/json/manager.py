@@ -1,6 +1,6 @@
 import json
 
-from py.debug import dbg
+from debug import dbg
 from py.path.manager import JsonFileID, PathConfig
 
 

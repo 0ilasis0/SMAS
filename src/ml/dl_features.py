@@ -13,16 +13,16 @@ class DLFeatureEngine:
     負責特徵縮放 (MinMaxScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
     """
     def __init__(
-        self,
-        time_steps: int = IndicatorParams.MA_QUARTER,
-        lookahead: int = IndicatorParams.MA_MONTH
-    ):
+            self,
+            time_steps: int = IndicatorParams.MA_QUARTER,
+            lookahead: int = IndicatorParams.MA_MONTH
+        ):
         # 模型要回看過去幾根(天) K 線
         self.time_steps = time_steps
         # 預測未來幾天後的漲跌
         self.lookahead = lookahead
 
-    def process_pipeline(self, df: pd.DataFrame, scaler: MinMaxScaler = None):
+    def process_pipeline(self, df: pd.DataFrame, scaler: MinMaxScaler | None = None):
         """
         執行 DL 特徵管線。
         :param df: 原始 DataFrame

@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
-@dataclass
+@dataclass(frozen=True)
 class IndicatorParams:
 # 均線參數
     MA_WEEK: int = 5
@@ -46,3 +46,23 @@ class FeatureCol(StrEnum):
             cls.RSI, cls.MACD, cls.MACD_SIGNAL,
             cls.VOL_CHANGE, cls.CLOSE_CHANGE
         ]
+
+
+@dataclass(frozen=True)
+class XGBHyperParams:
+    objective: str = 'binary:logistic'  # 輸出 0~1 的機率
+    eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
+    max_depth: int = 4                  # 限制樹的深度，防止過度擬合 (Overfitting)
+    learning_rate: float = 0.05
+    n_estimators: int = 150
+    subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
+    colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
+    random_state: int = 42              # 固定亂數種子，確保結果可重現
+
+@dataclass(frozen=True)
+class TrainConfig:
+    N_SPLITS: int = 5
+    N_SPLITS_MAX: int = 8
+    N_SPLITS_MIN: int = 3
+
+    EARLY_STOP_ROUND = 10
