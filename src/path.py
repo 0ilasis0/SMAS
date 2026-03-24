@@ -28,6 +28,19 @@ class PathBase:
 @dataclass(frozen = True)
 class PathConfig:
     IDSS_DATA = PathBase.processed / "idss_data.db"
-    BACKTEST_RESULT = PathBase.processed / "backtest_result.csv"
+    RESULP_REPORT = PathBase.processed / "report"
     GEMINI_KEY = PathBase.raw / ".env"
     XGB_MODEL = PathBase.model / "xgb_model.json"
+
+    @classmethod
+    def get_backtest_report_path(cls, ticker: str) -> Path:
+        """
+        根據 ticker 動態生成回測報告的 CSV 路徑。
+        例如: '006208.TW' -> output/006208_backtest.csv
+        """
+        # 確保輸出目錄存在
+        cls.RESULP_REPORT.mkdir(parents=True, exist_ok=True)
+        clean_ticker = ticker.replace(".TW", "")
+
+        # 組合出最終的路徑
+        return cls.RESULP_REPORT / f"{clean_ticker}_backtest.csv"

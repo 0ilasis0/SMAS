@@ -39,12 +39,18 @@ class XGBFeatureEngine:
         if df.empty: return df
 
         data = df.copy()
+        close_col = str(StockCol.CLOSE)
+
+        ma_w = data[close_col].rolling(window=self.params.MA_WEEK).mean()
+        ma_m = data[close_col].rolling(window=self.params.MA_MONTH).mean()
+        ma_q = data[close_col].rolling(window=self.params.MA_QUARTER).mean()
+        ma_y = data[close_col].rolling(window=self.params.MA_YEAR).mean()
 
         #  移動平均線
-        data[FeatureCol.MA_WEEK] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_WEEK).mean()
-        data[FeatureCol.MA_MONTH] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_MONTH).mean()
-        data[FeatureCol.MA_QUARTER] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_QUARTER).mean()
-        data[FeatureCol.MA_YEAR] = data[StockCol.CLOSE.value].rolling(window=self.params.MA_YEAR).mean()
+        data[FeatureCol.BIAS_WEEK] = (data[close_col] - ma_w) / ma_w
+        data[FeatureCol.BIAS_MONTH] = (data[close_col] - ma_m) / ma_m
+        data[FeatureCol.BIAS_QUARTER] = (data[close_col] - ma_q) / ma_q
+        data[FeatureCol.BIAS_YEAR] = (data[close_col] - ma_y) / ma_y
 
         # RSI (相對強弱指標)
         delta = data[StockCol.CLOSE].diff()
