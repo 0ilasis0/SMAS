@@ -68,7 +68,7 @@ class XGBFeatureEngine:
         data = df.copy()
 
         # 將未來第 N 天的收盤價往回拉到今天的 Row
-        future_close = data[StockCol.CLOSE].shift(lookahead * (-1))
+        future_close = data[StockCol.CLOSE].shift(-lookahead)
 
         # 先轉為支援缺失值的整數型態，再將確實沒有未來資料的列強制設為 NaN
         data[FeatureCol.TARGET] = (future_close > data[StockCol.CLOSE]).astype('Int64')
