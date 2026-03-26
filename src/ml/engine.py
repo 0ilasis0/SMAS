@@ -102,7 +102,10 @@ class QuantAIEngine:
         # Meta-Learner 處理管線 (Level 1)
         dbg.log("\n--- [訓練階段] 總指揮：Meta-Learner ---")
         meta_learner = MetaLearner(ticker=self.config.ticker)
-        meta_learner.train_and_evaluate(oof_xgb, oof_dl, y_true)
+        X_meta, y_meta = meta_learner.evaluate_oof(oof_xgb, oof_dl, y_true)
+
+        if save_models:
+            meta_learner.train_and_save_final_model(X_meta, y_meta)
 
         gc.collect()
         dbg.log(f"\n🎉 {self.config.ticker} Stacking 整合訓練管線全數執行完畢！")
@@ -148,15 +151,15 @@ class QuantAIEngine:
 
         # 抓取最新資料 (確保資料庫有最新 K 線)
         df_raw = self.db.get_daily_data(self.config.ticker)
+        df_recent = df_raw.tail(500).copy()
 
         # ==========================================
         # 🟢 左腦 (XGBoost) 推論修正
         # ==========================================
         xgb_engine = XGBFeatureEngine()
-        df_xgb_features = xgb_engine._create_daily_features(df_raw)
-
-        # 取得今天(最後一筆)的特徵
+        df_xgb_features = xgb_engine._create_daily_features(df_recent)
         latest_xgb_features = df_xgb_features[FeatureCol.get_features()].iloc[-1:]
+
         if latest_xgb_features.isna().any().any():
             dbg.war(f"[{self.config.ticker}] 警告：今日特徵包含 NaN (可能歷史資料不足 240 天)，XGB 預測準確度可能下降。")
 
@@ -167,7 +170,7 @@ class QuantAIEngine:
         # ==========================================
         dl_engine = DLFeatureEngine(self.config.lookahead)
         # 注意：傳入 self.dl_scaler，讓它進入「推論模式」
-        X_dl, _, _, _ = dl_engine.process_pipeline(df_raw, scaler=self.dl_scaler)
+        X_dl, _, _, _ = dl_engine.process_pipeline(df_recent, scaler=self.dl_scaler)
 
         if X_dl is None:
             dbg.error(f"[{self.config.ticker}] 資料量不足，無法產生 DL 推論特徵。")
@@ -176,11 +179,8 @@ class QuantAIEngine:
         # 轉成 Tensor 丟給模型
         self.dl_model.eval()
         with torch.no_grad():
-            X_tensor = torch.tensor(X_dl, dtype=torch.float32)
-            # 在推論端同樣將 GPU/MPS 考量進去
             device = next(self.dl_model.parameters()).device
-            X_tensor = X_tensor.to(device)
-
+            X_tensor = torch.as_tensor(X_dl, dtype=torch.float32, device=device)
             prob_dl = torch.sigmoid(self.dl_model(X_tensor)).item()
 
         # 總指揮 (Meta-Learner) 融合

@@ -1,13 +1,12 @@
 from debug import dbg
 from ml.engine import QuantAIEngine
-from ml.params import RNNType
+from ml.params import SessionConfig
 
 if __name__ == "__main__":
     # 1. 啟動引擎
     c_ticker = "2388.TW"
-    c_rnn_type=RNNType.GRU
-    engine = QuantAIEngine(ticker=c_ticker, rnn_type=c_rnn_type)
-    dbg.log(f"current {c_ticker} mode is {c_rnn_type}")
+    engine = QuantAIEngine(ticker=c_ticker)
+    dbg.log(f"current {c_ticker} mode is {SessionConfig.rnn_type}")
 
     # 2. 假設 UI 按下了「更新資料庫」按鈕
     # engine.update_market_data()

@@ -10,7 +10,7 @@ class RNNType(StrEnum):
 class SessionConfig:
     """存放當前任務的『環境變數』"""
     ticker: str
-    rnn_type: RNNType = RNNType.LSTM
+    rnn_type: RNNType = RNNType.GRU
     lookahead: int = 5
 
 
@@ -94,7 +94,7 @@ class DLHyperParams:
     CNN_OUT_CHANNELS: int = 16          # CNN 特徵提取後的維度
     LSTM_HIDDEN: int = 32               # LSTM 隱藏層神經元數量
     NUM_LAYERS: int = 1
-    BATCH_SIZE: int = 32
+    BATCH_SIZE: int = 16
     LEARNING_RATE: float = 0.001
     EPOCHS: int = 50
     DROPOUT: float = 0.2
