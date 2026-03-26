@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from data.variable import StockCol
 from debug import dbg
 from ml.params import FeatureCol, IndicatorParams

@@ -2,9 +2,9 @@ import sqlite3
 from pathlib import Path
 
 import pandas as pd
+
 from data.variable import StockCol
 from debug import dbg
-
 from path import PathConfig
 
 
@@ -132,3 +132,49 @@ class DataManager:
             ''', (ticker,))
             conn.commit()
             dbg.log(f"已將 {ticker} 加入自選清單。")
+
+    def get_daily_data(self, ticker: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        """
+        從資料庫讀取指定標的的日 K 線資料
+        可選填 start_date 與 end_date (格式: 'YYYY-MM-DD') 來過濾區間。
+        """
+        return self._fetch_data(
+            table_name='daily_k_lines',
+            time_col='date',
+            ticker=ticker,
+            start_time=start_date,
+            end_time=end_date
+        )
+
+    def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
+        """從資料庫讀取指定標的的分時 K 線資料"""
+        return self._fetch_data(
+            table_name='intraday_k_lines',
+            time_col='datetime',
+            ticker=ticker,
+            start_time=start_datetime,
+            end_time=end_datetime
+        )
+
+    def _fetch_data(self, table_name: str, time_col: str, ticker: str, start_time: str = None, end_time: str = None) -> pd.DataFrame:
+        """通用的資料庫查詢與 DataFrame 轉換邏輯"""
+        query = f"SELECT * FROM {table_name} WHERE ticker = ?"
+        params = [ticker]
+
+        if start_time:
+            query += f" AND {time_col} >= ?"
+            params.append(start_time)
+        if end_time:
+            query += f" AND {time_col} <= ?"
+            params.append(end_time)
+
+        query += f" ORDER BY {time_col}"
+
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=params, index_col=time_col, parse_dates=[time_col])
+
+        # 整理 DataFrame：剔除不參與訓練的 ticker 欄位
+        if not df.empty and 'ticker' in df.columns:
+            df = df.drop(columns=['ticker'])
+
+        return df

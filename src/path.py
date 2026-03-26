@@ -1,7 +1,10 @@
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+if TYPE_CHECKING:
+    from ml.params import RNNType
 
 def resource_path(*paths):
     """
@@ -27,10 +30,11 @@ class PathBase:
 
 @dataclass(frozen = True)
 class PathConfig:
+    RESULT_REPORT = PathBase.processed / "report"
     IDSS_DATA = PathBase.processed / "idss_data.db"
-    RESULP_REPORT = PathBase.processed / "report"
     GEMINI_KEY = PathBase.raw / ".env"
     XGB_MODEL = PathBase.model / "xgb_model.json"
+    MODEL_DIR = PathBase.model
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:
@@ -39,8 +43,19 @@ class PathConfig:
         例如: '006208.TW' -> output/006208_backtest.csv
         """
         # 確保輸出目錄存在
-        cls.RESULP_REPORT.mkdir(parents=True, exist_ok=True)
+        cls.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
         clean_ticker = ticker.replace(".TW", "")
 
         # 組合出最終的路徑
-        return cls.RESULP_REPORT / f"{clean_ticker}_backtest.csv"
+        return cls.RESULT_REPORT / f"{clean_ticker}_backtest.csv"
+
+    @classmethod
+    def get_dl_model_path(cls, ticker: str, rnn_type: "RNNType") -> Path:
+        """
+        根據 ticker 與 RNN 類型動態生成權重檔路徑。
+        例如: ('006208.TW', LSTM) -> model/006208_LSTM_model.pth
+        """
+        cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        clean_ticker = ticker.replace(".TW", "")
+
+        return cls.MODEL_DIR / f"{clean_ticker}_{rnn_type.name}_model.pth"

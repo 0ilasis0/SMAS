@@ -1,10 +1,11 @@
 import numpy as np
 import pandas as pd
+from numpy.lib.stride_tricks import sliding_window_view
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+
 from data.variable import StockCol
 from debug import dbg
 from ml.params import FeatureCol, IndicatorParams
-from numpy.lib.stride_tricks import sliding_window_view
-from sklearn.preprocessing import MinMaxScaler
 
 
 class DLFeatureEngine:
@@ -46,14 +47,15 @@ class DLFeatureEngine:
         data.loc[future_close.isna(), FeatureCol.TARGET] = pd.NA
 
         # 選取要餵給神經網路的原始特徵
-        features = StockCol.get_ohlcv()
+        features = FeatureCol.get_features()
+        data = data.replace([np.inf, -np.inf], np.nan)
 
         # 特徵正規化 (Scaling 到 0 ~ 1)
         if is_training:
             # 產生全新的 Scaler，並從訓練資料中學習 (fit) 最大最小值
             dbg.log("訓練模式：重新 Fit Scaler")
             data = data.dropna(subset=features + [FeatureCol.TARGET])
-            scaler = MinMaxScaler(feature_range=(0, 1))
+            scaler = StandardScaler()
             scaled_features = scaler.fit_transform(data[features])
         else:
             # 嚴格禁止使用 fit，只能使用訓練集傳過來的 Scaler 進行轉換
