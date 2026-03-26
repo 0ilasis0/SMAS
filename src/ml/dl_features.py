@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
-from sklearn.preprocessing import MinMaxScaler, RobustScaler, StandardScaler
+from sklearn.preprocessing import RobustScaler
 
 from data.variable import StockCol
 from debug import dbg
@@ -10,8 +10,8 @@ from ml.params import DLHyperParams, IndicatorParams
 
 class DLFeatureEngine:
     """
-    專為時序深度學習模型 (TCN/LSTM) 設計的特徵工程。
-    負責特徵縮放 (MinMaxScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
+    專為時序深度學習模型 (TCN/LSTM) 設計的特徵工程 (純動能視角)。
+    負責特徵縮放 (RobustScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
     :para: lookahead -> 預測未來幾天後的漲跌
     :para: time_steps -> 模型要回看過去幾根(天) K 線
     """
@@ -23,7 +23,7 @@ class DLFeatureEngine:
         self.lookahead = lookahead
         self.time_steps = time_steps
 
-    def process_pipeline(self, df: pd.DataFrame, scaler: MinMaxScaler | None = None):
+    def process_pipeline(self, df: pd.DataFrame, scaler: RobustScaler | None = None):
         """
         執行 DL 特徵管線。
         :param df: 原始 DataFrame
