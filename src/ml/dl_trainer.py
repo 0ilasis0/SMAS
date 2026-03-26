@@ -22,7 +22,7 @@ class CNN_RNN(nn.Module):
     def __init__(
             self,
             num_features: int,
-            rnn_type: RNNType = RNNType.LSTM,
+            rnn_type: RNNType,
             cnn_out_channels: int = DLHyperParams.CNN_OUT_CHANNELS,
             rnn_hidden: int = DLHyperParams.LSTM_HIDDEN
         ):
@@ -85,7 +85,7 @@ class CNN_RNN(nn.Module):
 # DL 離線訓練器 (與 XGBTrainer API 對齊)
 # -----------------------------------------
 class DLTrainer:
-    def __init__(self, ticker: str, rnn_type: RNNType = RNNType.LSTM):
+    def __init__(self, ticker: str, rnn_type: RNNType):
         self.rnn_type = rnn_type
         self.ticker = ticker
         self.model_save_path = PathConfig.get_dl_model_path(self.ticker, self.rnn_type)

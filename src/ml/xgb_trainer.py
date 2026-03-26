@@ -1,5 +1,4 @@
 from dataclasses import asdict
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -20,10 +19,11 @@ class XGBTrainer:
     """
     def __init__(
             self,
-            model_save_path: str = PathConfig.XGB_MODEL,
+            ticker: str,
             hp: XGBHyperParams = XGBHyperParams()
         ):
-        self.model_save_path = Path(model_save_path)
+        self.ticker = ticker
+        self.model_save_path = PathConfig.get_xgboost_model_path(self.ticker)
         self.params = asdict(hp)
 
     def train_with_cv(self, df_clean: pd.DataFrame, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
@@ -33,7 +33,7 @@ class XGBTrainer:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
 
         if len(df_clean) <= n_splits:
-            dbg.error(f"資料量不足！目前可用樣本僅 {len(X)} 筆，不足以支撐 {n_splits} 折交叉驗證。")
+            dbg.error(f"資料量不足！目前可用樣本僅 {len(df_clean)} 筆，不足以支撐 {n_splits} 折交叉驗證。")
             dbg.error("請增加資料抓取範圍，或縮短特徵計算所需的週期（如 MA_YEAR）。")
             return pd.Series(dtype=float)
 

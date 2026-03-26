@@ -14,7 +14,7 @@ class XGBFeatureEngine:
     def __init__(self, params: IndicatorParams = IndicatorParams()):
         self.params = params
 
-    def process_pipeline(self, df: pd.DataFrame, lookahead: int = IndicatorParams.MA_WEEK) -> pd.DataFrame:
+    def process_pipeline(self, df: pd.DataFrame, lookahead: int) -> pd.DataFrame:
         """執行完整的 XGBoost 特徵管線"""
         if df.empty:
             dbg.war("輸入的 DataFrame 為空，跳過特徵工程。")

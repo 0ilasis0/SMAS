@@ -2,6 +2,18 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
+class RNNType(StrEnum):
+    LSTM = "LSTM"
+    GRU = "GRU"
+
+@dataclass
+class SessionConfig:
+    """存放當前任務的『環境變數』"""
+    ticker: str
+    rnn_type: RNNType = RNNType.LSTM
+    lookahead: int = 5
+
+
 @dataclass(frozen=True)
 class IndicatorParams:
 # 均線參數
@@ -53,11 +65,6 @@ class MetaCol(StrEnum):
     PROB_DL = "prob_dl"
     # 直接引用 FeatureCol 的 TARGET，確保一致性
     TARGET = FeatureCol.TARGET
-
-
-class RNNType(StrEnum):
-    LSTM = "LSTM"
-    GRU = "GRU"
 
 
 @dataclass(frozen=True)

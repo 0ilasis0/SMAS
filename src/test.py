@@ -41,7 +41,7 @@ if __name__ == "__main__":
     xgb_engine = XGBFeatureEngine()
     df_xgb_clean = xgb_engine.process_pipeline(df_raw)
 
-    xgb_trainer = XGBTrainer()
+    xgb_trainer = XGBTrainer(ticker)
     # 取得 XGBoost 的 OOF 預測
     oof_xgb = xgb_trainer.train_with_cv(df_xgb_clean)
 

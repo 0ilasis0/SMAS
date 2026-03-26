@@ -5,7 +5,7 @@ from sklearn.preprocessing import RobustScaler
 
 from data.variable import StockCol
 from debug import dbg
-from ml.params import DLHyperParams, IndicatorParams
+from ml.params import DLHyperParams
 
 
 class DLFeatureEngine:
@@ -17,7 +17,7 @@ class DLFeatureEngine:
     """
     def __init__(
             self,
-            lookahead: int = IndicatorParams.MA_WEEK,
+            lookahead: int,
             time_steps: int = DLHyperParams.TIME_STEPS
         ):
         self.lookahead = lookahead

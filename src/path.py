@@ -33,7 +33,6 @@ class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
     IDSS_DATA = PathBase.processed / "idss_data.db"
     GEMINI_KEY = PathBase.raw / ".env"
-    XGB_MODEL = PathBase.model / "xgb_model.json"
     MODEL_DIR = PathBase.model
 
     @classmethod
@@ -41,12 +40,21 @@ class PathConfig:
         return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, "_backtest", ".csv")
 
     @classmethod
+    def get_xgboost_model_path(cls, ticker: str) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json")
+
+    @classmethod
     def get_dl_model_path(cls, ticker: str, rnn_type: "RNNType") -> Path:
         return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_model", ".pth")
 
     @classmethod
+    def get_dl_scalar_path(cls, ticker: str, rnn_type: "RNNType") -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_dl_scaler", ".joblib")
+
+    @classmethod
     def get_meta_model_path(cls, ticker: str) -> Path:
         return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_meta_model", ".joblib")
+
 
     @classmethod
     def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str) -> Path:
