@@ -1,6 +1,8 @@
 import pandas as pd
 
+from data.fetcher import Fetcher
 from data.manager import DataManager
+from data.variable import TimeUnit
 from debug import dbg
 from ml.dl_features import DLFeatureEngine
 from ml.dl_trainer import DLTrainer
@@ -11,11 +13,22 @@ from ml.xgb_trainer import XGBTrainer
 
 if __name__ == "__main__":
     ticker = "2388.TW"
+    fetcher = Fetcher()
+    db = DataManager()
+
+    # 抓取並存儲歷史資料 ---
+    # dbg.log(f"正在更新 {ticker} 的歷史資料...")
+    # daily_df = fetcher.fetch_daily_data(ticker)
+    # if not daily_df.empty:
+    #     db.save_daily_data(ticker, daily_df)
+    # else:
+    #     dbg.error("抓取資料失敗，請檢查網路或 Ticker 名稱。")
+    #     exit()
+
 
     # ==========================================
     # 0. 取得資料
     # ==========================================
-    db = DataManager()
     df_raw = db.get_daily_data(ticker)
 
     if df_raw.empty:
@@ -26,7 +39,7 @@ if __name__ == "__main__":
     # Level 0 - 左腦：XGBoost 處理管線
     # ==========================================
     xgb_engine = XGBFeatureEngine()
-    df_xgb_clean = xgb_engine.process_pipeline(df_raw, lookahead=20)
+    df_xgb_clean = xgb_engine.process_pipeline(df_raw)
 
     xgb_trainer = XGBTrainer()
     # 取得 XGBoost 的 OOF 預測
@@ -42,9 +55,8 @@ if __name__ == "__main__":
 
     dl_engine = DLFeatureEngine()
     X_dl, y_dl, _, original_index = dl_engine.process_pipeline(df_with_indicators)
-    dl_trainer = DLTrainer(ticker=ticker, rnn_type=RNNType.LSTM)
+    dl_trainer = DLTrainer(ticker=ticker, rnn_type=RNNType.GRU)
 
-    dl_trainer = DLTrainer(ticker=ticker, rnn_type=RNNType.LSTM)
     # 取得 DL 的 OOF 預測
     oof_dl = dl_trainer.train_with_cv(X_dl, y_dl, original_index)
 

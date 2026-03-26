@@ -85,21 +85,6 @@ class MetaLearner:
         except Exception as e:
             dbg.error(f"Meta-Learner 載入失敗: {e}")
 
-    # def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
-    #     """
-    #     給線上實戰 (UI / 階段三行為樹) 呼叫用。
-    #     輸入雙腦機率，輸出最終決定性的勝率。
-    #     """
-    #     if math.isnan(prob_xgb) or math.isnan(prob_dl):
-    #         dbg.war("接收到 NaN 機率，回傳中性勝率 0.5")
-    #         return 0.5
-
-    #     prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)
-    #     prob_dl = MathTool.clamp(prob_dl, 0.0, 1.0)
-
-    #     X_new = pd.DataFrame({MetaCol.PROB_XGB: [prob_xgb], MetaCol.PROB_DL: [prob_dl]})
-    #     return self.model.predict_proba(X_new)[0, 1]
-
     def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
         """
         給線上實戰 (UI / 階段三行為樹) 呼叫用。
@@ -111,4 +96,19 @@ class MetaLearner:
 
         prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)
         prob_dl = MathTool.clamp(prob_dl, 0.0, 1.0)
-        return (prob_xgb + prob_dl) / 2.0
+
+        X_new = pd.DataFrame({MetaCol.PROB_XGB: [prob_xgb], MetaCol.PROB_DL: [prob_dl]})
+        return self.model.predict_proba(X_new)[0, 1]
+
+    # def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
+    #     """
+    #     給線上實戰 (UI / 階段三行為樹) 呼叫用。
+    #     輸入雙腦機率，輸出最終決定性的勝率。
+    #     """
+    #     if math.isnan(prob_xgb) or math.isnan(prob_dl):
+    #         dbg.war("接收到 NaN 機率，回傳中性勝率 0.5")
+    #         return 0.5
+
+    #     prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)
+    #     prob_dl = MathTool.clamp(prob_dl, 0.0, 1.0)
+    #     return (prob_xgb + prob_dl) / 2.0

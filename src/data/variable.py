@@ -4,9 +4,9 @@ from base import FrozenMeta
 
 
 class DataLimit(metaclass=FrozenMeta):
-    DAILY_MAX_YEAR = 10
-    DAILY_MAX_MONTH = 120
-    INTRADAY_MAX_DAY = 60
+    DAILY_MAX_YEAR = 40
+    DAILY_MAX_MONTH = 480
+    INTRADAY_MAX_DAY = 90
 
 class TimeUnit(StrEnum):
     YEAR = 'y'
@@ -15,7 +15,7 @@ class TimeUnit(StrEnum):
 
 class YfInterval(StrEnum):
     DAILY = "1d"
-    INTRADAY_5M = "5m"
+    INTRADAY_5M = "3m"
 
 class StockCol(StrEnum):
     OPEN = "open"

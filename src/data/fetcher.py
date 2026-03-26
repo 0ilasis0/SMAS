@@ -16,7 +16,7 @@ class Fetcher:
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 2
 
-    def fetch_daily_data(self, ticker_symbol: str, period: int, unit: str = TimeUnit.YEAR) -> pd.DataFrame:
+    def fetch_daily_data(self, ticker_symbol: str, period: int, unit: str) -> pd.DataFrame:
         """
         抓取指定標的的中長期日 K 線歷史資料。
         """
@@ -43,7 +43,7 @@ class Fetcher:
 
     def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_MAX_DAY) -> pd.DataFrame:
         """
-        抓取指定標的的分時資料 (5 分鐘 K 線)。
+        抓取指定標的的分時資料 (3 分鐘 K 線)。
         """
         valid_days = MathTool.clamp(days, 1, DataLimit.INTRADAY_MAX_DAY)
 
