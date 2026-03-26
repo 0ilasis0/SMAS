@@ -47,6 +47,18 @@ class FeatureCol(StrEnum):
             cls.VOL_CHANGE, cls.CLOSE_CHANGE
         ]
 
+class MetaCol(StrEnum):
+    """Meta-Learner (Level 1) 專用的欄位名稱"""
+    PROB_XGB = "prob_xgb"
+    PROB_DL = "prob_dl"
+    # 直接引用 FeatureCol 的 TARGET，確保一致性
+    TARGET = FeatureCol.TARGET
+
+
+class RNNType(StrEnum):
+    LSTM = "LSTM"
+    GRU = "GRU"
+
 
 @dataclass(frozen=True)
 class XGBHyperParams:
@@ -82,6 +94,16 @@ class DLHyperParams:
     SCHEDULER_PATIENCE: int = 3
     SCHEDULER_FACTOR: float = 0.5
 
-class RNNType(StrEnum):
-    LSTM = "LSTM"
-    GRU = "GRU"
+@dataclass(frozen=True)
+class MetaHyperParams:
+    # 核心超參數 (用於 Tuning)
+    C: float = 0.1
+    PENALTY: str = 'l2'
+    CLASS_WEIGHT: str = 'balanced'
+
+    # 穩定性配置 (通常不需變動)
+    RANDOM_STATE: int = 42
+
+    # 演算法配置 (通常不需變動)
+    SOLVER: str = 'lbfgs'
+    MAX_ITER: int = 100

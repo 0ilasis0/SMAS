@@ -4,8 +4,8 @@ from base import FrozenMeta
 
 
 class DataLimit(metaclass=FrozenMeta):
-    DAILY_MAX_YEAR = 5
-    DAILY_MAX_MONTH = 60
+    DAILY_MAX_YEAR = 10
+    DAILY_MAX_MONTH = 120
     INTRADAY_MAX_DAY = 60
 
 class TimeUnit(StrEnum):
