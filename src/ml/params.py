@@ -64,9 +64,9 @@ class RNNType(StrEnum):
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    max_depth: int = 6                  # 限制樹的深度，防止過度擬合 (Overfitting)
-    learning_rate: float = 0.02
-    n_estimators: int = 500
+    max_depth: int = 5                  # 限制樹的深度，防止過度擬合 (Overfitting)
+    learning_rate: float = 0.05
+    n_estimators: int = 300
     subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
     colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
     random_state: int = 42              # 固定亂數種子，確保結果可重現
@@ -97,7 +97,7 @@ class DLHyperParams:
 @dataclass(frozen=True)
 class MetaHyperParams:
     # 核心超參數 (用於 Tuning)
-    C: float = 0.1
+    C: float = 0.3
     PENALTY: str = 'l2'
     CLASS_WEIGHT: str = 'balanced'
 

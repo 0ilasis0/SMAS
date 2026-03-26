@@ -14,19 +14,19 @@ from ml.xgb_features import XGBFeatureEngine
 
 if __name__ == "__main__":
     # 設定測試標的
-    ticker = "0052.TW"
+    ticker = "2388.TW"
 
     db = DataManager()
     fetcher = Fetcher()
 
     # --- 第一步：抓取並存儲歷史資料 ---
-    # dbg.log(f"正在更新 {ticker} 的歷史資料...")
-    # daily_df = fetcher.fetch_daily_data(ticker, period=10, unit=TimeUnit.YEAR)
-    # if not daily_df.empty:
-    #     db.save_daily_data(ticker, daily_df)
-    # else:
-    #     dbg.error("抓取資料失敗，請檢查網路或 Ticker 名稱。")
-    #     exit()
+    dbg.log(f"正在更新 {ticker} 的歷史資料...")
+    daily_df = fetcher.fetch_daily_data(ticker, period=10, unit=TimeUnit.YEAR)
+    if not daily_df.empty:
+        db.save_daily_data(ticker, daily_df)
+    else:
+        dbg.error("抓取資料失敗，請檢查網路或 Ticker 名稱。")
+        exit()
 
     # --- 第二步：從 DB 讀取資料 ---
     # 使用你剛寫好的 API，優雅地取得資料

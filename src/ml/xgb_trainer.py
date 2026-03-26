@@ -4,12 +4,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from base import MathTool
-from debug import dbg
-from ml.params import FeatureCol, TrainConfig, XGBHyperParams
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
+from base import MathTool
+from debug import dbg
+from ml.params import FeatureCol, TrainConfig, XGBHyperParams
 from path import PathConfig
 
 
@@ -100,10 +100,6 @@ class XGBTrainer:
 
         importance_dict = dict(zip(features, feature_importances))
         sorted_importance = sorted(importance_dict.items(), key=lambda x: x[1], reverse=True)
-
-        dbg.log("【特徵重要性排行榜前五名】")
-        for feat, imp in sorted_importance[:5]:
-            dbg.log(f"- {feat}: {imp:.4f}")
 
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 

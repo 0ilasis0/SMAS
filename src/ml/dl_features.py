@@ -5,23 +5,23 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from data.variable import StockCol
 from debug import dbg
-from ml.params import FeatureCol, IndicatorParams
+from ml.params import DLHyperParams, FeatureCol, IndicatorParams
 
 
 class DLFeatureEngine:
     """
     專為時序深度學習模型 (TCN/LSTM) 設計的特徵工程。
     負責特徵縮放 (MinMaxScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
+    :para: lookahead -> 預測未來幾天後的漲跌
+    :para: time_steps -> 模型要回看過去幾根(天) K 線
     """
     def __init__(
             self,
-            time_steps: int = IndicatorParams.MA_QUARTER,
-            lookahead: int = IndicatorParams.MA_MONTH
+            lookahead: int = IndicatorParams.MA_WEEK,
+            time_steps: int = DLHyperParams.TIME_STEPS
         ):
-        # 模型要回看過去幾根(天) K 線
-        self.time_steps = time_steps
-        # 預測未來幾天後的漲跌
         self.lookahead = lookahead
+        self.time_steps = time_steps
 
     def process_pipeline(self, df: pd.DataFrame, scaler: MinMaxScaler | None = None):
         """
@@ -72,11 +72,14 @@ class DLFeatureEngine:
             targets = data[FeatureCol.TARGET].values
             y = targets[self.time_steps - 1:]
             y = np.array(y).astype(int)
+            # 精準抓取對應的正確日期 Index
+            valid_index = data.index[self.time_steps - 1:]
         else:
             # 實戰中，我們通常只需要拿「最後一個 Window (即最新資料)」去預測未來
             X = X[-1:]
             y = None   # 推論時沒有標準答案
+            valid_index = data.index[-1:]
 
         y_shape_str = str(y.shape) if y is not None else "None"
         dbg.log(f"時序矩陣建立完成！ X 形狀: {X.shape}, y 形狀: {y_shape_str}")
-        return X, y, scaler
+        return X, y, scaler, valid_index
