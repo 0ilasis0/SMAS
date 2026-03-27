@@ -197,13 +197,17 @@ if __name__ == "__main__":
     # 此時 generate_backtest_data 會用「只學過過去」的模型，
     # 去預測「包含最後 250 天」的全量資料，這就是真正的 OOS 預測！
     df_real_data = ai_engine.generate_backtest_data()
-    # df_real_data = ai_engine.load_inference_models()
 
     if df_real_data.empty:
         dbg.log("❌ 無法產生回測資料！")
         exit()
 
     df_test = df_real_data.tail(test_days)
+
+    print("\n📊 【AI 預測勝率分佈統計】")
+    print(df_test['prob_final'].describe())
+
+    dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
     engine = BacktestEngine(initial_cash=200000.0)
