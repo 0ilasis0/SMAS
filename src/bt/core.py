@@ -68,22 +68,3 @@ class Selector(BaseNode):
                 return state
         # 所有的備案都失敗了
         return NodeState.FAILURE
-
-class Inverter(BaseNode):
-    """
-    反轉節點 (NOT 邏輯 / 裝飾節點)。
-    只能包含一個子節點。將子節點的 SUCCESS 轉為 FAILURE，FAILURE 轉為 SUCCESS。
-    RUNNING 狀態則原封不動回傳。
-    (用途範例：Inverter(檢查是否持有部位) -> 變成「確認目前為空手」)
-    """
-    def __init__(self, name: str, child: BaseNode):
-        super().__init__(name)
-        self.child = child
-
-    def tick(self, blackboard: Blackboard) -> NodeState:
-        state = self.child.tick(blackboard)
-        if state == NodeState.SUCCESS:
-            return NodeState.FAILURE
-        elif state == NodeState.FAILURE:
-            return NodeState.SUCCESS
-        return state # RUNNING 原樣回傳

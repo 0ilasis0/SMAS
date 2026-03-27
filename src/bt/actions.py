@@ -1,17 +1,13 @@
 from bt.blackboard import Blackboard
 from bt.const import BtVar, DecisionAction, ExecuteCol
 from bt.core import BaseNode, NodeState
-from bt.params import ConsiderVar, TaxRate
+from bt.params import ConsiderConfig, TaxRate
 from debug import dbg
 
 
 # 交易動作節點 (虛擬交易執行)
 class ExecuteBuyNode(BaseNode):
-    """
-    執行買進動作，並更新黑板上的資金與部位。
-    :param capital_ratio: 動用可用資金的比例 (0.0 ~ 1.0)，1.0 為 All-in
-    """
-    def __init__(self, name: str = ExecuteCol.BUY, capital_ratio: float = ConsiderVar.CAPITAL_RATIO):
+    def __init__(self, name: str = ExecuteCol.BUY, capital_ratio: float = ConsiderConfig.CAPITAL_RATIO):
         super().__init__(name)
         self.capital_ratio = capital_ratio
 
@@ -25,20 +21,23 @@ class ExecuteBuyNode(BaseNode):
 
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
-        shares_to_buy = max(0, min(max_shares_prop, max_shares_min))
+        raw_shares = max(0, min(max_shares_prop, max_shares_min))
 
-        raw_cost = shares_to_buy * price
-        fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
+        # 嚴格限制買進必須是整股 (1000 股的倍數)
+        shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
 
-        # 避免除以零，並檢查摩擦成本
-        if raw_cost == 0 or (fee / raw_cost) > ConsiderVar.MAX_FRICTION_COST_RATIO:
-            dbg.war(f"買進金額過小 (僅 {raw_cost:.0f} 元)，手續費佔比過高，拒絕交易！")
+        if shares_to_buy <= 0:
+            dbg.war(f"資金不足以購買 1 張 ({BtVar.TRADE_UNIT} 股)，拒絕交易！")
             return NodeState.FAILURE
 
-        # 交易成本計算
+        # 🚀 修復：先計算交易成本，再進行防呆檢查
         raw_cost = shares_to_buy * price
         fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
         total_cost = raw_cost + fee
+
+        if (fee / raw_cost) > ConsiderConfig.MAX_FRICTION_COST_RATIO:
+            dbg.war("手續費摩擦佔比過高，拒絕交易！")
+            return NodeState.FAILURE
 
         if total_cost > blackboard.cash:
             dbg.war("加計手續費後真實總資金不足！")
@@ -58,8 +57,9 @@ class ExecuteBuyNode(BaseNode):
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = 0.0
 
-        if old_total_cost == 0:
+        if blackboard.entry_count == 0:
             blackboard.highest_price = price
+        blackboard.entry_count += 1
 
         dbg.log(f"🟢 [交易執行] 動用 {self.capital_ratio:.0%} 資金買進 {shares_to_buy} 股，成交價 {price:.2f}。剩餘總資金: {blackboard.cash:.2f}")
         blackboard.cached_return_rate = None
@@ -67,11 +67,7 @@ class ExecuteBuyNode(BaseNode):
 
 
 class ExecuteSellNode(BaseNode):
-    """
-    執行賣出動作，換回現金。
-    :param position_ratio: 賣出目前部位的比例 (0.0 ~ 1.0)，預設 1.0 為全數出清
-    """
-    def __init__(self, name: str = ExecuteCol.SELL, position_ratio: float = ConsiderVar.POSITION_RATIO):
+    def __init__(self, position_ratio: float, name: str = ExecuteCol.SELL):
         super().__init__(name)
         self.position_ratio = position_ratio
 
@@ -79,10 +75,22 @@ class ExecuteSellNode(BaseNode):
         price = blackboard.current_price
         position = blackboard.position
 
-        shares_to_sell = int(position * self.position_ratio)
+        if position <= 0:
+            return NodeState.FAILURE
+
+        # 🚀 修復：減碼遇到「不足一張」的防呆機制
+        if self.position_ratio >= 1.0:
+            shares_to_sell = position
+        else:
+            raw_shares = int(position * self.position_ratio)
+            shares_to_sell = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+
+            # 若計算出 0 股，但確實想減碼，則強迫賣出 1 張 (或剩下的全部)
+            if shares_to_sell == 0 and raw_shares > 0:
+                shares_to_sell = min(position, BtVar.TRADE_UNIT)
 
         if shares_to_sell <= 0:
-            dbg.war("賣出比例換算股數不足 1 股，無法賣出！")
+            dbg.war("計算後賣出股數異常，取消賣出！")
             return NodeState.FAILURE
 
         # 計算賣出實拿金額與損益
@@ -91,7 +99,6 @@ class ExecuteSellNode(BaseNode):
         tax = raw_revenue * TaxRate.TAX_RATE
         actual_revenue = raw_revenue - fee - tax
 
-        # 損益 = 賣出實拿 - (賣出股數 * 平均成本)
         profit = actual_revenue - (shares_to_sell * blackboard.avg_cost)
 
         # 更新黑板帳戶狀態
@@ -99,12 +106,13 @@ class ExecuteSellNode(BaseNode):
         blackboard.position -= shares_to_sell
 
         if blackboard.position == 0:
-            blackboard.avg_cost = 0.0
-            blackboard.highest_price = 0.0
+            # 已經清倉：一鍵清除所有記憶
+            blackboard.clear_trade_memory()
+        elif self.position_ratio < 1.0:
+            # 部分減碼：標記已經停利過，防止碎肉機陷阱
+            blackboard.is_partial_profit_taken = True
 
         blackboard.action_decision = DecisionAction.SELL
-
-        # 寫入黑板供 Gemini 使用
         blackboard.last_trade_shares = shares_to_sell
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = profit
@@ -112,7 +120,6 @@ class ExecuteSellNode(BaseNode):
         dbg.log(f"🔴 [交易執行] 賣出 {self.position_ratio:.0%} 部位 ({shares_to_sell} 股)，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
-
 
 class ExecuteHoldNode(BaseNode):
     """保持觀望，不進行任何交易"""
@@ -122,6 +129,20 @@ class ExecuteHoldNode(BaseNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         blackboard.action_decision = DecisionAction.HOLD
         dbg.log("⚪ [交易執行] 維持現狀 (HOLD)。")
+        return NodeState.SUCCESS
+
+
+class IgnoreFailure(BaseNode):
+    """裝飾節點：將子節點的 FAILURE 強制轉為 SUCCESS (非關鍵路徑避震器)"""
+    def __init__(self, child: BaseNode):
+        super().__init__(child.name + "_Ignored")
+        self.child = child
+
+    def tick(self, blackboard: Blackboard) -> NodeState:
+        state = self.child.tick(blackboard)
+        # 如果子節點還在 RUNNING，就乖乖向上回傳 RUNNING (未來擴充非同步 API 時會用到)
+        if state == NodeState.RUNNING:
+            return NodeState.RUNNING
         return NodeState.SUCCESS
 
 

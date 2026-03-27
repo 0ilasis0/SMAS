@@ -32,6 +32,10 @@ class Blackboard:
     avg_cost: float = 0.0       # 個股持倉平均成本
     highest_price: float = 0.0  # 移動停損專用的最高價記憶
 
+    # 波段交易記憶
+    entry_count: int = 0                  # 紀錄這個波段總共「買進/加碼」了幾次
+    is_partial_profit_taken: bool = False # 紀錄是否已經觸發過「部分停利」
+
     # AI 分析與決策結果
     action_decision: str = DecisionAction.HOLD
     gemini_reasoning: str = ""    # Gemini 產出的分析報告
@@ -48,15 +52,25 @@ class Blackboard:
     def get(self, key: str, default: Any = None) -> Any:
         return self.context.get(key, default)
 
-    def update_price(self, current_price: float):
+    def update_price(self, current_price: float, high_price: float = None):
         # 價格變了，強迫重算
         self.current_price = current_price
         self.cached_return_rate = None
 
         if self.position > 0:
-            self.highest_price = max(self.highest_price, current_price)
+            peak = high_price if high_price is not None else current_price
+            self.highest_price = max(self.highest_price, peak)
         else:
             self.highest_price = 0.0
+
+    def clear_trade_memory(self):
+        """當部位全數出清時，重置所有波段記憶與成本"""
+        self.position = 0
+        self.avg_cost = 0.0
+        self.highest_price = 0.0
+        self.entry_count = 0
+        self.is_partial_profit_taken = False
+        self.cached_return_rate = None
 
     @property
     def has_position(self) -> bool:
