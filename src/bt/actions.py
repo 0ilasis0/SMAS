@@ -1,96 +1,110 @@
 from bt.blackboard import Blackboard
+from bt.const import BtVar, DecisionAction, ExecuteCol
 from bt.core import BaseNode, NodeState
-from bt.variable import BtVar, DecisionAction, ExecuteCol
+from bt.params import ConsiderVar, TaxRate
 from debug import dbg
-
-
-class TaxRate:
-    ''' 台灣股市基礎費率設定 (可依券商折讓自行調整) '''
-    FEE_RATE: float = 0.001425  # 券商手續費率 (買賣皆收)
-    TAX_RATE: float = 0.003     # 證券交易稅率 (僅賣出收取)
-    MIN_FEE: float = 20.0       # 手續費低消
 
 
 # 交易動作節點 (虛擬交易執行)
 class ExecuteBuyNode(BaseNode):
-    """執行買進動作，並更新黑板上的資金與部位"""
-    def __init__(self, name: str = ExecuteCol.BUY):
+    """
+    執行買進動作，並更新黑板上的資金與部位。
+    :param capital_ratio: 動用可用資金的比例 (0.0 ~ 1.0)，1.0 為 All-in
+    """
+    def __init__(self, name: str = ExecuteCol.BUY, capital_ratio: float = ConsiderVar.CAPITAL_RATIO):
         super().__init__(name)
+        self.capital_ratio = capital_ratio
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         price = blackboard.current_price
-        cash = blackboard.cash
+        usable_cash = blackboard.cash * self.capital_ratio
 
         if price <= 0:
             dbg.error("股價異常，無法執行買進！")
             return NodeState.FAILURE
 
-        max_shares_prop = int(cash // (price * (1 + TaxRate.FEE_RATE)))
-        max_shares_min = int((cash - 20) // price)
-        shares_to_buy = min(max_shares_prop, max_shares_min)
+        max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
+        max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
+        shares_to_buy = max(0, min(max_shares_prop, max_shares_min))
 
-        if shares_to_buy <= 0:
+        if shares_to_buy <= 20:
             dbg.war("資金不足以購買任何零股/整股！")
             return NodeState.FAILURE
 
+        # 交易成本計算
         raw_cost = shares_to_buy * price
         fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
         total_cost = raw_cost + fee
 
-        if total_cost > cash:
-            dbg.war("加計手續費後資金不足！")
+        if total_cost > blackboard.cash:
+            dbg.war("加計手續費後真實總資金不足！")
             return NodeState.FAILURE
 
+        # 更新黑板帳戶狀態
         old_total_cost = blackboard.position * blackboard.avg_cost
         blackboard.cash -= total_cost
 
         new_position = blackboard.position + shares_to_buy
         blackboard.avg_cost = (old_total_cost + total_cost) / new_position
         blackboard.position = new_position
-
         blackboard.action_decision = DecisionAction.BUY
 
-        # 寫入黑板，供 Gemini 報告使用
+        # 寫入黑板供 Gemini 使用
         blackboard.last_trade_shares = shares_to_buy
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = 0.0
 
-        dbg.log(f"🟢 [交易執行] 買進 {shares_to_buy} 股，成交價 {price:.2f}。手續費 {fee:.0f}。剩餘資金: {blackboard.cash:.2f}")
+        if old_total_cost == 0:
+            blackboard.highest_price = price
+
+        dbg.log(f"🟢 [交易執行] 動用 {self.capital_ratio:.0%} 資金買進 {shares_to_buy} 股，成交價 {price:.2f}。剩餘總資金: {blackboard.cash:.2f}")
         return NodeState.SUCCESS
 
 
 class ExecuteSellNode(BaseNode):
-    """執行賣出動作，清空部位並換回現金"""
-    def __init__(self, name: str = ExecuteCol.SELL):
+    """
+    執行賣出動作，換回現金。
+    :param position_ratio: 賣出目前部位的比例 (0.0 ~ 1.0)，預設 1.0 為全數出清
+    """
+    def __init__(self, name: str = ExecuteCol.SELL, position_ratio: float = ConsiderVar.POSITION_RATIO):
         super().__init__(name)
+        self.position_ratio = position_ratio
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         price = blackboard.current_price
         position = blackboard.position
 
-        if position <= 0:
-            dbg.error("目前無部位，無法執行賣出！")
+        shares_to_sell = int(position * self.position_ratio)
+
+        if shares_to_sell <= 0:
+            dbg.war("賣出比例換算股數不足 1 股，無法賣出！")
             return NodeState.FAILURE
 
         # 計算賣出實拿金額與損益
-        raw_revenue = position * price
+        raw_revenue = shares_to_sell * price
         fee = max(TaxRate.MIN_FEE, raw_revenue * TaxRate.FEE_RATE)
         tax = raw_revenue * TaxRate.TAX_RATE
         actual_revenue = raw_revenue - fee - tax
 
-        profit = actual_revenue - (position * blackboard.avg_cost)
+        # 損益 = 賣出實拿 - (賣出股數 * 平均成本)
+        profit = actual_revenue - (shares_to_sell * blackboard.avg_cost)
 
+        # 更新黑板帳戶狀態
         blackboard.cash += actual_revenue
-        blackboard.position = 0
-        blackboard.avg_cost = 0.0
+        blackboard.position -= shares_to_sell
+
+        if blackboard.position == 0:
+            blackboard.avg_cost = 0.0
+            blackboard.highest_price = 0.0
+
         blackboard.action_decision = DecisionAction.SELL
 
-        # 寫入黑板，供 Gemini 報告使用
-        blackboard.last_trade_shares = position
+        # 寫入黑板供 Gemini 使用
+        blackboard.last_trade_shares = shares_to_sell
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = profit
 
-        dbg.log(f"🔴 [交易執行] 賣出 {position} 股，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
+        dbg.log(f"🔴 [交易執行] 賣出 {self.position_ratio:.0%} 部位 ({shares_to_sell} 股)，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
         return NodeState.SUCCESS
 
 

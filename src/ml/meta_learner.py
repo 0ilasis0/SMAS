@@ -9,7 +9,8 @@ from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from base import MathTool
 from debug import dbg
-from ml.params import MetaCol, MetaHyperParams, TrainConfig
+from ml.const import MetaCol
+from ml.params import MetaHyperParams, TrainConfig
 from path import PathConfig
 
 

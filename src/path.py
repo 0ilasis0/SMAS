@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ml.params import RNNType
+    from ml.const import RNNType
 
 def resource_path(*paths):
     """

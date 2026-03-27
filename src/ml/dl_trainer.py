@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import torch
@@ -11,7 +9,8 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool
 from debug import dbg
-from ml.params import DLHyperParams, RNNType, TrainConfig
+from ml.const import RNNType
+from ml.params import DLHyperParams, TrainConfig
 from path import PathConfig
 
 

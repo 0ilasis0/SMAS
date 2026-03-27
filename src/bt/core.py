@@ -2,8 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 
 from bt.blackboard import Blackboard
-from bt.variable import BtVar
-from debug import dbg
+from bt.const import BtVar
 
 
 class NodeState(Enum):

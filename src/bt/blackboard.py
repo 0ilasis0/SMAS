@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
-from bt.variable import DecisionAction
+from bt.const import DecisionAction
+from bt.params import TaxRate
 
 
 @dataclass
@@ -25,9 +26,10 @@ class Blackboard:
     last_trade_price: float = 0.0
 
     # 帳戶與持股狀態
-    cash: float = 0                         # 可用資金
-    position: list[str, int] = ["", 0]      # 持有個股與股數
-    avg_cost: list[str, float] = ["", 0.0]  # 持有個股與持倉平均成本
+    cash: float = 0             # 可用資金
+    position: int = 0           # 持有個股與股數
+    avg_cost: float = 0.0       # 持有個股與持倉平均成本
+    highest_price: float = 0.0  # 移動停損專用的最高價記憶
 
     # AI 分析與決策結果
     action_decision: str = DecisionAction.HOLD
@@ -36,13 +38,47 @@ class Blackboard:
     # 動態擴充區 (給特殊的節點放臨時變數)
     context: Dict[str, Any] = field(default_factory=dict)
 
+    _cached_return_rate: float | None = None
+
     def set(self, key: str, value: Any):
         self.context[key] = value
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.context.get(key, default)
 
+    def update_price(self, current_price: float):
+        # 價格變了，強迫重算
+        self.current_price = current_price
+        self._cached_return_rate = None
+
+        if self.position > 0:
+            self.highest_price = max(self.highest_price, current_price)
+        else:
+            self.highest_price = 0.0
+
     @property
     def has_position(self) -> bool:
         """判斷目前是否持有該檔股票"""
         return self.position > 0
+
+    @property
+    def estimated_return_rate(self) -> float:
+        """計算真實報酬率 (包含緩存機制)"""
+        if self._cached_return_rate is not None:
+            return self._cached_return_rate
+
+        if self.position <= 0 or self.avg_cost <= 0:
+            self._cached_return_rate = 0.0
+            return 0.0
+
+        raw_revenue = self.position * self.current_price
+        fee = max(TaxRate.MIN_FEE, raw_revenue * TaxRate.FEE_RATE)
+        tax = raw_revenue * TaxRate.TAX_RATE
+
+        actual_revenue = raw_revenue - fee - tax
+        total_cost = self.position * self.avg_cost
+
+        profit = actual_revenue - total_cost
+
+        self._cached_return_rate = profit / total_cost
+        return self._cached_return_rate

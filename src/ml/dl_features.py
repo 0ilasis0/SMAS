@@ -3,7 +3,7 @@ import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.preprocessing import RobustScaler
 
-from data.variable import StockCol
+from data.const import StockCol
 from debug import dbg
 from ml.params import DLHyperParams
 

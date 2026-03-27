@@ -8,7 +8,8 @@ from sklearn.model_selection import TimeSeriesSplit
 
 from base import MathTool
 from debug import dbg
-from ml.params import FeatureCol, TrainConfig, XGBHyperParams
+from ml.const import FeatureCol
+from ml.params import TrainConfig, XGBHyperParams
 from path import PathConfig
 
 

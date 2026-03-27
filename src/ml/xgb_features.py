@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from data.variable import StockCol
+from data.const import StockCol
 from debug import dbg
-from ml.params import FeatureCol, IndicatorParams
+from ml.const import FeatureCol
+from ml.params import IndicatorParams
 
 
 class XGBFeatureEngine:
