@@ -84,9 +84,8 @@ class DLFeatureEngine:
             y = np.array(y[valid_mask]).astype(int)
             valid_index = aligned_index[valid_mask]
         else:
-            X = X[-1:]
             y = None
-            valid_index = aligned_index[-1:]
+            valid_index = aligned_index
 
         y_shape_str = str(y.shape) if y is not None else "None"
         dbg.log(f"時序矩陣建立完成！ X 形狀: {X.shape}, y 形狀: {y_shape_str}")

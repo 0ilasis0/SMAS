@@ -7,30 +7,34 @@ from debug import dbg
 
 # 交易動作節點 (虛擬交易執行)
 class ExecuteBuyNode(BaseNode):
-    def __init__(self, name: str = ExecuteCol.BUY, capital_ratio: float = ConsiderConfig.CAPITAL_RATIO):
+    def __init__(self, capital_ratio: float, name: str = ExecuteCol.BUY):
         super().__init__(name)
         self.capital_ratio = capital_ratio
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        price = blackboard.current_price
+        # 使用明天的開盤價 (executable_price) 進行扣款
+        price = blackboard.executable_price
         usable_cash = blackboard.cash * self.capital_ratio
 
         if price <= 0:
-            dbg.error("股價異常，無法執行買進！")
             return NodeState.FAILURE
 
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
         raw_shares = max(0, min(max_shares_prop, max_shares_min))
 
-        # 嚴格限制買進必須是整股 (1000 股的倍數)
+        # 流動性限制 (買進量不得超過當日成交量的 5%)
+        max_liquidity_shares = int(blackboard.daily_volume * 0.05)
+        raw_shares = min(raw_shares, max_liquidity_shares)
+
+        # 嚴格限制整股
         shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
 
         if shares_to_buy <= 0:
-            dbg.war(f"資金不足以購買 1 張 ({BtVar.TRADE_UNIT} 股)，拒絕交易！")
+            dbg.war(f"資金或流動性不足以購買 1 張 ({BtVar.TRADE_UNIT} 股)！")
             return NodeState.FAILURE
 
-        # 🚀 修復：先計算交易成本，再進行防呆檢查
+        # 先計算交易成本，再進行防呆檢查
         raw_cost = shares_to_buy * price
         fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
         total_cost = raw_cost + fee
@@ -68,13 +72,13 @@ class ExecuteSellNode(BaseNode):
         self.position_ratio = position_ratio
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        price = blackboard.current_price
+        price = blackboard.executable_price
         position = blackboard.position
 
         if position <= 0:
             return NodeState.FAILURE
 
-        # 🚀 修復：減碼遇到「不足一張」的防呆機制
+        # 減碼遇到「不足一張」的防呆機制
         if self.position_ratio >= 1.0:
             shares_to_sell = position
         else:
@@ -85,8 +89,19 @@ class ExecuteSellNode(BaseNode):
             if shares_to_sell == 0 and raw_shares > 0:
                 shares_to_sell = min(position, BtVar.TRADE_UNIT)
 
+
+        drop_rate = (price - blackboard.current_price) / blackboard.current_price
+        if drop_rate <= -0.095:
+            dbg.war(f"遭遇跌停板鎖死 (開盤跌幅 {drop_rate:.2%})，無法執行賣出！")
+            return NodeState.FAILURE
+
+        # 🚀 升級：流動性限制 (賣出量不得超過當日成交量的 5%)
+        max_liquidity_shares = int(blackboard.daily_volume * 0.05)
+        if shares_to_sell > max_liquidity_shares:
+            dbg.war(f"賣出量 ({shares_to_sell}) 超過市場流動性上限 ({max_liquidity_shares})，僅能部分成交！")
+            shares_to_sell = (max_liquidity_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+
         if shares_to_sell <= 0:
-            dbg.war("計算後賣出股數異常，取消賣出！")
             return NodeState.FAILURE
 
         # 計算賣出實拿金額與損益
@@ -113,7 +128,7 @@ class ExecuteSellNode(BaseNode):
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = profit
 
-        dbg.log(f"🔴 [交易執行] 賣出 {self.position_ratio:.0%} 部位 ({shares_to_sell} 股)，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
+        dbg.log(f"[交易執行] 賣出 {self.position_ratio:.0%} 部位 ({shares_to_sell} 股)，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
@@ -124,7 +139,7 @@ class ExecuteHoldNode(BaseNode):
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         blackboard.action_decision = DecisionAction.HOLD
-        dbg.log("⚪ [交易執行] 維持現狀 (HOLD)。")
+        dbg.log("[交易執行] 維持現狀 (HOLD)。")
         return NodeState.SUCCESS
 
 
@@ -151,7 +166,7 @@ class GenerateGeminiReportNode(BaseNode):
         super().__init__(name)
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        dbg.log("🧠 正在呼叫 Gemini 生成決策分析報告...")
+        dbg.log("正在呼叫 Gemini 生成決策分析報告...")
 
         trade_info_str = ""
         if blackboard.action_decision == DecisionAction.BUY:
@@ -189,7 +204,7 @@ class GenerateGeminiReportNode(BaseNode):
         try:
             mock_response = f"【模擬 Gemini 回覆】\n根據綜合勝率 {blackboard.prob_final:.2%}，系統目前判定為 {blackboard.action_decision}。XGBoost 與 DL 模型的數據顯示..."
             blackboard.gemini_reasoning = mock_response
-            dbg.log("✅ Gemini 報告生成完畢！")
+            dbg.log("Gemini 報告生成完畢！")
             return NodeState.SUCCESS
 
         except Exception as e:

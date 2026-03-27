@@ -32,6 +32,10 @@ class Blackboard:
     avg_cost: float = 0.0       # 個股持倉平均成本
     highest_price: float = 0.0  # 移動停損專用的最高價記憶
 
+    # 交易執行用的現實環境變數
+    executable_price: float = 0.0
+    daily_volume: float = 0.0
+
     # 波段交易記憶
     entry_count: int = 0                  # 紀錄這個波段總共「買進/加碼」了幾次
     is_partial_profit_taken: bool = False # 紀錄是否已經觸發過「部分停利」
@@ -52,14 +56,15 @@ class Blackboard:
     def get(self, key: str, default: Any = None) -> Any:
         return self.context.get(key, default)
 
-    def update_price(self, current_price: float, high_price: float = None):
-        # 價格變了，強迫重算
+    def update_price(self, current_price: float, high_price: float, executable_price: float, daily_volume: float):
         self.current_price = current_price
+        self.executable_price = executable_price
+        self.daily_volume = daily_volume
         self.cached_return_rate = None
 
+        # 移動停損最高價追蹤 (使用高點，更精準)
         if self.position > 0:
-            peak = high_price if high_price is not None else current_price
-            self.highest_price = max(self.highest_price, peak)
+            self.highest_price = max(self.highest_price, high_price)
         else:
             self.highest_price = 0.0
 

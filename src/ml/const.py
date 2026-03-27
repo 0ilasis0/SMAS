@@ -38,5 +38,6 @@ class MetaCol(StrEnum):
     """Meta-Learner (Level 1) 專用的欄位名稱"""
     PROB_XGB = "prob_xgb"
     PROB_DL = "prob_dl"
+    PROB_FINAL = "prob_final"
     # 直接引用 FeatureCol 的 TARGET，確保一致性
     TARGET = FeatureCol.TARGET

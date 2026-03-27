@@ -1,7 +1,9 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 
-class BtVar(StrEnum):
+@dataclass(frozen=True)
+class BtVar:
     BASE_NODE = "base_node"
     GENERATE_GEMINI_REPORT = "generate_gemini_report"
     TRADE_UNIT = 1000
