@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
 
+from bt.account import Account
 from bt.const import DecisionAction
 from bt.params import TaxRate
 
@@ -26,9 +27,9 @@ class Blackboard:
     last_trade_price: float = 0.0
 
     # 帳戶與持股狀態
-    cash: float = 0             # 可用資金
-    position: int = 0           # 持有個股與股數
-    avg_cost: float = 0.0       # 持有個股與持倉平均成本
+    account: Account = None     # 可用資金
+    position: int = 0           # 持有股數
+    avg_cost: float = 0.0       # 個股持倉平均成本
     highest_price: float = 0.0  # 移動停損專用的最高價記憶
 
     # AI 分析與決策結果
@@ -38,7 +39,8 @@ class Blackboard:
     # 動態擴充區 (給特殊的節點放臨時變數)
     context: Dict[str, Any] = field(default_factory=dict)
 
-    _cached_return_rate: float | None = None
+    # 快取
+    cached_return_rate: float | None = None
 
     def set(self, key: str, value: Any):
         self.context[key] = value
@@ -49,7 +51,7 @@ class Blackboard:
     def update_price(self, current_price: float):
         # 價格變了，強迫重算
         self.current_price = current_price
-        self._cached_return_rate = None
+        self.cached_return_rate = None
 
         if self.position > 0:
             self.highest_price = max(self.highest_price, current_price)
@@ -64,11 +66,11 @@ class Blackboard:
     @property
     def estimated_return_rate(self) -> float:
         """計算真實報酬率 (包含緩存機制)"""
-        if self._cached_return_rate is not None:
-            return self._cached_return_rate
+        if self.cached_return_rate is not None:
+            return self.cached_return_rate
 
         if self.position <= 0 or self.avg_cost <= 0:
-            self._cached_return_rate = 0.0
+            self.cached_return_rate = 0.0
             return 0.0
 
         raw_revenue = self.position * self.current_price
@@ -80,5 +82,17 @@ class Blackboard:
 
         profit = actual_revenue - total_cost
 
-        self._cached_return_rate = profit / total_cost
-        return self._cached_return_rate
+        self.cached_return_rate = profit / total_cost
+        return self.cached_return_rate
+
+    @property
+    def cash(self) -> float:
+        """提供一個捷徑屬性，方便原本的 Action 節點讀取"""
+        if self.account is None: return 0.0
+        return self.account.cash
+
+    @cash.setter
+    def cash(self, value: float):
+        """提供一個捷徑屬性，方便原本的 Action 節點扣款"""
+        if self.account is not None:
+            self.account.cash = value

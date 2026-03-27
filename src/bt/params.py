@@ -22,3 +22,6 @@ class ConsiderVar:
     # 動用可用資金的比例 (0.0 ~ 1.0)，1.0 為 All-in
     CAPITAL_RATIO: float = 0.5
     POSITION_RATIO:  float = 1.0
+
+    # 摩擦成本
+    MAX_FRICTION_COST_RATIO: float = 0.01

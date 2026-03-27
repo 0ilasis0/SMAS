@@ -27,8 +27,12 @@ class ExecuteBuyNode(BaseNode):
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
         shares_to_buy = max(0, min(max_shares_prop, max_shares_min))
 
-        if shares_to_buy <= 20:
-            dbg.war("資金不足以購買任何零股/整股！")
+        raw_cost = shares_to_buy * price
+        fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
+
+        # 避免除以零，並檢查摩擦成本
+        if raw_cost == 0 or (fee / raw_cost) > ConsiderVar.MAX_FRICTION_COST_RATIO:
+            dbg.war(f"買進金額過小 (僅 {raw_cost:.0f} 元)，手續費佔比過高，拒絕交易！")
             return NodeState.FAILURE
 
         # 交易成本計算
@@ -58,6 +62,7 @@ class ExecuteBuyNode(BaseNode):
             blackboard.highest_price = price
 
         dbg.log(f"🟢 [交易執行] 動用 {self.capital_ratio:.0%} 資金買進 {shares_to_buy} 股，成交價 {price:.2f}。剩餘總資金: {blackboard.cash:.2f}")
+        blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
 
@@ -105,6 +110,7 @@ class ExecuteSellNode(BaseNode):
         blackboard.last_trade_profit = profit
 
         dbg.log(f"🔴 [交易執行] 賣出 {self.position_ratio:.0%} 部位 ({shares_to_sell} 股)，成交價 {price:.2f}。淨損益: {profit:.2f}。目前資金: {blackboard.cash:.2f}")
+        blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
 
@@ -133,8 +139,9 @@ class GenerateGeminiReportNode(BaseNode):
         trade_info_str = ""
         if blackboard.action_decision == DecisionAction.BUY:
             trade_info_str = f"- 交易執行：系統買進了 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}。"
-        elif blackboard.action_decision == DecisionAction.SELL:
-            trade_info_str = f"- 交易執行：系統全數出清 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，本次交易淨損益為 {blackboard.last_trade_profit:.2f} 元。"
+        elif  blackboard.action_decision == DecisionAction.SELL:
+            action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
+            trade_info_str = f"- 交易執行：系統{action_type} {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，本次交易淨損益為 {blackboard.last_trade_profit:.2f} 元。"
         else:
             trade_info_str = "- 交易執行：系統判定無顯著訊號或條件不符，維持空手/持倉不動 (HOLD)。"
 
