@@ -4,13 +4,14 @@ from bt.conditions import (CheckBuySignalNode, CheckEntryCountLimitNode,
                            CheckHasPositionNode, CheckNotPartialTakenNode,
                            CheckSellSignalNode, CheckStopLossNode,
                            CheckTakeProfitNode, CheckTrailingStopNode)
-from bt.core import Selector, Sequence
+from bt.core import Inverter, Selector, Sequence
+from bt.params import StrategyConfig
 
 
-def build_trading_tree() -> Selector:
+def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
     """
     建構 IDSS 量化交易行為樹主邏輯。
-    加入「動態加碼 (Scaling In)」與「分級減碼 (Scaling Out)」的機構級策略。
+    :param config: 策略參數設定，若不傳入則使用預設值。
     """
 
     # ==========================================
@@ -22,28 +23,29 @@ def build_trading_tree() -> Selector:
         # 依照危機的嚴重程度，拆分成不同級別的出場手段
         Selector("分級出場邏輯", [
 
-            # 級別 1：致命危機 -> 觸發停損或移動停損，100% 資金全面砍倉
+            # 級別 1：致命危機 -> 觸發停損或移動停損，全面砍倉
             Sequence("強制停損_全面撤退", [
                 Selector("停損條件", [
-                    CheckStopLossNode(loss_tolerance=-0.05),
-                    CheckTrailingStopNode(drawdown_tolerance=-0.08)
+                    CheckStopLossNode(loss_tolerance=config.stop_loss_tolerance),
+                    CheckTrailingStopNode(drawdown_tolerance=config.trailing_stop_drawdown)
                 ]),
-                ExecuteSellNode(position_ratio=1.0),
+                ExecuteSellNode(position_ratio=config.stop_loss_sell_ratio),
                 IgnoreFailure(GenerateGeminiReportNode())
             ]),
 
-            # 級別 2：AI 預警 -> 勝率低於 40%，先減碼 50% 降風險，避免被洗出場
+            # 級別 2：AI 預警 -> 勝率低迷，先減碼降風險
             Sequence("勝率低迷_戰術減碼", [
-                CheckSellSignalNode(threshold=0.40),
-                ExecuteSellNode(position_ratio=0.5),
+                CheckSellSignalNode(threshold=config.sell_signal_threshold),
+                ExecuteSellNode(position_ratio=config.warning_sell_ratio),
                 IgnoreFailure(GenerateGeminiReportNode())
             ]),
 
-            # 級別 3：極端停利 -> 暴漲 30%，先賣 50% 入袋為安，剩下讓利潤奔跑
+            # 級別 3：極端停利 -> 暴漲達標，先入袋為安，剩下讓利潤奔跑
             Sequence("極端獲利_部分停利", [
-                CheckTakeProfitNode(profit_target=0.30),
-                CheckNotPartialTakenNode(),  # 🛡️ 關鍵：已經賣過一半就不會再進來了！
-                ExecuteSellNode(position_ratio=0.5),
+                CheckTakeProfitNode(profit_target=config.take_profit_target),
+                CheckNotPartialTakenNode(),
+                Inverter("非強烈看漲", CheckBuySignalNode(threshold=config.strong_buy_threshold)),
+                ExecuteSellNode(position_ratio=config.take_profit_sell_ratio),
                 IgnoreFailure(GenerateGeminiReportNode())
             ])
         ])
@@ -54,20 +56,19 @@ def build_trading_tree() -> Selector:
     # ==========================================
     attack_strategy = Selector("進攻策略", [
 
-        # 狀況 A：極度看漲 -> 動用當下剩餘現金的 100% 買進
+        # 狀況 A：極度看漲 -> 強烈買進
         Sequence("強烈買進", [
-            CheckBuySignalNode(threshold=0.75),
-            CheckEntryCountLimitNode(max_entries=3),
-            ExecuteBuyNode(capital_ratio=1.0),
+            CheckBuySignalNode(threshold=config.strong_buy_threshold),
+            CheckEntryCountLimitNode(max_entries=config.max_entries),
+            ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
             IgnoreFailure(GenerateGeminiReportNode())
         ]),
 
-        # 狀況 B：普通看漲 -> 動用當下剩餘現金的 50% 試水溫或微調加碼
+        # 狀況 B：普通看漲 -> 保守買進試水溫
         Sequence("保守買進", [
-            # (已移除空手限制)
-            CheckBuySignalNode(threshold=0.60),
-            CheckEntryCountLimitNode(max_entries=3),
-            ExecuteBuyNode(capital_ratio=0.5),
+            CheckBuySignalNode(threshold=config.conservative_buy_threshold),
+            CheckEntryCountLimitNode(max_entries=config.max_entries),
+            ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),
             IgnoreFailure(GenerateGeminiReportNode())
         ])
     ])

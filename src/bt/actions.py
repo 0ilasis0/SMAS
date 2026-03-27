@@ -35,10 +35,6 @@ class ExecuteBuyNode(BaseNode):
         fee = max(TaxRate.MIN_FEE, raw_cost * TaxRate.FEE_RATE)
         total_cost = raw_cost + fee
 
-        if (fee / raw_cost) > ConsiderConfig.MAX_FRICTION_COST_RATIO:
-            dbg.war("手續費摩擦佔比過高，拒絕交易！")
-            return NodeState.FAILURE
-
         if total_cost > blackboard.cash:
             dbg.war("加計手續費後真實總資金不足！")
             return NodeState.FAILURE
