@@ -1,10 +1,11 @@
 from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
                         GenerateGeminiReportNode, IgnoreFailure)
-from bt.conditions import (CheckBuySignalNode, CheckEntryCountLimitNode,
-                           CheckGapLimitNode, CheckHasPositionNode,
-                           CheckNotPartialTakenNode, CheckSellSignalNode,
-                           CheckStopLossNode, CheckTakeProfitNode,
-                           CheckTrailingStopNode)
+from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
+                           CheckEntryCountLimitNode, CheckGapLimitNode,
+                           CheckHasPositionNode, CheckNotPartialTakenNode,
+                           CheckSellSignalNode, CheckStopLossNode,
+                           CheckTakeProfitNode, CheckTrailingStopNode,
+                           CheckTrendFilterNode)
 from bt.core import Inverter, Selector, Sequence
 from bt.params import StrategyConfig
 
@@ -27,8 +28,8 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
             # 級別 1：致命危機 -> 觸發停損或移動停損，全面砍倉
             Sequence("強制停損_全面撤退", [
                 Selector("停損條件", [
-                    CheckStopLossNode(loss_tolerance=config.stop_loss_tolerance),
-                    CheckTrailingStopNode(drawdown_tolerance=config.trailing_stop_drawdown)
+                    CheckStopLossNode(loss_tolerance=config.stop_loss_tolerance, cooldown_days=config.cooldown_days),
+                    CheckTrailingStopNode(drawdown_tolerance=config.trailing_stop_drawdown, cooldown_days=config.cooldown_days)
                 ]),
                 ExecuteSellNode(position_ratio=config.stop_loss_sell_ratio),
                 IgnoreFailure(GenerateGeminiReportNode())
@@ -56,23 +57,30 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
     # 策略 2：進攻與建倉 (允許連續加碼)
     # ==========================================
     attack_strategy = Selector("進攻策略", [
+        # 共同防禦：必須通過這兩關，才有資格往下走
+        CheckCooldownNode(cooldown_days=config.cooldown_days),
+        CheckTrendFilterNode(),
 
-        # 狀況 A：極度看漲 -> 強烈買進
-        Sequence("強烈買進", [
-            CheckBuySignalNode(threshold=config.strong_buy_threshold),
-            CheckEntryCountLimitNode(max_entries=config.max_entries),
-            CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
-            ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
-            IgnoreFailure(GenerateGeminiReportNode())
-        ]),
+        # 通過防禦後，才進入選擇器分配力道
+        Selector("買進力道分配", [
 
-        # 狀況 B：普通看漲 -> 保守買進試水溫
-        Sequence("保守買進", [
-            CheckBuySignalNode(threshold=config.conservative_buy_threshold),
-            CheckEntryCountLimitNode(max_entries=config.max_entries),
-            CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
-            ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),
-            IgnoreFailure(GenerateGeminiReportNode())
+            # 狀況 A：極度看漲 -> 強烈買進
+            Sequence("強烈買進", [
+                CheckBuySignalNode(threshold=config.strong_buy_threshold),
+                CheckEntryCountLimitNode(max_entries=config.max_entries),
+                CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
+                ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
+                IgnoreFailure(GenerateGeminiReportNode())
+            ]),
+
+            # 狀況 B：普通看漲 -> 保守買進試水溫
+            Sequence("保守買進", [
+                CheckBuySignalNode(threshold=config.conservative_buy_threshold),
+                CheckEntryCountLimitNode(max_entries=config.max_entries),
+                CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
+                ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),
+                IgnoreFailure(GenerateGeminiReportNode())
+            ])
         ])
     ])
 

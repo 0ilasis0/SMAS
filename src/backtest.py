@@ -4,7 +4,7 @@ import pandas as pd
 
 from bt.account import Account
 from bt.blackboard import Blackboard
-from bt.const import DecisionAction
+from bt.const import BtVar, DecisionAction
 from bt.params import StrategyConfig
 from bt.strategy import build_trading_tree
 from data.const import StockCol
@@ -60,6 +60,11 @@ class BacktestEngine:
 
             # 清空前一天的決策紀錄
             self.bb.action_decision = DecisionAction.HOLD
+
+            # 全域時鐘，每天確實扣減冷卻期
+            current_cd = getattr(self.bb, BtVar.COOLDOWN_TIMER, 0)
+            if current_cd > 0:
+                setattr(self.bb, BtVar.COOLDOWN_TIMER, current_cd - 1)
 
             # 執行行為樹心跳 (Tick)
             self.tree.tick(self.bb)
@@ -183,20 +188,20 @@ def generate_mock_data(days: int = 250) -> pd.DataFrame:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2388.TW"
+    ticker = "0052.TW"
     test_days = 240
     ai_engine = QuantAIEngine(ticker=ticker)
 
     # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-    ai_engine.update_market_data()
-    ai_engine.train_all_models(save_models=True, oos_days=test_days)
+    # ai_engine.update_market_data()
+    # ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
         dbg.error("❌ 模型載入失敗...")
         exit()
 
     # 此時 generate_backtest_data 會用「只學過過去」的模型，
-    # 去預測「包含最後 250 天」的全量資料，這就是真正的 OOS 預測！
+    # 去預測「包含最後 240 天」的全量資料，這就是真正的 OOS 預測！
     df_real_data = ai_engine.generate_backtest_data()
 
     if df_real_data.empty:

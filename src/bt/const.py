@@ -7,6 +7,8 @@ class BtVar:
     BASE_NODE = "base_node"
     GENERATE_GEMINI_REPORT = "generate_gemini_report"
     TRADE_UNIT = 1000
+    COOLDOWN_TIMER = "cooldown_timer"
+
 
 class ExecuteCol(StrEnum):
     BUY = "buy"
@@ -14,6 +16,8 @@ class ExecuteCol(StrEnum):
     HOLD = "hold"
 
 class ConditionCol(StrEnum):
+    CHECK_COOLDOWN = "check_cooldown"
+    CHECK_TREND_FILTER = "check_trend_filter"
     CHECK_GAP_LIMIT = "check_gap_limit"
     CHECK_NOT_PARTIAL_TAKEN = "check_not_partial_taken"
     CHECK_ENTRY_COUNT_LIMIT = "check_entry_count_limit"
@@ -23,9 +27,6 @@ class ConditionCol(StrEnum):
     CHECK_STOP_LOSS = "check_stop_loss"
     CHECK_TAKE_PROFIT = "check_take_profit"
     CHECK_TRAILING_STOP = "check_trailing_stop"
-
-class StrategyCol(StrEnum):
-    DEFENSIVE = "defensive"
 
 class DecisionAction(StrEnum):
     BUY = "buy"
