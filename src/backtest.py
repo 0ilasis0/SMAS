@@ -187,8 +187,8 @@ if __name__ == "__main__":
     ai_engine = QuantAIEngine(ticker=ticker)
 
     # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-    ai_engine.update_market_data()
-    ai_engine.train_all_models(save_models=True, oos_days=test_days)
+    # ai_engine.update_market_data()
+    # ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
         dbg.log("❌ 模型載入失敗...")
@@ -206,8 +206,6 @@ if __name__ == "__main__":
 
     print("\n📊 【AI 預測勝率分佈統計】")
     print(df_test['prob_final'].describe())
-
-    dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
     engine = BacktestEngine(initial_cash=200000.0)
