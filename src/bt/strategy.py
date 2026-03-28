@@ -59,7 +59,7 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
     attack_strategy = Selector("進攻策略", [
         # 共同防禦：必須通過這兩關，才有資格往下走
         CheckCooldownNode(cooldown_days=config.cooldown_days),
-        CheckTrendFilterNode(),
+        CheckTrendFilterNode(StrategyConfig.xgb_threshold),
 
         # 通過防禦後，才進入選擇器分配力道
         Selector("買進力道分配", [
