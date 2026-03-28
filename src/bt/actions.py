@@ -16,22 +16,18 @@ class ExecuteBuyNode(BaseNode):
         price = blackboard.executable_price
         usable_cash = blackboard.cash * self.capital_ratio
 
-        if price <= 0:
+        if price <= 0 or pd.isna(price):
+            dbg.war(f"買進失敗: 執行價異常 (price={price})")
             return NodeState.FAILURE
 
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
         raw_shares = max(0, min(max_shares_prop, max_shares_min))
 
-        # 流動性限制 (買進量不得超過當日成交量的 5%)
-        max_liquidity_shares = int(blackboard.daily_volume * 0.05)
-        raw_shares = min(raw_shares, max_liquidity_shares)
-
         # 嚴格限制整股
         shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
-
         if shares_to_buy <= 0:
-            dbg.war(f"資金或流動性不足以購買 1 張 ({BtVar.TRADE_UNIT} 股)！")
+            dbg.war(f"買進失敗: 欲買 {shares_to_buy} 股。可用資金={usable_cash:.0f}, 股價={price:.2f}, 原始試算={raw_shares} 股")
             return NodeState.FAILURE
 
         # 先計算交易成本，再進行防呆檢查

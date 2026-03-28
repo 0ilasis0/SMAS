@@ -208,5 +208,5 @@ if __name__ == "__main__":
     print(df_test['prob_final'].describe())
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    engine = BacktestEngine(initial_cash=200000.0)
+    engine = BacktestEngine(initial_cash=1000000.0)
     engine.run(df_test)
