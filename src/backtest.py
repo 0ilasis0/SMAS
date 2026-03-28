@@ -191,7 +191,7 @@ if __name__ == "__main__":
     # ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
-        dbg.log("❌ 模型載入失敗...")
+        dbg.error("❌ 模型載入失敗...")
         exit()
 
     # 此時 generate_backtest_data 會用「只學過過去」的模型，
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     df_real_data = ai_engine.generate_backtest_data()
 
     if df_real_data.empty:
-        dbg.log("❌ 無法產生回測資料！")
+        dbg.error("❌ 無法產生回測資料！")
         exit()
 
     df_test = df_real_data.tail(test_days)

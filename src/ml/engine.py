@@ -4,16 +4,16 @@ import joblib
 import pandas as pd
 import torch
 
-from data.const import StockCol, TimeUnit
+from data.const import TimeUnit
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MetaCol
+from ml.const import FeatureCol, MetaCol, MLConst
 from ml.dl_features import DLFeatureEngine
 from ml.dl_trainer import DLTrainer
 from ml.meta_learner import MetaLearner
-from ml.params import SessionConfig
+from ml.params import DLHyperParams, SessionConfig
 from ml.xgb_features import XGBFeatureEngine
 from ml.xgb_trainer import XGBTrainer
 from path import PathConfig
@@ -73,12 +73,13 @@ class QuantAIEngine:
             dbg.error(f"資料庫中無 {self.config.ticker} 的資料，請先執行 update_market_data()。")
             return
 
+        df_train_only = df_raw_full.iloc[:-oos_days] if oos_days > 0 else df_raw_full
+
         # XGBoost 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 左腦：XGBoost ---")
 
         xgb_engine = XGBFeatureEngine()
-        df_xgb_clean_full = xgb_engine.process_pipeline(df_raw_full, self.config.lookahead)
-        df_xgb_train = df_xgb_clean_full.iloc[:-oos_days] if oos_days > 0 else df_xgb_clean_full
+        df_xgb_train = xgb_engine.process_pipeline(df_train_only, self.config.lookahead)
 
         xgb_trainer = XGBTrainer(self.config.ticker)
         oof_xgb = xgb_trainer.train_with_cv(df_xgb_train)
@@ -91,16 +92,7 @@ class QuantAIEngine:
         dbg.log("\n--- [訓練階段] 右腦：Deep Learning ---")
 
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        X_dl_full, y_dl_full, scaler, valid_index_full = dl_engine.process_pipeline(df_raw_full)
-
-        if oos_days > 0:
-            X_dl_train = X_dl_full[:-oos_days]
-            y_dl_train = y_dl_full[:-oos_days]
-            valid_index_train = valid_index_full[:-oos_days]
-        else:
-            X_dl_train = X_dl_full
-            y_dl_train = y_dl_full
-            valid_index_train = valid_index_full
+        X_dl_train, y_dl_train, scaler, valid_index_train = dl_engine.process_pipeline(df_train_only)
 
         dl_trainer = DLTrainer(ticker=self.config.ticker, rnn_type=self.config.rnn_type)
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train)
@@ -139,7 +131,7 @@ class QuantAIEngine:
             self.xgb_model = XGBTrainer.load_inference_model(xgb_path)
 
             self.dl_scaler = joblib.load(self.scaler_path)
-            dl_input_size = len(StockCol.get_ohlcv())
+            dl_input_size = DLHyperParams.INPUT_SIZE
             self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size)
 
             meta = MetaLearner(self.config.ticker)
@@ -167,25 +159,25 @@ class QuantAIEngine:
 
         # 抓取最新資料 (確保資料庫有最新 K 線)
         df_raw = self.db.get_daily_data(self.config.ticker)
-        df_recent = df_raw.tail(500).copy()
+        df_recent = df_raw.tail(MLConst.MAX_LOOKBACK).copy()
 
         # ==========================================
         # 🟢 左腦 (XGBoost) 推論修正
         # ==========================================
         xgb_engine = XGBFeatureEngine()
-        df_xgb_features = xgb_engine._create_daily_features(df_recent)
-        latest_xgb_features = df_xgb_features[FeatureCol.get_features()].iloc[-1:]
+        df_xgb_clean = xgb_engine.process_pipeline(df_recent, self.config.lookahead, is_training=False)
+        if df_xgb_clean.empty:
+            dbg.error(f"[{self.config.ticker}] XGBoost 暖機資料不足，無法預測！")
+            return None
 
-        if latest_xgb_features.isna().any().any():
-            dbg.war(f"[{self.config.ticker}] 警告：今日特徵包含 NaN (可能歷史資料不足 240 天)，XGB 預測準確度可能下降。")
-
+        latest_xgb_features = df_xgb_clean[FeatureCol.get_features()].iloc[-1:]
         prob_xgb = self.xgb_model.predict_proba(latest_xgb_features)[0, 1]
 
         # ==========================================
         # 🟢 右腦 (DL) 推論修正
         # ==========================================
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        # 注意：傳入 self.dl_scaler，讓它進入「推論模式」
+
         X_dl, _, _, _ = dl_engine.process_pipeline(df_recent, scaler=self.dl_scaler)
 
         if X_dl is None:
@@ -210,9 +202,6 @@ class QuantAIEngine:
         【供回測引擎使用】
         批次產生包含歷史 K 線與 AI 預測勝率的 DataFrame。
         """
-        import pandas as pd
-        import torch
-
         if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler):
             dbg.error("模型未載入！請先執行 load_inference_models()")
             return pd.DataFrame()
@@ -224,30 +213,37 @@ class QuantAIEngine:
 
         # XGBoost 批次推論
         xgb_engine = XGBFeatureEngine()
-        df_xgb_features = xgb_engine._create_daily_features(df_raw)
-        X_xgb = df_xgb_features[FeatureCol.get_features()]
-        prob_xgb = self.xgb_model.predict_proba(X_xgb)[:, 1]
+        df_xgb_clean = xgb_engine.process_pipeline(df_raw, self.config.lookahead, is_training=False)
+        X_xgb = df_xgb_clean[FeatureCol.get_features()]
+        prob_xgb_series = pd.Series(
+            self.xgb_model.predict_proba(X_xgb)[:, 1],
+            index=df_xgb_clean.index,
+            name=MetaCol.PROB_XGB
+        )
 
         # DL 批次推論
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        # 傳入 scaler 進入推論模式
-        X_dl, _, _, _ = dl_engine.process_pipeline(df_raw, scaler=self.dl_scaler)
+        X_dl, _, _, valid_index = dl_engine.process_pipeline(df_raw, scaler=self.dl_scaler)
 
         self.dl_model.eval()
         with torch.no_grad():
-            X_tensor = torch.tensor(X_dl, dtype=torch.float32)
             device = next(self.dl_model.parameters()).device
-            X_tensor = X_tensor.to(device)
-            prob_dl = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
+            X_tensor = torch.as_tensor(X_dl, dtype=torch.float32, device=device)
+            prob_dl_array = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
 
-        valid_len = len(prob_dl)
-        df_backtest = df_raw.iloc[-valid_len:].copy()
+        prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MetaCol.PROB_DL)
 
-        df_backtest[MetaCol.PROB_XGB] = prob_xgb[-valid_len:]
-        df_backtest[MetaCol.PROB_DL] = prob_dl
+        df_backtest = df_raw.copy()
+        df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series)
+
+        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL], inplace=True)
+
+        if df_backtest.empty:
+            dbg.war("合併後的預測資料為空，請檢查資料長度是否足夠讓模型暖機。")
+            return pd.DataFrame()
 
         X_meta = df_backtest[[MetaCol.PROB_XGB, MetaCol.PROB_DL]].values
         df_backtest[MetaCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
-        dbg.log("✅ 回測資料生成完畢！")
+        dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")
         return df_backtest

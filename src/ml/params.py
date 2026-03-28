@@ -8,13 +8,13 @@ from ml.const import RNNType
 class SessionConfig:
     """存放當前任務的『環境變數』"""
     ticker: str
-    rnn_type: RNNType = RNNType.GRU
+    rnn_type: RNNType = RNNType.LSTM
     lookahead: int = 5
 
 
 @dataclass(frozen=True)
 class IndicatorParams:
-# 均線參數
+    # 均線參數
     MA_WEEK: int = 5
     MA_MONTH: int = 20
     MA_QUARTER: int = 60
@@ -51,7 +51,8 @@ class TrainConfig:
 @dataclass(frozen=True)
 class DLHyperParams:
     """CNN-LSTM 深度學習超參數"""
-    TIME_STEPS: int = 60                # 滑動窗口大小 (回顧過去 ~ 天)
+    INPUT_SIZE: int = 8
+    TIME_STEPS: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
     CNN_OUT_CHANNELS: int = 16          # CNN 特徵提取後的維度
     LSTM_HIDDEN: int = 32               # LSTM 隱藏層神經元數量
     NUM_LAYERS: int = 1

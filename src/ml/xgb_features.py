@@ -16,7 +16,7 @@ class XGBFeatureEngine:
     def __init__(self, params: IndicatorParams = IndicatorParams()):
         self.params = params
 
-    def process_pipeline(self, df: pd.DataFrame, lookahead: int) -> pd.DataFrame:
+    def process_pipeline(self, df: pd.DataFrame, lookahead: int, is_training: bool = True) -> pd.DataFrame:
         """執行完整的 XGBoost 特徵管線"""
         if df.empty:
             dbg.war("輸入的 DataFrame 為空，跳過特徵工程。")
@@ -28,12 +28,16 @@ class XGBFeatureEngine:
         df_labeled = self._create_labels(df_features, lookahead)
 
         features = FeatureCol.get_features()
-        initial_len = len(df_labeled)
 
         df_labeled = df_labeled.replace([np.inf, -np.inf], np.nan)
-        df_clean = df_labeled.dropna(subset=features + [FeatureCol.TARGET])
-        final_len = len(df_clean)
 
+        if is_training:
+            df_clean = df_labeled.dropna(subset=features + [FeatureCol.TARGET])
+        else:
+            df_clean = df_labeled.dropna(subset=features)
+
+        initial_len = len(df_labeled)
+        final_len = len(df_clean)
         dbg.log(f"特徵工程完成。移除了 {initial_len - final_len} 筆含 NaN 的無效資料，剩餘 {final_len} 筆可用樣本。")
         return df_clean
 
@@ -62,11 +66,15 @@ class XGBFeatureEngine:
         rs = gain / (loss + 1e-9)
         data[FeatureCol.RSI] = 100 - (100 / (1 + rs))
 
-        # MACD
+        # MACD (轉化為百分比 PPO)
         ema_fast = data[StockCol.CLOSE].ewm(span=self.params.MACD_FAST, adjust=False).mean()
         ema_slow = data[StockCol.CLOSE].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
-        data[FeatureCol.MACD] = ema_fast - ema_slow
+        data[FeatureCol.MACD] = (ema_fast - ema_slow) / data[StockCol.CLOSE] * 100
         data[FeatureCol.MACD_SIGNAL] = data[FeatureCol.MACD].ewm(span=self.params.MACD_SIGNAL, adjust=False).mean()
+
+        # 布林通道寬度 (BB Width) - 抓波動率壓縮
+        rolling_std = data[close_col].rolling(window=self.params.MA_MONTH).std()
+        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / ma_m
 
         # 價格與成交量動能
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
@@ -84,11 +92,11 @@ class XGBFeatureEngine:
 
         data = df.copy()
 
-        # 將未來第 N 天的收盤價往回拉到今天的 Row
-        future_close = data[StockCol.CLOSE].shift(-lookahead)
+        future_high_max = data[StockCol.HIGH].rolling(window=lookahead, min_periods=1).max().shift(-lookahead)
 
-        # 先轉為支援缺失值的整數型態，再將確實沒有未來資料的列強制設為 NaN
-        data[FeatureCol.TARGET] = (future_close > data[StockCol.CLOSE]).astype('Int64')
-        data.loc[future_close.isna(), FeatureCol.TARGET] = pd.NA
+        target_condition = future_high_max > (data[StockCol.CLOSE] * 1.025)
+
+        data[FeatureCol.TARGET] = target_condition.astype('Int64')
+        data.loc[future_high_max.isna(), FeatureCol.TARGET] = pd.NA
 
         return data

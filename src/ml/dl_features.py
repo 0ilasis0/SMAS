@@ -6,6 +6,7 @@ from sklearn.preprocessing import RobustScaler
 
 from data.const import StockCol
 from debug import dbg
+from ml.const import FeatureCol
 from ml.params import DLHyperParams
 
 
@@ -40,14 +41,27 @@ class DLFeatureEngine:
             dbg.war(f"資料量不足。需要 {min_required_len} 筆，目前僅有 {len(df)} 筆。")
             return None, None, None, None
 
-        data = df.copy()
-
         # 選取要餵給神經網路的原始特徵
         dl_features = []
+        data = df.copy()
+        # 基礎 K 線變化
         for col in StockCol.get_ohlcv():
             feat_name = f"{col}_log_chg"
-            data[feat_name] = np.log(data[col] / data[col].shift(1))
+            if col == StockCol.VOLUME:
+                data[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
+            else:
+                data[feat_name] = np.log(data[col] / data[col].shift(1))
             dl_features.append(feat_name)
+
+        ma_w = data[StockCol.CLOSE].rolling(window=5).mean()
+        ma_m = data[StockCol.CLOSE].rolling(window=20).mean()
+        rolling_std = data[StockCol.CLOSE].rolling(window=20).std()
+
+        data[FeatureCol.BIAS_WEEK] = (data[StockCol.CLOSE] - ma_w) / ma_w
+        data[FeatureCol.BIAS_MONTH] = (data[StockCol.CLOSE] - ma_m) / ma_m
+        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / ma_m
+
+        dl_features.extend([FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH])
 
         # 處理極端值與 0 填補
         data[dl_features] = data[dl_features].replace([np.inf, -np.inf], np.nan)
@@ -57,28 +71,26 @@ class DLFeatureEngine:
         if is_training:
             dbg.log("訓練模式：重新 Fit Scaler")
             scaler = RobustScaler()
-            scaled_features = scaler.fit_transform(data[dl_features])
+            scaled_features = scaler.fit_transform(data[dl_features].values)
         else:
             dbg.log("推論模式：使用既有 Scaler 進行 Transform")
-            scaled_features = scaler.transform(data[dl_features])
+            scaled_features = scaler.transform(data[dl_features].values)
 
         # 建立滑動視窗
         X = sliding_window_view(scaled_features, window_shape=self.time_steps, axis=0)
         X = np.transpose(X, (0, 2, 1))
-
         # 對齊索引
         aligned_index = data.index[self.time_steps - 1:]
 
         # 處理標籤 (Target) 與切分
         if is_training:
-            future_close = data[StockCol.CLOSE].shift(-self.lookahead)
+            future_high_max = data[StockCol.HIGH].rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
+            target_condition = future_high_max > (data[StockCol.CLOSE] * 1.025)
 
-            # 直接算出所有的 0 和 1 (忽略 NaN，反正最後會切掉)
-            y_all = (future_close > data[StockCol.CLOSE]).astype(int).values
+            y_all = target_condition.astype(int).values
             y = y_all[self.time_steps - 1:]
 
-            # 直接用 future_close 是否為 NaN 來做 Mask
-            future_isna = future_close.isna().values[self.time_steps - 1:]
+            future_isna = future_high_max.isna().values[self.time_steps - 1:]
             valid_mask = ~future_isna
 
             X = X[valid_mask]

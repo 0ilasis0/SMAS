@@ -21,6 +21,7 @@ class FeatureCol(StrEnum):
     # 動能特徵
     VOL_CHANGE = "vol_change"
     CLOSE_CHANGE = "close_change"
+    BB_WIDTH = "bb_width"
 
     # 標籤 (Label)
     TARGET = "target"
@@ -31,7 +32,7 @@ class FeatureCol(StrEnum):
         return [
             cls.BIAS_WEEK, cls.BIAS_MONTH, cls.BIAS_QUARTER, cls.BIAS_YEAR,
             cls.RSI, cls.MACD, cls.MACD_SIGNAL,
-            cls.VOL_CHANGE, cls.CLOSE_CHANGE
+            cls.VOL_CHANGE, cls.CLOSE_CHANGE, cls.BB_WIDTH
         ]
 
 class MetaCol(StrEnum):
@@ -41,3 +42,7 @@ class MetaCol(StrEnum):
     PROB_FINAL = "prob_final"
     # 直接引用 FeatureCol 的 TARGET，確保一致性
     TARGET = FeatureCol.TARGET
+
+class MLConst:
+    # 依據：MA_YEAR(240) + DL_TIME_STEPS(20) + 安全緩衝 = 抓取 300~500 天足矣
+    MAX_LOOKBACK = 400
