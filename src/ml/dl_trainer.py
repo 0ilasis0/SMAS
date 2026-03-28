@@ -1,4 +1,6 @@
 # dl_trainer.py
+import copy
+
 import numpy as np
 import pandas as pd
 import torch
@@ -145,6 +147,7 @@ class DLTrainer:
 
             best_val_loss = float('inf')
             patience_counter = 0
+            best_model_wts = copy.deepcopy(model.state_dict())
 
             # --- Training Loop ---
             for epoch in range(self.epochs):
@@ -169,6 +172,8 @@ class DLTrainer:
                 if avg_val_loss < best_val_loss:
                     best_val_loss = avg_val_loss
                     patience_counter = 0
+                    # 在 Loss 最低時，趕緊把大腦狀態備份下來！
+                    best_model_wts = copy.deepcopy(model.state_dict())
                 else:
                     patience_counter += 1
                     if patience_counter >= TrainConfig.EARLY_STOP_ROUND:
@@ -177,6 +182,7 @@ class DLTrainer:
                 scheduler.step(avg_val_loss)
 
             # --- 收集 OOF 預測 ---
+            model.load_state_dict(best_model_wts)
             model.eval()
             val_preds = []
             with torch.no_grad():
