@@ -51,23 +51,24 @@ class BacktestEngine:
             self.bb.update_price(
                 current_price=current_close,
                 high_price=row[StockCol.HIGH],
-                executable_price=next_row[StockCol.OPEN],  # 🚀 新增：實際執行交易的價格
-                daily_volume=next_row[StockCol.VOLUME]     # 🚀 新增：流動性上限
+                executable_price=next_row[StockCol.OPEN],  # 實際執行交易的價格
+                daily_volume=next_row[StockCol.VOLUME]     # 流動性上限
             )
-
             self.bb.prob_xgb = row[MetaCol.PROB_XGB]
+            self.bb.prob_dl = row[MetaCol.PROB_DL]
+            self.bb.prob_final = row[MetaCol.PROB_FINAL]
 
             # 清空前一天的決策紀錄
             self.bb.action_decision = DecisionAction.HOLD
 
-            # 2. 執行行為樹心跳 (Tick)
+            # 執行行為樹心跳 (Tick)
             self.tree.tick(self.bb)
 
-            # 3. 計算當日總淨值
+            # 計算當日總淨值
             stock_value = self.bb.position * current_close
             total_equity = self.bb.cash + stock_value
 
-            # 4. 紀錄歷史
+            # 紀錄歷史
             self.history_records.append({
                 'Date': date,
                 'Close': current_close,
@@ -88,20 +89,20 @@ class BacktestEngine:
 
         df_res = pd.DataFrame(self.history_records).set_index('Date')
 
-        # 1. 總報酬率與年化報酬率 (CAGR)
+        # 總報酬率與年化報酬率 (CAGR)
         final_equity = df_res['Total_Equity'].iloc[-1]
         total_return = (final_equity - self.initial_cash) / self.initial_cash
 
-        # 🚀 升級三：計算 CAGR (假設一年約 252 個交易日)
+        # 計算 CAGR (假設一年約 252 個交易日)
         trading_days = len(df_res)
         cagr = (final_equity / self.initial_cash) ** (252 / trading_days) - 1
 
-        # 2. 計算最大回撤 (Max Drawdown, MDD)
+        # 計算最大回撤 (Max Drawdown, MDD)
         df_res['Peak'] = df_res['Total_Equity'].cummax()
         df_res['Drawdown'] = (df_res['Total_Equity'] - df_res['Peak']) / df_res['Peak']
         max_drawdown = df_res['Drawdown'].min()
 
-        # 🚀 升級三：計算夏普值 (Sharpe Ratio，假設無風險利率為 1%)
+        # 計算夏普值 (Sharpe Ratio，假設無風險利率為 1%)
         df_res['Daily_Return'] = df_res['Total_Equity'].pct_change().fillna(0)
         daily_volatility = df_res['Daily_Return'].std()
         if daily_volatility > 0:
@@ -109,7 +110,7 @@ class BacktestEngine:
         else:
             sharpe_ratio = 0.0
 
-        # 3. 統計交易次數
+        # 統計交易次數
         buy_count = len(df_res[df_res['Action'] == DecisionAction.BUY])
         sell_count = len(df_res[df_res['Action'] == DecisionAction.SELL])
 
@@ -126,7 +127,7 @@ class BacktestEngine:
         dbg.log(f"💸 賣出次數: \t{sell_count} 次")
         dbg.log("="*40)
 
-        # 4. 繪製資金曲線圖
+        # 繪製資金曲線圖
         plt.figure(figsize=(12, 6))
 
         ax1 = plt.subplot(2, 1, 1)
@@ -182,13 +183,13 @@ def generate_mock_data(days: int = 250) -> pd.DataFrame:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2409.TW"
-    test_days = 250
+    ticker = "2388.TW"
+    test_days = 240
     ai_engine = QuantAIEngine(ticker=ticker)
 
     # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-    # ai_engine.update_market_data()
-    # ai_engine.train_all_models(save_models=True, oos_days=test_days)
+    ai_engine.update_market_data()
+    ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
         dbg.error("❌ 模型載入失敗...")
@@ -208,5 +209,5 @@ if __name__ == "__main__":
     print(df_test['prob_final'].describe())
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    engine = BacktestEngine(initial_cash=1000000.0)
+    engine = BacktestEngine(initial_cash=2000000.0)
     engine.run(df_test)

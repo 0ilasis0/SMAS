@@ -91,7 +91,7 @@ class CheckBuySignalNode(BaseNode):
         if prob >= self.threshold:
             dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} >= 買進門檻 ➔ 允許買進 (SUCCESS)")
             return NodeState.SUCCESS
-
+        # dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} <= 買進門檻 ➔ 不買進")
         return NodeState.FAILURE
 
 

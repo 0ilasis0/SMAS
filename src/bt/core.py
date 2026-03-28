@@ -3,6 +3,7 @@ from enum import Enum, auto
 
 from bt.blackboard import Blackboard
 from bt.const import BtVar
+from debug import dbg
 
 
 class NodeState(Enum):
@@ -42,10 +43,13 @@ class Sequence(BaseNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         for child in self.children:
             state = child.tick(blackboard)
-            if state != NodeState.SUCCESS:
-                # 遇到 FAILURE 或 RUNNING，直接中斷並向上回傳
-                return state
-        # 全部子節點都成功
+
+            if state == NodeState.FAILURE:
+                # dbg.log(f"❌ [Sequence 阻斷] 節點 '{self.name}' 在子節點 '{child.name}' 失敗")
+                return NodeState.FAILURE
+            elif state == NodeState.RUNNING:
+                return NodeState.RUNNING
+
         return NodeState.SUCCESS
 
 
@@ -64,7 +68,6 @@ class Selector(BaseNode):
         for child in self.children:
             state = child.tick(blackboard)
             if state != NodeState.FAILURE:
-                # 遇到 SUCCESS 或 RUNNING，代表找到可行的路，直接向上回傳
                 return state
         # 所有的備案都失敗了
         return NodeState.FAILURE

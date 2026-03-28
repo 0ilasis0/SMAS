@@ -32,14 +32,22 @@ class ExecuteBuyNode(BaseNode):
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
         raw_shares = max(0, min(max_shares_prop, max_shares_min))
 
-        # 恢復買進流動性限制 (買進量不得超過當日成交量的 5%)
-        max_liquidity_shares = int(blackboard.daily_volume * 0.05)
+        # 終極修復：自動偵測成交量單位 (張 vs 股)
+        vol = blackboard.daily_volume
+        # 如果日成交量小於 100 萬，極高機率 API 給的是「張數」，我們自動幫它乘 1000 轉成「股數」
+        if vol < 1000000 and vol > 0:
+            vol = vol * 1000
+            print("88888888888888888888")
+
+        max_liquidity_shares = int(vol * 0.05)
         raw_shares = min(raw_shares, max_liquidity_shares)
 
         # 嚴格限制整股
         shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+
+        # 偵錯探針：把為什麼不買的原因大聲說出來！
         if shares_to_buy <= 0:
-            dbg.war(f"買進失敗: 欲買 {shares_to_buy} 股。可用資金={usable_cash:.0f}, 股價={price:.2f}, 原始試算={raw_shares} 股")
+            # dbg.war(f"買進失敗: 欲買 0 股。預算={usable_cash:.0f}, 股價={price:.2f}, 流動性上限={max_liquidity_shares}股")
             return NodeState.FAILURE
 
         # 先計算交易成本，再進行防呆檢查
@@ -69,7 +77,7 @@ class ExecuteBuyNode(BaseNode):
             blackboard.highest_price = price
         blackboard.entry_count += 1
 
-        dbg.log(f"🟢 [交易執行] 動用 {self.capital_ratio:.0%} 資金買進 {shares_to_buy} 股，成交價 {price:.2f}。剩餘總資金: {blackboard.cash:.2f}")
+        dbg.log(f"🟢 [交易執行] 動用 {self.capital_ratio:.0%} 資金買進 {shares_to_buy} 股，成交價 {price:.2f}。剩餘總資金: {blackboard.cash:.0f}")
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
@@ -103,7 +111,7 @@ class ExecuteSellNode(BaseNode):
             dbg.war(f"遭遇跌停板鎖死 (開盤跌幅 {drop_rate:.2%})，無法執行賣出！")
             return NodeState.FAILURE
 
-        # 🚀 升級：流動性限制 (賣出量不得超過當日成交量的 5%)
+        # 流動性限制 (賣出量不得超過當日成交量的 5%)
         max_liquidity_shares = int(blackboard.daily_volume * 0.05)
         if shares_to_sell > max_liquidity_shares:
             dbg.war(f"賣出量 ({shares_to_sell}) 超過市場流動性上限 ({max_liquidity_shares})，僅能部分成交！")

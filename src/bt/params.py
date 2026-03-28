@@ -33,7 +33,7 @@ class StrategyConfig:
 
     # ================= 進攻與資金控管參數 =================
     max_entries: int = 3                     # 單一波段最大加碼次數
-    max_gap_ratio: int = 0.03
+    max_gap_ratio: float = 0.07              # 低價股的跳空容忍度
 
     strong_buy_threshold: float = 0.75       # 強烈買進訊號門檻 (>= 75%)
     strong_buy_capital_ratio: float = 1.0    # 強烈買進時動用的資金比例 (100%)
