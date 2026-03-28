@@ -1,8 +1,34 @@
 from bt.blackboard import Blackboard
 from bt.const import ConditionCol
 from bt.core import BaseNode, NodeState
-from bt.params import ConsiderConfig
+from bt.params import ConsiderConfig, TaxRate
 from debug import dbg
+
+
+class CheckGapLimitNode(BaseNode):
+    """
+    檢查隔日開盤跳空幅度是否過大。
+    用來防止 AI 判定買進，但隔天直接開漲停或大幅跳空，導致買在極高風險的位置。
+    """
+    def __init__(self, max_gap_ratio: float, name: str = ConditionCol.CHECK_GAP_LIMIT):
+        super().__init__(name)
+        # 預設：如果明天開盤跳空大於 ~%，就放棄買進
+        self.max_gap_ratio = max_gap_ratio
+
+    def tick(self, blackboard: Blackboard) -> NodeState:
+        today_close = blackboard.current_price
+        tomorrow_open = blackboard.executable_price
+
+        if today_close <= 0:
+            return NodeState.FAILURE
+
+        gap_ratio = (tomorrow_open - today_close) / today_close
+
+        if gap_ratio > self.max_gap_ratio:
+            dbg.war(f"🛡️ [進攻取消] 明日開盤跳空達 {gap_ratio:.2%}，超過容忍值 {self.max_gap_ratio:.2%}，拒絕追高！(FAILURE)")
+            return NodeState.FAILURE
+
+        return NodeState.SUCCESS
 
 
 class CheckNotPartialTakenNode(BaseNode):
@@ -101,11 +127,23 @@ class CheckStopLossNode(BaseNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         if blackboard.position <= 0: return NodeState.FAILURE
 
-        real_return = blackboard.estimated_return_rate
+        # 以今日收盤價評估的真實報酬率
+        close_return = blackboard.estimated_return_rate
 
-        if real_return <= self.loss_tolerance:
-            dbg.war(f"⚠️ [風險控管] 觸發停損！真實報酬率 {real_return:.2%} <= 容忍底線 {self.loss_tolerance:.2%} (SUCCESS)")
+        # 以明日開盤價評估的「預期報酬率」(模擬券商洗價觸發)
+        open_revenue = blackboard.position * blackboard.executable_price
+        total_cost = blackboard.position * blackboard.avg_cost
+
+        # 扣除預估手續費與稅金
+        fee = max(TaxRate.MIN_FEE, open_revenue * TaxRate.FEE_RATE)
+        tax = open_revenue * TaxRate.TAX_RATE
+        open_return = (open_revenue - fee - tax - total_cost) / total_cost if total_cost > 0 else 0
+
+        if close_return <= self.loss_tolerance or open_return <= self.loss_tolerance:
+            trigger_price = blackboard.current_price if close_return <= self.loss_tolerance else blackboard.executable_price
+            dbg.war(f"⚠️ [風險控管] 觸發強制停損！觸價: {trigger_price:.2f} 預估報酬率: {min(close_return, open_return):.2%} <= 容忍底線 {self.loss_tolerance:.2%} (SUCCESS)")
             return NodeState.SUCCESS
+
         return NodeState.FAILURE
 
 
@@ -143,13 +181,18 @@ class CheckTrailingStopNode(BaseNode):
         if blackboard.position <= 0 or blackboard.highest_price <= 0:
             return NodeState.FAILURE
 
-        current_price = blackboard.current_price
         highest_price = blackboard.highest_price
 
-        drawdown = (current_price - highest_price) / highest_price
+        # 1. 計算今日收盤的回落幅度
+        close_drawdown = (blackboard.current_price - highest_price) / highest_price
 
-        if drawdown <= self.drawdown_tolerance:
-            dbg.war(f"🛡️ [風險控管] 觸發移動停損！從最高點 {highest_price:.2f} 回落 {drawdown:.2%} <= 容忍底線 {self.drawdown_tolerance:.2%} (SUCCESS)")
+        # 2. 計算明日開盤的回落幅度 (模擬開盤跳空跌破防守線)
+        open_drawdown = (blackboard.executable_price - highest_price) / highest_price
+
+        # 只要有任何一個跌破容忍底線 (注意：數值是負的，所以用 <= )
+        if close_drawdown <= self.drawdown_tolerance or open_drawdown <= self.drawdown_tolerance:
+            actual_drawdown = min(close_drawdown, open_drawdown)
+            dbg.war(f"🛡️ [風險控管] 觸發移動停損！最高點 {highest_price:.2f} 回落 {actual_drawdown:.2%} <= 容忍底線 {self.drawdown_tolerance:.2%} (SUCCESS)")
             return NodeState.SUCCESS
 
         return NodeState.FAILURE

@@ -1,9 +1,10 @@
 from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
                         GenerateGeminiReportNode, IgnoreFailure)
 from bt.conditions import (CheckBuySignalNode, CheckEntryCountLimitNode,
-                           CheckHasPositionNode, CheckNotPartialTakenNode,
-                           CheckSellSignalNode, CheckStopLossNode,
-                           CheckTakeProfitNode, CheckTrailingStopNode)
+                           CheckGapLimitNode, CheckHasPositionNode,
+                           CheckNotPartialTakenNode, CheckSellSignalNode,
+                           CheckStopLossNode, CheckTakeProfitNode,
+                           CheckTrailingStopNode)
 from bt.core import Inverter, Selector, Sequence
 from bt.params import StrategyConfig
 
@@ -60,6 +61,7 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
         Sequence("強烈買進", [
             CheckBuySignalNode(threshold=config.strong_buy_threshold),
             CheckEntryCountLimitNode(max_entries=config.max_entries),
+            CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
             ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
             IgnoreFailure(GenerateGeminiReportNode())
         ]),
@@ -68,6 +70,7 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
         Sequence("保守買進", [
             CheckBuySignalNode(threshold=config.conservative_buy_threshold),
             CheckEntryCountLimitNode(max_entries=config.max_entries),
+            CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
             ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),
             IgnoreFailure(GenerateGeminiReportNode())
         ])

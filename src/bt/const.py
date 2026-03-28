@@ -14,6 +14,7 @@ class ExecuteCol(StrEnum):
     HOLD = "hold"
 
 class ConditionCol(StrEnum):
+    CHECK_GAP_LIMIT = "check_gap_limit"
     CHECK_NOT_PARTIAL_TAKEN = "check_not_partial_taken"
     CHECK_ENTRY_COUNT_LIMIT = "check_entry_count_limit"
     CHECK_HAS_POSITION = "check_has_position"

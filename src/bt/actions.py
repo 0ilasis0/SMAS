@@ -1,7 +1,9 @@
+import pandas as pd
+
 from bt.blackboard import Blackboard
 from bt.const import BtVar, DecisionAction, ExecuteCol
 from bt.core import BaseNode, NodeState
-from bt.params import ConsiderConfig, TaxRate
+from bt.params import TaxRate
 from debug import dbg
 
 
@@ -20,9 +22,19 @@ class ExecuteBuyNode(BaseNode):
             dbg.war(f"買進失敗: 執行價異常 (price={price})")
             return NodeState.FAILURE
 
+        # 漲停板鎖死防禦
+        rise_rate = (price - blackboard.current_price) / blackboard.current_price
+        if rise_rate >= 0.095:
+            dbg.war(f"遭遇漲停板鎖死 (開盤漲幅 {rise_rate:.2%})，無法執行買進！")
+            return NodeState.FAILURE
+
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
         raw_shares = max(0, min(max_shares_prop, max_shares_min))
+
+        # 恢復買進流動性限制 (買進量不得超過當日成交量的 5%)
+        max_liquidity_shares = int(blackboard.daily_volume * 0.05)
+        raw_shares = min(raw_shares, max_liquidity_shares)
 
         # 嚴格限制整股
         shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
