@@ -14,59 +14,60 @@ class ConsiderConfig:
     BUY_THRESHOLD: float = 0.6
     SELL_THRESHOLD: float = 0.4
 
-# @dataclass
-# class StrategyConfig:
-#     """
-#     量化交易策略參數配置中心。
-#     將所有閥值集中管理，方便未來進行網格搜索 (Grid Search) 最佳化。
-#     """
-#     # ================= 防守與風險控管參數 =================
-#     stop_loss_tolerance: float = -0.05       # 強制停損容忍度 (-5%)
-#     trailing_stop_drawdown: float = -0.08    # 移動停損回落容忍度 (-8%)
-#     stop_loss_sell_ratio: float = 1.0        # 觸發停損時的賣出比例 (100% 全面撤退)
-
-#     sell_signal_threshold: float = 0.40      # AI 勝率低迷預警門檻 (<40%)
-#     warning_sell_ratio: float = 0.5          # AI 預警時的戰術減碼比例 (賣出 50%)
-
-#     take_profit_target: float = 0.30         # 極端停利目標 (+30%)
-#     take_profit_sell_ratio: float = 0.5      # 觸發極端停利時的減碼比例 (先入袋 50%)
-
-#     # ================= 進攻與資金控管參數 =================
-#     max_entries: int = 3                     # 單一波段最大加碼次數
-#     max_gap_ratio: float = 0.07              # 低價股的跳空容忍度
-
-#     strong_buy_threshold: float = 0.75       # 強烈買進訊號門檻 (>= 75%)
-#     strong_buy_capital_ratio: float = 1.0    # 強烈買進時動用的資金比例 (100%)
-
-#     conservative_buy_threshold: float = 0.60 # 保守買進訊號門檻 (>= 60%)
-#     conservative_buy_capital_ratio: float = 0.5 # 保守買進時動用的資金比例 (50%)
-
-    # xgb_threshold: float = 0.45
-    # cooldown_timer: int = 5
-
 @dataclass
 class StrategyConfig:
-    # --- 防守與風險控管 ---
-    stop_loss_tolerance: float = -0.04       # 設緊一點，錯了就砍 (-4%)
-    trailing_stop_drawdown: float = -0.04    # 回落 4% 就鎖住利潤
-    stop_loss_sell_ratio: float = 1.0
+    """
+    量化交易策略參數配置中心。
+    將所有閥值集中管理，方便未來進行網格搜索 (Grid Search) 最佳化。
+    """
+    # ================= 防守與風險控管參數 =================
+    stop_loss_tolerance: float = -0.05       # 強制停損容忍度 (-5%)
+    trailing_stop_drawdown: float = -0.08    # 移動停損回落容忍度 (-8%)
+    stop_loss_sell_ratio: float = 1.0        # 觸發停損時的賣出比例 (100% 全面撤退)
 
-    sell_signal_threshold: float = 0.45      # 提高逃命敏感度 (<45%)
-    warning_sell_ratio: float = 1.0          # 遇到危險不要只賣一半，全砍
+    sell_signal_threshold: float = 0.40      # AI 勝率低迷預警門檻 (<40%)
+    warning_sell_ratio: float = 0.5          # AI 預警時的戰術減碼比例 (賣出 50%)
 
-    # AI 只預測微幅上漲，所以我們見好就收！
-    take_profit_target: float = 0.05         # 賺 5% 就觸發極端停利
-    take_profit_sell_ratio: float = 0.5      # 先賣一半入袋
+    take_profit_target: float = 0.30         # 極端停利目標 (+30%)
+    take_profit_sell_ratio: float = 0.5      # 觸發極端停利時的減碼比例 (先入袋 50%)
 
-    # --- 進攻與資金控管 ---
-    max_entries: int = 2                     # 減少加碼次數
-    max_gap_ratio: float = 0.03
+    # ================= 進攻與資金控管參數 =================
+    max_entries: int = 3                     # 單一波段最大加碼次數
+    max_gap_ratio: float = 0.07              # 低價股的跳空容忍度
 
-    strong_buy_threshold: float = 0.80       # 把門檻拉高，只做最有把握的 (>= 80%)
-    strong_buy_capital_ratio: float = 1.0
+    strong_buy_threshold: float = 0.75       # 強烈買進訊號門檻 (>= 75%)
+    strong_buy_capital_ratio: float = 1.0    # 強烈買進時動用的資金比例 (100%)
 
-    conservative_buy_threshold: float = 0.70 # (>= 70%)
-    conservative_buy_capital_ratio: float = 0.5
+    conservative_buy_threshold: float = 0.60 # 保守買進訊號門檻 (>= 60%)
+    conservative_buy_capital_ratio: float = 0.5 # 保守買進時動用的資金比例 (50%)
 
     xgb_threshold: float = 0.45
-    cooldown_days: int = 5
+    cooldown_days: int = 3
+
+# @dataclass
+# class StrategyConfig:
+#     # --- 防守與風險控管 (極限防守) ---
+#     stop_loss_tolerance: float = -0.02       # 🚀 對齊 2.5% 利潤，停損必須縮小到 -2%
+#     trailing_stop_drawdown: float = -0.02    # 🚀 回落 2% 立刻跑，絕不戀戰
+#     stop_loss_sell_ratio: float = 1.0
+
+#     sell_signal_threshold: float = 0.50      # 勝率低於 50% 就視為危險 (<50%)
+#     warning_sell_ratio: float = 1.0
+
+#     # 🚀 停利完美對齊 AI 訓練標籤 (2.5%)
+#     take_profit_target: float = 0.025        # 只要賺 2.5% 立刻觸發停利！
+#     take_profit_sell_ratio: float = 0.8      # 極短線不留戀，直接賣出 80% 或全賣 (設 1.0 也可以)
+
+#     # --- 進攻與資金控管 ---
+#     max_entries: int = 1                     # 極短線搶反彈，禁止加碼攤平 (設為 1)
+#     max_gap_ratio: float = 0.02              # 跳空超過 2% 就不追了
+
+#     # 🚀 應對勝率通膨，拉高進場門檻 (只挑 Top 15% 的極端好機會)
+#     strong_buy_threshold: float = 0.88       # (>= 88%)
+#     strong_buy_capital_ratio: float = 1.0
+
+#     conservative_buy_threshold: float = 0.80 # (>= 80%)
+#     conservative_buy_capital_ratio: float = 0.5
+
+#     xgb_threshold: float = 0.50              # 左腦也要大於 50% 才准放行
+#     cooldown_days: int = 3                   # 短線冷卻期縮短為 3 天

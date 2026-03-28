@@ -160,7 +160,7 @@ class BacktestEngine:
 # ==========================================
 # 模擬測試區 (如果還沒有真實的 ML 預測數據，可以用這個測試行為樹邏輯)
 # ==========================================
-def generate_mock_data(days: int = 250) -> pd.DataFrame:
+def generate_mock_data(days) -> pd.DataFrame:
     """生成具有趨勢的假 K 線與假 AI 勝率，用來測試行為樹是否正常運作"""
     np.random.seed(42)
 
@@ -188,8 +188,8 @@ def generate_mock_data(days: int = 250) -> pd.DataFrame:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2388.TW"
-    test_days = 240
+    ticker = "2409.TW"
+    test_days = 200
     ai_engine = QuantAIEngine(ticker=ticker)
 
     # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
