@@ -35,6 +35,26 @@ class FeatureCol(StrEnum):
             cls.VOL_CHANGE, cls.CLOSE_CHANGE, cls.BB_WIDTH
         ]
 
+class MarketFeatureCol(StrEnum):
+    """大盤專屬特徵欄位名稱"""
+    TWII_BIAS_20 = "twii_bias_20"
+    TWII_BIAS_60 = "twii_bias_60"
+    TWII_RSI = "twii_rsi"
+    TWII_MACD = "twii_macd"
+    TWII_VOL_CHG = "twii_vol_chg"
+
+    TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
+    SOX_RET_1D = "sox_ret_1d"
+    SOX_RET_5D = "sox_ret_5d"
+    SOX_TWII_SPREAD = "sox_twii_spread" # 台美相對強弱差
+
+    TARGET_DANGER = "target_danger" # 1:危險(將崩盤), 0:安全
+
+    @classmethod
+    def get_features(cls) -> list[str]:
+        """自動回傳所有特徵名稱 (排除 Target)"""
+        return [e.value for e in cls if e.value != cls.TARGET_DANGER.value]
+
 class MetaCol(StrEnum):
     """Meta-Learner (Level 1) 專用的欄位名稱"""
     PROB_XGB = "prob_xgb"

@@ -1,5 +1,5 @@
-# ml/params.py
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from typing import Any, Dict
 
 from ml.const import RNNType
 
@@ -62,6 +62,28 @@ class DLHyperParams:
     DROPOUT: float = 0.2
     SCHEDULER_PATIENCE: int = 3
     SCHEDULER_FACTOR: float = 0.5
+
+@dataclass
+class MarketLGBMConfig:
+    """LightGBM 大盤防禦模型超參數配置"""
+    objective: str = 'binary'
+    metric: str = 'auc'
+    boosting_type: str = 'gbdt'
+    max_depth: int = 4              # 限制深度防止過擬合
+    learning_rate: float = 0.05
+    n_estimators: int = 300
+    subsample: float = 0.8
+    colsample_bytree: float = 0.8
+    random_state: int = 42
+    verbose: int = -1
+    early_stopping_rounds: int = 30 # 將 callback 參數也納入管理
+
+    def to_dict(self) -> Dict[str, Any]:
+        """轉換為 LightGBM 吃的字典格式，並排除非原生參數"""
+        data = asdict(self)
+        # 移除不屬於 LGBMClassifier 構造函數的參數
+        data.pop('early_stopping_rounds', None)
+        return data
 
 @dataclass(frozen=True)
 class MetaHyperParams:

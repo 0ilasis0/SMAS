@@ -34,6 +34,7 @@ class PathConfig:
     IDSS_DATA = PathBase.processed / "idss_data.db"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
+    UNIVERSAL_MARKET = PathBase.model / "universal_market_model.joblib"
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:
