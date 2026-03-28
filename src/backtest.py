@@ -188,7 +188,7 @@ def generate_mock_data(days: int = 250) -> pd.DataFrame:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "0052.TW"
+    ticker = "2388.TW"
     test_days = 240
     ai_engine = QuantAIEngine(ticker=ticker)
 

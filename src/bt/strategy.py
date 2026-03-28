@@ -56,10 +56,10 @@ def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
     # ==========================================
     # 策略 2：進攻與建倉 (允許連續加碼)
     # ==========================================
-    attack_strategy = Selector("進攻策略", [
-        # 共同防禦：必須通過這兩關，才有資格往下走
+    attack_strategy = Sequence("進攻策略大門", [
+        # 共同防禦：必須通過這兩關 (回傳 SUCCESS)，才有資格往下走
         CheckCooldownNode(cooldown_days=config.cooldown_days),
-        CheckTrendFilterNode(StrategyConfig.xgb_threshold),
+        CheckTrendFilterNode(xgb_threshold=config.xgb_threshold),
 
         # 通過防禦後，才進入選擇器分配力道
         Selector("買進力道分配", [
