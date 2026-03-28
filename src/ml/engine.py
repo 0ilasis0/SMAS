@@ -5,7 +5,7 @@ import joblib
 import pandas as pd
 import torch
 
-from data.const import TimeUnit
+from data.const import MacroTicker, TimeUnit
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
@@ -36,6 +36,8 @@ class QuantAIEngine:
         self.xgb_model = None
         self.dl_model = None
         self.meta_learner = None
+        self.market_model = None
+
         # DL 推論的縮放器
         self.dl_scaler = None
 
@@ -46,16 +48,26 @@ class QuantAIEngine:
     # ==========================================
     def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR) -> bool:
         """供 UI 觸發：從網路抓取最新歷史資料並寫入資料庫"""
-        dbg.log(f"[{self.config.ticker}] 正在從網路更新歷史資料...")
+        dbg.log(f"[{self.config.ticker}] 正在從網路更新個股歷史資料...")
         daily_df = self.fetcher.fetch_daily_data(self.config.ticker, period=period, unit=unit)
+        success = False
 
         if not daily_df.empty:
             self.db.save_daily_data(self.config.ticker, daily_df)
             dbg.log(f"[{self.config.ticker}] 資料庫更新成功！")
-            return True
+            success = True
         else:
             dbg.error(f"[{self.config.ticker}] 抓取資料失敗，請檢查網路。")
-            return False
+
+        for macro_ticker in MacroTicker:
+            dbg.log(f"[{macro_ticker}] 正在同步更新大盤/總經資料...")
+            df_macro = self.fetcher.fetch_daily_data(macro_ticker, period=period, unit=unit)
+            if not df_macro.empty:
+                self.db.save_daily_data(macro_ticker, df_macro)
+            else:
+                dbg.war(f"[{macro_ticker}] 總經資料更新失敗，可能被 Yahoo 阻擋或無數據。")
+
+        return success
 
     # ==========================================
     # 模組 2：自動化訓練與存檔
@@ -69,9 +81,11 @@ class QuantAIEngine:
         dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {oos_days} 天做為純淨測試集)")
 
         # 取得資料
-        df_raw_full = self.db.get_daily_data(self.config.ticker)
+        macro_tickers = MacroTicker.get_overseas_tickers
+        df_raw_full = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
+
         if df_raw_full.empty:
-            dbg.error(f"資料庫中無 {self.config.ticker} 的資料，請先執行 update_market_data()。")
+            dbg.error(f"資料庫中無資料...")
             return
 
         df_train_only = df_raw_full.iloc[:-oos_days] if oos_days > 0 else df_raw_full
@@ -103,13 +117,15 @@ class QuantAIEngine:
             import joblib
             joblib.dump(scaler, self.scaler_path)
 
+        dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
+
         # 清理 GPU 記憶體
         if torch.cuda.is_available(): torch.cuda.empty_cache()
         elif torch.backends.mps.is_available(): torch.mps.empty_cache()
 
         # Meta-Learner 處理管線 (Level 1)
         dbg.log("\n--- [訓練階段] 總指揮：Meta-Learner ---")
-
+        
         meta_learner = MetaLearner(ticker=self.config.ticker)
         X_meta, y_meta = meta_learner.evaluate_oof(oof_xgb, oof_dl, y_true)
 

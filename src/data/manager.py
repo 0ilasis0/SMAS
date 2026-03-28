@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data.const import StockCol
+from data.const import MacroTicker
 from debug import dbg
 from path import PathConfig
 
@@ -69,25 +69,20 @@ class DataManager:
 
     def save_daily_data(self, ticker: str, df: pd.DataFrame):
         """將日 K 線 DataFrame 存入 SQLite"""
-        if df.empty:
-            return
+        if df.empty: return
 
-        records = []
-        for index, row in df.iterrows():
-            # pandas 的 index (Date) 轉為 YYYY-MM-DD 字串
-            date_str = index.strftime('%Y-%m-%d')
-            records.append((
-                ticker, date_str,
-                row[StockCol.OPEN],
-                row[StockCol.HIGH],
-                row[StockCol.LOW],
-                row[StockCol.CLOSE],
-                int(row[StockCol.VOLUME])
-            ))
+        records = [
+            (
+                ticker,
+                row.Index.strftime('%Y-%m-%d'),
+                row.Open, row.High, row.Low, row.Close,
+                int(row.Volume) if pd.notna(row.Volume) else 0
+            )
+            for row in df.itertuples()
+        ]
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            # INSERT OR REPLACE：確保同一檔股票在同一天不會有重複資料
             cursor.executemany('''
                 INSERT OR REPLACE INTO daily_k_lines
                 (ticker, date, open, high, low, close, volume)
@@ -100,18 +95,15 @@ class DataManager:
         """將分時 K 線 DataFrame 存入 SQLite"""
         if df.empty: return
 
-        records = []
-        for index, row in df.iterrows():
-            # 轉換為包含時間的字串 YYYY-MM-DD HH:MM:SS
-            datetime_str = index.strftime('%Y-%m-%d %H:%M:%S')
-            records.append((
-                ticker, datetime_str,
-                row[StockCol.OPEN],
-                row[StockCol.HIGH],
-                row[StockCol.LOW],
-                row[StockCol.CLOSE],
-                int(row[StockCol.VOLUME])
-            ))
+        records = [
+            (
+                ticker,
+                row.Index.strftime('%Y-%m-%d %H:%M:%S'),
+                row.Open, row.High, row.Low, row.Close,
+                int(row.Volume) if pd.notna(row.Volume) else 0
+            )
+            for row in df.itertuples()
+        ]
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -146,6 +138,7 @@ class DataManager:
             end_time=end_date
         )
 
+
     def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
         """從資料庫讀取指定標的的分時 K 線資料"""
         return self._fetch_data(
@@ -155,6 +148,43 @@ class DataManager:
             start_time=start_datetime,
             end_time=end_datetime
         )
+
+    def get_aligned_market_data(self, stock_ticker: str, macro_tickers: list[str]) -> pd.DataFrame:
+        """
+        機構級數據對齊引擎
+        以個股交易日為主體 (Left Join)，將大盤數據併入，並自動處理美股時差與休市問題。
+        """
+        df_stock = self.get_daily_data(stock_ticker)
+        if df_stock.empty:
+            return df_stock
+
+        aligned_df = df_stock.copy()
+        overseas_tickers = MacroTicker.get_overseas_tickers()
+
+        for mt in macro_tickers:
+            df_macro = self.get_daily_data(mt)
+            if df_macro.empty: continue
+
+            # 為大盤資料加上字首避免欄位衝突 (e.g., TWII_Close)
+            prefix = mt.replace('^', '') + "_"
+            df_macro = df_macro.add_prefix(prefix)
+
+            if mt in overseas_tickers:
+                # 直接產生包含台股 Index 的空 DataFrame，並與美股進行 Outer Join
+                temp_merged = pd.DataFrame(index=aligned_df.index).join(df_macro, how='outer')
+
+                # 向前填補 (處理海外休市)，再往後推移一天 (模擬 T+1 跨國時差)
+                temp_merged = temp_merged.ffill().shift(1)
+
+                # 捨棄多餘的海外日期，完美貼回台股日曆
+                aligned_df = aligned_df.join(temp_merged, how='left')
+            else:
+                # 國內大盤 (如 TWII) 無時差，直接 Left Join
+                aligned_df = aligned_df.join(df_macro, how='left')
+
+        # 最前端因 shift(1) 產生的 NaN 會保留，交由後續特徵工程的 dropna() 處理
+        aligned_df = aligned_df.ffill()
+        return aligned_df
 
     def _fetch_data(self, table_name: str, time_col: str, ticker: str, start_time: str = None, end_time: str = None) -> pd.DataFrame:
         """通用的資料庫查詢與 DataFrame 轉換邏輯"""

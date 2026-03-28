@@ -188,20 +188,19 @@ def generate_mock_data(days) -> pd.DataFrame:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2409.TW"
-    test_days = 200
+    ticker = "5469.TW"
+    test_days = 240
     ai_engine = QuantAIEngine(ticker=ticker)
 
-    # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
+    # # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
     # ai_engine.update_market_data()
+    # # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
     # ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
         dbg.error("❌ 模型載入失敗...")
         exit()
 
-    # 此時 generate_backtest_data 會用「只學過過去」的模型，
-    # 去預測「包含最後 240 天」的全量資料，這就是真正的 OOS 預測！
     df_real_data = ai_engine.generate_backtest_data()
 
     if df_real_data.empty:
