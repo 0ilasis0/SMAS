@@ -124,10 +124,18 @@ class DLTrainer:
             train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
             val_loader = self._create_dataloader(X_val, y_val, shuffle=False)
 
-            # 初始化模型與訓練工具
+            # 動態計算 BCE Loss 的正樣本權重
+            pos_count = y_train.sum()
+            neg_count = len(y_train) - pos_count
+            pos_weight_val = neg_count / pos_count if pos_count > 0 else 1.0
+            pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
+
             model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
-            criterion = nn.BCEWithLogitsLoss()
-            optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor) # 套用權重
+
+            # 加入 weight_decay (L2 正規化) 提高泛化能力
+            optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode='min',
@@ -146,6 +154,7 @@ class DLTrainer:
                     optimizer.zero_grad()
                     loss = criterion(model(X_batch), y_batch)
                     loss.backward()
+                    nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
 
                 # --- Validation & Early Stopping ---
@@ -204,11 +213,16 @@ class DLTrainer:
         """使用全量資料訓練最終上線版本"""
         dbg.log("開始訓練最終上線版 DL 模型 (使用全量資料)...")
         num_features = X.shape[2]
-
         full_loader = self._create_dataloader(X, y, shuffle=True)
+
+        pos_count = y.sum()
+        neg_count = len(y) - pos_count
+        pos_weight_val = neg_count / pos_count if pos_count > 0 else 1.0
+        pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
+
         model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
-        criterion = nn.BCEWithLogitsLoss()
-        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
+        criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
+        optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
 
         model.train()
         for epoch in range(self.epochs):
@@ -217,6 +231,7 @@ class DLTrainer:
                 optimizer.zero_grad()
                 loss = criterion(model(X_batch), y_batch)
                 loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
         self.model_save_path.parent.mkdir(parents=True, exist_ok=True)

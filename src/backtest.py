@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
     # ai_engine.update_market_data()
-    # ai_engine.train_all_models(save_models=True, oos_days=test_days)
+    ai_engine.train_all_models(save_models=True, oos_days=test_days)
 
     if not ai_engine.load_inference_models():
         dbg.error("❌ 模型載入失敗...")

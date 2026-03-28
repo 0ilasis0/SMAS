@@ -60,9 +60,15 @@ class XGBTrainer:
             X_train, X_val = X.iloc[train_index], X.iloc[val_index]
             y_train, y_val = y.iloc[train_index], y.iloc[val_index]
 
+            # 動態計算不平衡權重 (Scale Positive Weight)
+            pos_count = y_train.sum()
+            neg_count = len(y_train) - pos_count
+            scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
+
             # 初始化並訓練模型
             model = xgb.XGBClassifier(
                 **self.params,
+                scale_pos_weight=scale_weight,
                 early_stopping_rounds=TrainConfig.EARLY_STOP_ROUND
             )
             model.fit(
@@ -118,8 +124,15 @@ class XGBTrainer:
         X = df_clean[features]
         y = df_clean[FeatureCol.TARGET].astype(int)
 
+        pos_count = y.sum()
+        neg_count = len(y) - pos_count
+        scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
+
         # 訓練全量模型
-        final_model = xgb.XGBClassifier(**self.params)
+        final_model = xgb.XGBClassifier(
+            **self.params,
+            scale_pos_weight=scale_weight
+        )
         final_model.fit(X, y)
 
         # 確保儲存目錄存在
