@@ -34,10 +34,6 @@ class ExecuteBuyNode(BaseNode):
 
         # 終極修復：自動偵測成交量單位 (張 vs 股)
         vol = blackboard.daily_volume
-        # 如果日成交量小於 100 萬，極高機率 API 給的是「張數」，我們自動幫它乘 1000 轉成「股數」
-        if vol < 1000000 and vol > 0:
-            vol = vol * 1000
-            print("88888888888888888888")
 
         max_liquidity_shares = int(vol * 0.05)
         raw_shares = min(raw_shares, max_liquidity_shares)
