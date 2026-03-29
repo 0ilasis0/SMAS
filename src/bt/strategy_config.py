@@ -35,13 +35,14 @@ class StrategyConfig:
     safe_threshold: float = 0.50
     cooldown_days: int = 5
 
+
 class PersonaFactory:
     """投資性格工廠：根據使用者選擇，動態產生對應的策略參數"""
 
     @staticmethod
     def get_config(persona: TradingPersona) -> StrategyConfig:
         if persona == TradingPersona.AGGRESSIVE:
-            # 🔥 激進型：關閉防護罩，放寬買進門檻，拉開停利損空間
+            # 激進型：關閉防護罩，放寬買進門檻，拉開停利損空間
             return StrategyConfig(
                 stop_loss_tolerance=-0.08,        # 容忍 8% 虧損
                 trailing_stop_drawdown=-0.08,     # 回落 8% 才跑
@@ -53,7 +54,7 @@ class PersonaFactory:
             )
 
         elif persona == TradingPersona.CONSERVATIVE:
-            # 🛡️ 保守型：草木皆兵，極度要求大盤環境安全
+            # 保守型：草木皆兵，極度要求大盤環境安全
             return StrategyConfig(
                 stop_loss_tolerance=-0.025,       # 跌 2.5% 立刻砍倉
                 trailing_stop_drawdown=-0.025,    # 回落 2.5% 立刻閃人
