@@ -1,7 +1,7 @@
-# dl/engine.py
 import gc
 
 import joblib
+import numpy as np
 import pandas as pd
 import torch
 
@@ -13,6 +13,8 @@ from debug import dbg
 from ml.const import FeatureCol, MetaCol, MLConst
 from ml.dl_features import DLFeatureEngine
 from ml.dl_trainer import DLTrainer
+from ml.market_features import MarketFeatureCol, MarketFeatureEngine
+from ml.market_trainer import MarketTrainer
 from ml.meta_learner import MetaLearner
 from ml.params import DLHyperParams, SessionConfig
 from ml.xgb_features import XGBFeatureEngine
@@ -23,7 +25,7 @@ from path import PathConfig
 class QuantAIEngine:
     """
     量化 AI 引擎中樞。
-    封裝了資料抓取、雙腦模型訓練 (XGBoost + DL)、Meta-Learner 融合，以及線上推論的完整管線。
+    封裝了資料抓取、三腦模型訓練 (XGBoost + DL + Market)、Meta-Learner 融合，以及線上推論的完整管線。
     """
     def __init__(self, ticker: str):
         self.config = SessionConfig(ticker=ticker)
@@ -60,12 +62,12 @@ class QuantAIEngine:
             dbg.error(f"[{self.config.ticker}] 抓取資料失敗，請檢查網路。")
 
         for macro_ticker in MacroTicker:
-            dbg.log(f"[{macro_ticker}] 正在同步更新大盤/總經資料...")
-            df_macro = self.fetcher.fetch_daily_data(macro_ticker, period=period, unit=unit)
+            dbg.log(f"[{macro_ticker.value}] 正在同步更新大盤/總經資料...")
+            df_macro = self.fetcher.fetch_daily_data(macro_ticker.value, period=period, unit=unit)
             if not df_macro.empty:
-                self.db.save_daily_data(macro_ticker, df_macro)
+                self.db.save_daily_data(macro_ticker.value, df_macro)
             else:
-                dbg.war(f"[{macro_ticker}] 總經資料更新失敗，可能被 Yahoo 阻擋或無數據。")
+                dbg.war(f"[{macro_ticker.value}] 總經資料更新失敗，可能被 Yahoo 阻擋或無數據。")
 
         return success
 
@@ -75,27 +77,23 @@ class QuantAIEngine:
     def train_all_models(self, save_models: bool = True, oos_days: int = 0):
         """
         供 UI 或開發者觸發：執行完整的 Stacking 訓練管線。
-        :param save_models: 若為 True，則在 CV 驗證後，用全量資料重新訓練並儲存最終上線模型 (.pth, .json, .joblib)
-        :param oos_days: 0 代表全部資料都使用，不然會對資料進行從今日往回推oos_days天的資料不使用
         """
         dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {oos_days} 天做為純淨測試集)")
 
-        # 取得資料
-        macro_tickers = MacroTicker.get_overseas_tickers
+        # 取得「已對齊大盤特徵」的完整資料集
+        macro_tickers = [e.value for e in MacroTicker]
         df_raw_full = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
 
         if df_raw_full.empty:
-            dbg.error(f"資料庫中無資料...")
+            dbg.error(f"資料庫中無 {self.config.ticker} 的資料，請先執行 update_market_data()。")
             return
 
         df_train_only = df_raw_full.iloc[:-oos_days] if oos_days > 0 else df_raw_full
 
         # XGBoost 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 左腦：XGBoost ---")
-
         xgb_engine = XGBFeatureEngine()
         df_xgb_train = xgb_engine.process_pipeline(df_train_only, self.config.lookahead)
-
         xgb_trainer = XGBTrainer(self.config.ticker)
         oof_xgb = xgb_trainer.train_with_cv(df_xgb_train)
         y_true = df_xgb_train[FeatureCol.TARGET]
@@ -105,10 +103,8 @@ class QuantAIEngine:
 
         # DL (CNN-RNN) 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 右腦：Deep Learning ---")
-
         dl_engine = DLFeatureEngine(self.config.lookahead)
         X_dl_train, y_dl_train, scaler, valid_index_train = dl_engine.process_pipeline(df_train_only)
-
         dl_trainer = DLTrainer(ticker=self.config.ticker, rnn_type=self.config.rnn_type)
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train)
 
@@ -117,7 +113,15 @@ class QuantAIEngine:
             import joblib
             joblib.dump(scaler, self.scaler_path)
 
+        # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
+        market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
+        df_market_train = market_engine.process_pipeline(df_train_only, is_training=True)
+        market_trainer = MarketTrainer()
+        oof_market = market_trainer.train_with_cv(df_market_train, lookahead=self.config.lookahead)
+
+        if save_models:
+            market_trainer.train_and_save_final_model(df_market_train)
 
         # 清理 GPU 記憶體
         if torch.cuda.is_available(): torch.cuda.empty_cache()
@@ -125,15 +129,39 @@ class QuantAIEngine:
 
         # Meta-Learner 處理管線 (Level 1)
         dbg.log("\n--- [訓練階段] 總指揮：Meta-Learner ---")
-        
+
+        # 確保 Meta-Learner 吃到的 XGB 預測、DL 預測與真實標籤，都在同一個日期上！
+        df_oof = pd.DataFrame(index=df_train_only.index)
+
+        if isinstance(oof_xgb, np.ndarray):
+            oof_xgb = pd.Series(oof_xgb, index=df_xgb_train.index)
+        if isinstance(oof_dl, np.ndarray):
+            oof_dl = pd.Series(oof_dl, index=valid_index_train)
+
+        df_oof = df_oof.join(oof_xgb.rename(MetaCol.PROB_XGB)) \
+                       .join(oof_dl.rename(MetaCol.PROB_DL)) \
+                       .join(y_true.rename(FeatureCol.TARGET))
+
+        # 刪除長度不一致的暖機期
+        df_oof.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, FeatureCol.TARGET], inplace=True)
+
+        if df_oof.empty:
+            dbg.error("OOF 對齊後資料為空！請檢查各模型的訓練資料長度。")
+            return
+
+        aligned_oof_xgb = df_oof[MetaCol.PROB_XGB]
+        aligned_oof_dl = df_oof[MetaCol.PROB_DL]
+        aligned_y_true = df_oof[FeatureCol.TARGET]
+
         meta_learner = MetaLearner(ticker=self.config.ticker)
-        X_meta, y_meta = meta_learner.evaluate_oof(oof_xgb, oof_dl, y_true)
+        # 餵入完美對齊的資料
+        X_meta, y_meta = meta_learner.evaluate_oof(aligned_oof_xgb, aligned_oof_dl, aligned_y_true)
 
         if save_models:
             meta_learner.train_and_save_final_model(X_meta, y_meta)
 
         gc.collect()
-        dbg.log("\n🎉 模型訓練完畢！(完美避開最後 250 天的資料)")
+        dbg.log(f"\n🎉 雙層架構與三大腦模型訓練完畢！(完美避開最後 {oos_days} 天的資料)")
 
     # ==========================================
     # 模組 3：載入模型 (為線上推論做準備)
@@ -155,78 +183,92 @@ class QuantAIEngine:
             meta.load_inference_model()
             self.meta_learner = meta
 
-            if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model):
+            # 載入 Market Brain
+            self.market_model = MarketTrainer.load_inference_model(PathConfig.UNIVERSAL_MARKET)
+
+            if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model, self.market_model):
                 raise ValueError("部分模型或 Scaler 回傳為 None")
 
-            dbg.log("✅ 三大模型與 Scaler 載入成功，系統已就緒！")
+            dbg.log("✅ 四大元件 (XGB, DL, Meta, Market) 載入成功，系統已就緒！")
             return True
 
         except Exception as e:
             dbg.error(f"模型載入失敗，請確認是否已經執行過訓練管線: {e}")
             return False
 
-    def predict_today(self) -> float | None:
+    def predict_today(self) -> tuple[float, float] | None:
         """
-        供 UI 或行為樹呼叫：預測今天的最終勝率。
-        (請確保已經呼叫過 load_inference_models)
+        供 UI 或行為樹呼叫：預測今天的最終勝率與大盤安全度。
+        回傳: (final_prob, prob_market_safe)
         """
-        if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler):
+        if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler, self.market_model):
             dbg.error("模型未完全載入，無法進行推論！")
             return None
 
-        # 抓取最新資料 (確保資料庫有最新 K 線)
-        df_raw = self.db.get_daily_data(self.config.ticker)
-        df_recent = df_raw.tail(MLConst.MAX_LOOKBACK).copy()
+        # 抓取最新資料時，必須包含對齊後的大盤數據
+        macro_tickers = [e.value for e in MacroTicker]
+        df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
+        if df_raw.empty: return None
 
-        # ==========================================
-        # 🟢 左腦 (XGBoost) 推論修正
-        # ==========================================
+        df_recent = df_raw.tail(MLConst.MAX_LOOKBACK).copy()
+        target_date = df_recent.index[-1]
+        dbg.log(f"正在預測目標日期: {target_date.strftime('%Y-%m-%d')}")
+
+        # 左腦 (XGBoost) 推論
         xgb_engine = XGBFeatureEngine()
         df_xgb_clean = xgb_engine.process_pipeline(df_recent, self.config.lookahead, is_training=False)
-        if df_xgb_clean.empty:
-            dbg.error(f"[{self.config.ticker}] XGBoost 暖機資料不足，無法預測！")
+        if target_date not in df_xgb_clean.index:
+            dbg.error(f"[{self.config.ticker}] XGBoost 缺失 {target_date} 特徵，無法預測！")
             return None
-
-        latest_xgb_features = df_xgb_clean[FeatureCol.get_features()].iloc[-1:]
+        latest_xgb_features = df_xgb_clean.loc[[target_date], FeatureCol.get_features()]
         prob_xgb = self.xgb_model.predict_proba(latest_xgb_features)[0, 1]
 
-        # ==========================================
-        # 🟢 右腦 (DL) 推論修正
-        # ==========================================
+        # 右腦 (DL) 推論
         dl_engine = DLFeatureEngine(self.config.lookahead)
-
-        X_dl, _, _, _ = dl_engine.process_pipeline(df_recent, scaler=self.dl_scaler)
-
-        if X_dl is None:
-            dbg.error(f"[{self.config.ticker}] 資料量不足，無法產生 DL 推論特徵。")
+        X_dl, _, _, valid_index = dl_engine.process_pipeline(df_recent, scaler=self.dl_scaler)
+        if target_date not in valid_index:
+            dbg.error(f"[{self.config.ticker}] DL 缺失 {target_date} 特徵，無法預測！")
             return None
 
-        # 轉成 Tensor 丟給模型
+        target_idx = list(valid_index).index(target_date)
+
         self.dl_model.eval()
         with torch.no_grad():
             device = next(self.dl_model.parameters()).device
-            X_tensor = torch.as_tensor(X_dl[-1:], dtype=torch.float32, device=device)
+            X_tensor = torch.as_tensor(X_dl[[target_idx]], dtype=torch.float32, device=device)
             prob_dl = torch.sigmoid(self.dl_model(X_tensor)).item()
+
+        # 第三腦 (Market Brain) 推論
+        market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
+        df_market_clean = market_engine.process_pipeline(df_recent, is_training=False)
+        if target_date not in df_market_clean.index:
+            dbg.error(f"大盤缺失 {target_date} 特徵 (可能是總經資料 API 延遲)！拒絕預測。")
+            return None
+        latest_market_features = df_market_clean.loc[[target_date], MarketFeatureCol.get_features()]
+        prob_danger = self.market_model.predict_proba(latest_market_features)[0, 1]
+        prob_market_safe = 1.0 - prob_danger
 
         # 總指揮 (Meta-Learner) 融合
         final_prob = self.meta_learner.predict_final_probability(prob_xgb, prob_dl)
 
-        dbg.log(f"[{self.config.ticker} 今日預測] XGB: {prob_xgb:.2f} | DL: {prob_dl:.2f} ➔ 最終勝率: {final_prob:.2f}")
-        return final_prob
+        dbg.log(f"[{self.config.ticker} 今日預測] 勝率: {final_prob:.2%} | 大盤安全度: {prob_market_safe:.2%}")
+        return final_prob, prob_market_safe
 
     def generate_backtest_data(self) -> pd.DataFrame:
         """
-        【供回測引擎使用】
-        批次產生包含歷史 K 線與 AI 預測勝率的 DataFrame。
+        批次產生包含歷史 K 線、AI 預測勝率與大盤安全機率的 DataFrame。
         """
-        if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler):
+        if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler, self.market_model):
             dbg.error("模型未載入！請先執行 load_inference_models()")
             return pd.DataFrame()
 
         dbg.log(f"[{self.config.ticker}] 正在批次生成歷史預測勝率 (Backtest Data)...")
-        df_raw = self.db.get_daily_data(self.config.ticker)
-        if df_raw.empty:
-            return pd.DataFrame()
+
+        # 基底改為具備大盤特徵的 DataFrame
+        macro_tickers = [e.value for e in MacroTicker]
+        df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
+
+        if df_raw.empty: return pd.DataFrame()
 
         # XGBoost 批次推論
         xgb_engine = XGBFeatureEngine()
@@ -241,24 +283,36 @@ class QuantAIEngine:
         # DL 批次推論
         dl_engine = DLFeatureEngine(self.config.lookahead)
         X_dl, _, _, valid_index = dl_engine.process_pipeline(df_raw, scaler=self.dl_scaler)
-
         self.dl_model.eval()
         with torch.no_grad():
             device = next(self.dl_model.parameters()).device
             X_tensor = torch.as_tensor(X_dl, dtype=torch.float32, device=device)
             prob_dl_array = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
-
         prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MetaCol.PROB_DL)
 
-        df_backtest = df_raw.copy()
-        df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series)
+        # Market 批次推論
+        market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
+        df_market_clean = market_engine.process_pipeline(df_raw, is_training=False)
+        X_market = df_market_clean[MarketFeatureCol.get_features()]
+        prob_danger_array = self.market_model.predict_proba(X_market)[:, 1]
+        prob_market_safe_series = pd.Series(
+            1.0 - prob_danger_array,
+            index=df_market_clean.index,
+            name="prob_market_safe"
+        )
 
-        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL], inplace=True)
+        # 神級索引對齊 (Index Alignment)
+        df_backtest = df_raw.copy()
+        df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
+
+        # 清除暖機期的 NaN (只要有一顆大腦沒訊號，那天就不能做決策)
+        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, "prob_market_safe"], inplace=True)
 
         if df_backtest.empty:
             dbg.war("合併後的預測資料為空，請檢查資料長度是否足夠讓模型暖機。")
             return pd.DataFrame()
 
+        # Meta 融合預測
         X_meta = df_backtest[[MetaCol.PROB_XGB, MetaCol.PROB_DL]].values
         df_backtest[MetaCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
