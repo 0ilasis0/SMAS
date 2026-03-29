@@ -11,14 +11,14 @@ from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
 from ml.const import FeatureCol, MetaCol, MLCol, MLConst
-from ml.dl_features import DLFeatureEngine
-from ml.dl_trainer import DLTrainer
-from ml.market_features import MarketFeatureCol, MarketFeatureEngine
-from ml.market_trainer import MarketTrainer
-from ml.meta_learner import MetaLearner
+from ml.data.dl_features import DLFeatureEngine
+from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
+from ml.data.xgb_features import XGBFeatureEngine
+from ml.model.meta_learner import MetaLearner
 from ml.params import DLHyperParams, SessionConfig
-from ml.xgb_features import XGBFeatureEngine
-from ml.xgb_trainer import XGBTrainer
+from ml.trainers.dl_trainer import DLTrainer
+from ml.trainers.market_trainer import MarketTrainer
+from ml.trainers.xgb_trainer import XGBTrainer
 from path import PathConfig
 
 

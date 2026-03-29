@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from debug import dbg
-from ml.market_features import MarketFeatureCol
+from ml.data.market_features import MarketFeatureCol
 from ml.params import MarketLGBMConfig, TrainConfig
 
 
