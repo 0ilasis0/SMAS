@@ -14,6 +14,7 @@ from bt.strategy import build_trading_tree
 from data.const import StockCol
 from debug import dbg
 from ml.const import MetaCol
+from path import PathConfig
 
 
 class HistoryCol(StrEnum):
@@ -119,6 +120,24 @@ class BacktestEngine:
             )
             self.history_records.append(record.to_dict())
 
+        if len(df) > 0:
+            last_date = df.index[-1]
+            last_row = df.iloc[-1]
+            last_close = last_row[StockCol.CLOSE]
+            last_equity = self.bb.cash + (self.bb.position * last_close)
+
+            final_record = BacktestRecord(
+                Date=last_date,
+                Close=last_close,
+                Cash=self.bb.cash,
+                Position=self.bb.position,
+                Total_Equity=last_equity,
+                Action=DecisionAction.HOLD, # 最後一天不動作
+                prob_final=last_row.get(MetaCol.PROB_FINAL, 0.5),
+                prob_market_safe=last_row.get(MetaCol.PROB_MARKET_SAFE, 1.0)
+            )
+            self.history_records.append(final_record.to_dict())
+
         self._generate_report()
 
     def _generate_report(self):
@@ -211,6 +230,18 @@ class BacktestEngine:
         ax3.set_xlabel('Date')
         ax3.grid(True, alpha=0.3)
         ax3.legend(loc='upper left')
+
+        plt.tight_layout()
+
+        try:
+            report_img_path = PathConfig.RESULT_REPORT / f"{self.bb.ticker}_dashboard.png"
+            report_img_path.parent.mkdir(parents=True, exist_ok=True)
+            plt.savefig(report_img_path, dpi=300)
+            dbg.log(f"📸 儀表板圖片已自動儲存至: {report_img_path}")
+        except Exception as e:
+            dbg.war(f"圖片存檔失敗: {e}")
+
+        plt.show()
 
 
 if __name__ == "__main__":
