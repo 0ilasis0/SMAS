@@ -248,33 +248,34 @@ if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
     # 測試參數
-    ticker = "5469.TW"
+    tickers = ["5469.TW", "2388.TW", "2377.TW", "2409.TW"]
     test_days = 240
-    user_persona = TradingPersona.MODERATE
+    user_persona = TradingPersona.AGGRESSIVE
     strategy_config = PersonaFactory.get_config(user_persona)
 
-    ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
+    for ticker in tickers:
+        ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
 
-    # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
-    # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-    # ai_engine.update_market_data()
-    # ai_engine.train_all_models(save_models=True)
+        # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
+        # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
+        # ai_engine.update_market_data()
+        ai_engine.train_all_models(save_models=True)
 
-    if not ai_engine.load_inference_models():
-        dbg.error("❌ 模型載入失敗...")
-        exit()
+        if not ai_engine.load_inference_models():
+            dbg.error("❌ 模型載入失敗...")
+            exit()
 
-    df_real_data = ai_engine.generate_backtest_data()
+        df_real_data = ai_engine.generate_backtest_data()
 
-    if df_real_data.empty:
-        dbg.error("❌ 無法產生回測資料！")
-        exit()
+        if df_real_data.empty:
+            dbg.error("❌ 無法產生回測資料！")
+            exit()
 
-    df_test = df_real_data.tail(test_days)
+        df_test = df_real_data.tail(test_days)
 
-    print("\n📊 【AI 預測勝率分佈統計】")
-    print(df_test[MetaCol.PROB_FINAL].describe())
+        print("\n📊 【AI 預測勝率分佈統計】")
+        print(df_test[MetaCol.PROB_FINAL].describe())
 
-    dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    engine = BacktestEngine(initial_cash=2000000, ticker=ticker, strategy=strategy_config)
-    engine.run(df_test)
+        dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
+        engine = BacktestEngine(initial_cash=2000000, ticker=ticker, strategy=strategy_config)
+        engine.run(df_test)
