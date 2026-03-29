@@ -32,6 +32,7 @@ class PathBase:
 class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
     IDSS_DATA = PathBase.processed / "idss_data.db"
+    LLM_CACHE = PathBase.processed / "llm_cache.db"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
 

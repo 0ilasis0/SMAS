@@ -3,9 +3,9 @@ from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
 from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
                            CheckEntryCountLimitNode, CheckGapLimitNode,
                            CheckHasPositionNode, CheckNotPartialTakenNode,
-                           CheckSellSignalNode, CheckStopLossNode,
-                           CheckTakeProfitNode, CheckTrailingStopNode,
-                           CheckTrendFilterNode)
+                           CheckSellSignalNode, CheckSentimentFilterNode,
+                           CheckStopLossNode, CheckTakeProfitNode,
+                           CheckTrailingStopNode, CheckTrendFilterNode)
 from bt.core import Inverter, Selector, Sequence
 from bt.strategy_config import StrategyConfig
 
@@ -60,6 +60,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
         # 共同防禦：必須通過這兩關 (回傳 SUCCESS)，才有資格往下走
         CheckCooldownNode(cooldown_days=config.cooldown_days),
         CheckTrendFilterNode(safe_threshold=config.safe_threshold),
+        CheckSentimentFilterNode(min_score=config.llm_min_score),
 
         # 通過防禦後，才進入選擇器分配力道
         Selector("買進力道分配", [

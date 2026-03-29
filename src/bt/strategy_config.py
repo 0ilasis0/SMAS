@@ -20,6 +20,8 @@ class StrategyConfig:
     take_profit_target: float = 0.30         # 極端停利目標 (+30%)
     take_profit_sell_ratio: float = 0.5      # 觸發極端停利時的減碼比例 (先入袋 50%)
 
+    llm_min_score: int = 4
+
     # ================= 進攻與資金控管參數 =================
     max_entries: int = 3                     # 單一波段最大加碼次數
     max_gap_ratio: float = 0.07              # 低價股的跳空容忍度

@@ -4,8 +4,8 @@ import pandas as pd
 import yfinance as yf
 
 from base import MathTool
-from data.params import DataLimit
 from data.const import StockCol, TimeUnit, YfInterval
+from data.params import DataLimit
 from debug import dbg
 
 

@@ -18,6 +18,7 @@ class ExecuteCol(StrEnum):
 class ConditionCol(StrEnum):
     CHECK_COOLDOWN = "check_cooldown"
     CHECK_TREND_FILTER = "check_trend_filter"
+    CHECK_SENTIMENT_FILTER = "check_sentiment_filter"
     CHECK_GAP_LIMIT = "check_gap_limit"
     CHECK_NOT_PARTIAL_TAKEN = "check_not_partial_taken"
     CHECK_ENTRY_COUNT_LIMIT = "check_entry_count_limit"

@@ -25,6 +25,12 @@ class Blackboard:
     prob_market_safe: float = 1.0  # 大盤安全機率 (第三腦預測)
     cooldown_timer: int = 0        # 停損冷卻期倒數天數
 
+    # AI 分析與決策結果
+    action_decision: str = DecisionAction.HOLD
+    gemini_reasoning: str = ""    # Gemini 產出的分析報告
+    sentiment_score: int = 5       # 預設 5 分 (中立)
+    sentiment_reason: str = ""     # 新聞情緒理由
+
     last_trade_shares: int = 0
     last_trade_profit: float = 0.0
     last_trade_price: float = 0.0
@@ -42,10 +48,6 @@ class Blackboard:
     # 波段交易記憶
     entry_count: int = 0                  # 紀錄這個波段總共「買進/加碼」了幾次
     is_partial_profit_taken: bool = False # 紀錄是否已經觸發過「部分停利」
-
-    # AI 分析與決策結果
-    action_decision: str = DecisionAction.HOLD
-    gemini_reasoning: str = ""    # Gemini 產出的分析報告
 
     # 動態擴充區 (給特殊的節點放臨時變數)
     context: Dict[str, Any] = field(default_factory=dict)
