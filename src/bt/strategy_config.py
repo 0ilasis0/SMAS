@@ -62,7 +62,7 @@ class PersonaFactory:
                 take_profit_sell_ratio=1.0,       # 停利直接全賣，不留戀
                 strong_buy_threshold=0.65,        # 要求極高勝率才 All-in
                 conservative_buy_threshold=0.60,
-                safe_threshold=0.65,              # 🚀 大盤安全度必須大於 65% 才准買！
+                safe_threshold=0.65,              # 大盤安全度必須大於 65% 才准買！
                 cooldown_days=7                   # 停損後冷靜一整個禮拜
             )
 
