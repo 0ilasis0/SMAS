@@ -10,30 +10,29 @@ class TradingPersona(StrEnum):
 @dataclass
 class StrategyConfig:
     """行為樹策略的基礎超參數容器"""
-    # --- 防守與風險控管 ---
-    stop_loss_tolerance: float = -0.04
-    trailing_stop_drawdown: float = -0.04
-    stop_loss_sell_ratio: float = 1.0
+    stop_loss_tolerance: float = -0.05       # 強制停損容忍度 (-5%)
+    trailing_stop_drawdown: float = -0.08    # 移動停損回落容忍度 (-8%)
+    stop_loss_sell_ratio: float = 1.0        # 觸發停損時的賣出比例 (100% 全面撤退)
 
-    sell_signal_threshold: float = 0.52
-    warning_sell_ratio: float = 1.0
+    sell_signal_threshold: float = 0.40      # AI 勝率低迷預警門檻 (<40%)
+    warning_sell_ratio: float = 0.5          # AI 預警時的戰術減碼比例 (賣出 50%)
 
-    take_profit_target: float = 0.05
-    take_profit_sell_ratio: float = 0.5
+    take_profit_target: float = 0.30         # 極端停利目標 (+30%)
+    take_profit_sell_ratio: float = 0.5      # 觸發極端停利時的減碼比例 (先入袋 50%)
 
-    # --- 進攻與資金控管 ---
-    max_entries: int = 2
-    max_gap_ratio: float = 0.03
+    # ================= 進攻與資金控管參數 =================
+    max_entries: int = 3                     # 單一波段最大加碼次數
+    max_gap_ratio: float = 0.07              # 低價股的跳空容忍度
 
-    strong_buy_threshold: float = 0.60
-    strong_buy_capital_ratio: float = 1.0
+    strong_buy_threshold: float = 0.75       # 強烈買進訊號門檻 (>= 75%)
+    strong_buy_capital_ratio: float = 1.0    # 強烈買進時動用的資金比例 (100%)
 
-    conservative_buy_threshold: float = 0.57
-    conservative_buy_capital_ratio: float = 0.5
+    conservative_buy_threshold: float = 0.60 # 保守買進訊號門檻 (>= 60%)
+    conservative_buy_capital_ratio: float = 0.5 # 保守買進時動用的資金比例 (50%)
 
-    # 大盤防禦雷達門檻
-    safe_threshold: float = 0.50
-    cooldown_days: int = 5
+    # ================= 大盤防禦雷達門檻 =================
+    safe_threshold: float = 0.45
+    cooldown_days: int = 2
 
 
 class PersonaFactory:
@@ -63,7 +62,7 @@ class PersonaFactory:
                 strong_buy_threshold=0.65,        # 要求極高勝率才 All-in
                 conservative_buy_threshold=0.60,
                 safe_threshold=0.65,              # 大盤安全度必須大於 65% 才准買！
-                cooldown_days=7                   # 停損後冷靜一整個禮拜
+                cooldown_days=4                   # 停損後冷靜一整個禮拜
             )
 
         else:

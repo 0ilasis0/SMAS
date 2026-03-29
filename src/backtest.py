@@ -247,8 +247,12 @@ class BacktestEngine:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2337.TW"
+    # 測試參數
+    ticker = "5469.TW"
     test_days = 240
+    user_persona = TradingPersona.AGGRESSIVE
+    strategy_config = PersonaFactory.get_config(user_persona)
+
     ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
 
     # # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
@@ -272,8 +276,5 @@ if __name__ == "__main__":
     print(df_test[MetaCol.PROB_FINAL].describe())
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    user_persona = TradingPersona.AGGRESSIVE
-    strategy_config = PersonaFactory.get_config(user_persona)
-
     engine = BacktestEngine(initial_cash=2000000, strategy=strategy_config)
     engine.run(df_test)
