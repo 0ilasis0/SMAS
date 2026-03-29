@@ -187,7 +187,7 @@ class GenerateGeminiReportNode(BaseNode):
             action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
             trade_info_str = f"- 交易執行：系統{action_type} {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，本次交易淨損益為 {blackboard.last_trade_profit:.2f} 元。"
         else:
-            trade_info_str = "- 交易執行：系統判定無顯著訊號或條件不符，維持空手/持倉不動 (HOLD)。"
+            trade_info_str = "- 交易執行：系統判定無顯著訊號、環境風險過高或流動性不足，維持不動 (HOLD)。"
 
         prompt = f"""
         你是一位專業的台灣股票量化交易分析師。請根據以下的 AI 模型預測結果，撰寫一份簡短且專業的繁體中文分析報告。
@@ -202,19 +202,22 @@ class GenerateGeminiReportNode(BaseNode):
         - 帳上剩餘現金：{blackboard.cash:.2f} 元
 
         【模型勝率數據】
-        - 左腦 (XGBoost 技術指標) 預測上漲機率：{blackboard.prob_xgb:.2%}
-        - 右腦 (CNN-RNN K線型態) 預測上漲機率：{blackboard.prob_dl:.2%}
-        - Meta-Learner 綜合評估勝率：{blackboard.prob_final:.2%}
+        - 左腦 (XGB 技術指標) 預測上漲機率：{blackboard.prob_xgb:.2%}
+        - 右腦 (DL K線型態) 預測上漲機率：{blackboard.prob_dl:.2%}
+        - 第三腦 (大盤防禦雷達) 安全度：{getattr(blackboard, 'prob_market_safe', 1.0):.2%}
+        - 總指揮 (Meta-Learner) 綜合勝率：{blackboard.prob_final:.2%}
 
         【任務要求】
         1. 解釋為什麼系統會做出「{blackboard.action_decision}」的決策，若有損益請進行簡短點評。
-        2. 比較左右腦的勝率差異，分析技術指標與K線型態是否有共識或分歧。
-        3. 語氣請保持專業、客觀，避免過度承諾獲利。
+        2. 若大盤安全度偏低，請點出系統可能因此採取了防守策略。
+        3. 比較左右腦的勝率差異，分析技術指標與K線型態是否有共識或分歧。
+        4. 語氣請保持專業、客觀，避免過度承諾獲利。
         """
 
         # 呼叫 Gemini API (這裡先用 Mock 替代，等你接上真實 API)
         try:
-            mock_response = f"【模擬 Gemini 回覆】\n根據綜合勝率 {blackboard.prob_final:.2%}，系統目前判定為 {blackboard.action_decision}。XGBoost 與 DL 模型的數據顯示..."
+            # 這裡之後替換為真實的 LLM 呼叫程式碼
+            mock_response = f"【模擬 Gemini 回覆】\n根據綜合勝率 {blackboard.prob_final:.2%} 與 大盤安全度 {getattr(blackboard, 'prob_market_safe', 1.0):.2%}，系統目前判定為 {blackboard.action_decision}..."
             blackboard.gemini_reasoning = mock_response
             dbg.log("Gemini 報告生成完畢！")
             return NodeState.SUCCESS

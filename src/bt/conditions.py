@@ -6,15 +6,13 @@ from debug import dbg
 
 
 class CheckCooldownNode(BaseNode):
-    def __init__(self, cooldown_days: int, name: str = "CheckCooldown"):
+    def __init__(self, cooldown_days: int, name: str = ConditionCol.CHECK_COOLDOWN):
         super().__init__(name)
         self.cooldown_days = cooldown_days
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_cd = getattr(blackboard, BtVar.COOLDOWN_TIMER, 0)
-
-        if current_cd > 0:
-            dbg.war(f"🧊 [進攻取消] 系統處於停損冷卻期 (剩餘 {current_cd} 天)，拒絕進場！(FAILURE)")
+        if blackboard.cooldown_timer > 0:
+            dbg.war(f"🧊 [進攻取消] 系統處於停損冷卻期 (剩餘 {blackboard.cooldown_timer} 天)，拒絕進場！(FAILURE)")
             return NodeState.FAILURE
 
         return NodeState.SUCCESS
@@ -26,13 +24,13 @@ class CheckTrendFilterNode(BaseNode):
     如果目前股價處於明確的空頭趨勢 (例如跌破月線/季線)，拒絕做多。
     (這裡我們用一個簡單的近似法：如果股價距離過去的高點跌幅超過 15%，視為空頭瀑布)
     """
-    def __init__(self, xgb_threshold: float, name: str = ConditionCol.CHECK_TREND_FILTER):
+    def __init__(self, safe_threshold: float, name: str = ConditionCol.CHECK_TREND_FILTER):
         super().__init__(name)
-        self.xgb_threshold = xgb_threshold
+        self.safe_threshold = safe_threshold
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        if blackboard.prob_xgb < self.xgb_threshold:
-            dbg.war(f"📉 [進攻取消] XGB 勝率過低 ({blackboard.prob_xgb:.2%})，拒絕逆勢接刀！")
+        if blackboard.prob_market_safe < self.safe_threshold:
+            dbg.war(f"📉 [進攻取消] 大盤防禦雷達啟動 (安全度僅 {blackboard.prob_market_safe:.2%})，拒絕逆勢接刀！")
             return NodeState.FAILURE
         return NodeState.SUCCESS
 
@@ -153,21 +151,16 @@ class CheckStopLossNode(BaseNode):
     """
     def __init__(self, loss_tolerance: float, cooldown_days: int, name: str = ConditionCol.CHECK_STOP_LOSS):
         super().__init__(name)
-        # loss_tolerance 例如 -0.05 代表跌 5% 就停損
         self.loss_tolerance = loss_tolerance
         self.cooldown_days = cooldown_days
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         if blackboard.position <= 0: return NodeState.FAILURE
 
-        # 以今日收盤價評估的真實報酬率
         close_return = blackboard.estimated_return_rate
-
-        # 以明日開盤價評估的「預期報酬率」(模擬券商洗價觸發)
         open_revenue = blackboard.position * blackboard.executable_price
         total_cost = blackboard.position * blackboard.avg_cost
 
-        # 扣除預估手續費與稅金
         fee = max(TaxRate.MIN_FEE, open_revenue * TaxRate.FEE_RATE)
         tax = open_revenue * TaxRate.TAX_RATE
         open_return = (open_revenue - fee - tax - total_cost) / total_cost if total_cost > 0 else 0
@@ -175,7 +168,8 @@ class CheckStopLossNode(BaseNode):
         if close_return <= self.loss_tolerance or open_return <= self.loss_tolerance:
             trigger_price = blackboard.current_price if close_return <= self.loss_tolerance else blackboard.executable_price
             dbg.war(f"⚠️ [風險控管] 觸發強制停損！觸價: {trigger_price:.2f} 預估報酬率: {min(close_return, open_return):.2%} <= 容忍底線 {self.loss_tolerance:.2%} (SUCCESS)")
-            blackboard.set(BtVar.COOLDOWN_TIMER, self.cooldown_days)
+
+            blackboard.cooldown_timer = self.cooldown_days
             return NodeState.SUCCESS
 
         return NodeState.FAILURE
@@ -208,7 +202,6 @@ class CheckTrailingStopNode(BaseNode):
     """
     def __init__(self, drawdown_tolerance: float, cooldown_days: int, name: str = ConditionCol.CHECK_TRAILING_STOP):
         super().__init__(name)
-        # drawdown_tolerance = -0.08 代表從最高點回落 8% 就強制出場
         self.drawdown_tolerance = drawdown_tolerance
         self.cooldown_days = cooldown_days
 
@@ -217,18 +210,14 @@ class CheckTrailingStopNode(BaseNode):
             return NodeState.FAILURE
 
         highest_price = blackboard.highest_price
-
-        # 1. 計算今日收盤的回落幅度
         close_drawdown = (blackboard.current_price - highest_price) / highest_price
-
-        # 2. 計算明日開盤的回落幅度 (模擬開盤跳空跌破防守線)
         open_drawdown = (blackboard.executable_price - highest_price) / highest_price
 
-        # 只要有任何一個跌破容忍底線 (注意：數值是負的，所以用 <= )
         if close_drawdown <= self.drawdown_tolerance or open_drawdown <= self.drawdown_tolerance:
             actual_drawdown = min(close_drawdown, open_drawdown)
             dbg.war(f"🛡️ [風險控管] 觸發移動停損！最高點 {highest_price:.2f} 回落 {actual_drawdown:.2%} <= 容忍底線 {self.drawdown_tolerance:.2%} (SUCCESS)")
-            blackboard.set(BtVar.COOLDOWN_TIMER, self.cooldown_days)
+
+            blackboard.cooldown_timer = self.cooldown_days
             return NodeState.SUCCESS
 
         return NodeState.FAILURE

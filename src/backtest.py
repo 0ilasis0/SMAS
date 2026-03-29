@@ -194,8 +194,8 @@ if __name__ == "__main__":
 
     # # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
     # ai_engine.update_market_data()
-    # # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-    # ai_engine.train_all_models(save_models=True)
+    # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
+    ai_engine.train_all_models(save_models=True)
 
     if not ai_engine.load_inference_models():
         dbg.error("❌ 模型載入失敗...")

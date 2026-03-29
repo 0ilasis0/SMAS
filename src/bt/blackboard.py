@@ -22,6 +22,9 @@ class Blackboard:
     prob_dl: float = 0.5
     prob_final: float = 0.5
 
+    prob_market_safe: float = 1.0  # 大盤安全機率 (第三腦預測)
+    cooldown_timer: int = 0        # 停損冷卻期倒數天數
+
     last_trade_shares: int = 0
     last_trade_profit: float = 0.0
     last_trade_price: float = 0.0
