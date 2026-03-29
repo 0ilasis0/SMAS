@@ -247,8 +247,8 @@ class BacktestEngine:
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
-    ticker = "2388.TW"
-    test_days = 240
+    ticker = "0052.TW"
+    test_days = 80
     ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
 
     # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
