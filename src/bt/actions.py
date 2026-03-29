@@ -173,56 +173,63 @@ class IgnoreFailure(BaseNode):
 class GenerateGeminiReportNode(BaseNode):
     """
     負責收集黑板上的所有資訊，打包成 Prompt，並呼叫 Gemini 產出分析報告。
+    內建「防幻覺與嚴禁竄改」的 System Prompt 框架。
     """
-    def __init__(self, name: str = BtVar.GENERATE_GEMINI_REPORT):
+    def __init__(self, oracle=None, name: str = BtVar.GENERATE_GEMINI_REPORT):
         super().__init__(name)
+        self.oracle = oracle
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        dbg.log("正在呼叫 Gemini 生成決策分析報告...")
+        dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
 
         trade_info_str = ""
         if blackboard.action_decision == DecisionAction.BUY:
-            trade_info_str = f"- 交易執行：系統買進了 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}。"
-        elif  blackboard.action_decision == DecisionAction.SELL:
+            trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}。"
+        elif blackboard.action_decision == DecisionAction.SELL:
             action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
-            trade_info_str = f"- 交易執行：系統{action_type} {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，本次交易淨損益為 {blackboard.last_trade_profit:.2f} 元。"
+            trade_info_str = f"- 實際執行動作：系統已成功【{action_type}】 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，淨損益 {blackboard.last_trade_profit:.2f} 元。"
         else:
-            trade_info_str = "- 交易執行：系統判定無顯著訊號、環境風險過高或流動性不足，維持不動 (HOLD)。"
+            trade_info_str = "- 實際執行動作：系統判定維持現狀【觀望 (HOLD)】。"
+
+        score = getattr(blackboard, 'sentiment_score', BtVar.DEFAULT_LLM_SCORE)
+        reason = getattr(blackboard, 'sentiment_reason', '無相關新聞或未啟用 LLM')
 
         prompt = f"""
-        你是一位專業的台灣股票量化交易分析師。請根據以下的 AI 模型預測結果，撰寫一份簡短且專業的繁體中文分析報告。
+        【最高指令】：你是一個只負責「事後覆盤」的量化分析助理。
+        系統【已經】做出了最終交易決策，你絕對不可以質疑、修改或建議更改該決策。你的唯一任務是根據以下數據，寫出一份 100 字左右的專業、客觀的繁體中文盤後報告。
 
-        【標的與決策】
+        【當前決策事實 (不可竄改)】
         - 股票代號：{blackboard.ticker}
         - 系統最終決策：{blackboard.action_decision}
         {trade_info_str}
+        - 目前總持股：{blackboard.position} 股 (剩餘現金：{blackboard.cash:.2f} 元)
 
-        【當前帳戶狀態】
-        - 目前持有股數：{blackboard.position} 股
-        - 帳上剩餘現金：{blackboard.cash:.2f} 元
-
-        【模型勝率數據】
-        - 左腦 (XGB 技術指標) 預測上漲機率：{blackboard.prob_xgb:.2%}
-        - 右腦 (DL K線型態) 預測上漲機率：{blackboard.prob_dl:.2%}
-        - 第三腦 (大盤防禦雷達) 安全度：{getattr(blackboard, 'prob_market_safe', 1.0):.2%}
+        【AI 模型內部視角】
         - 總指揮 (Meta-Learner) 綜合勝率：{blackboard.prob_final:.2%}
+        - 左腦 (XGBoost 技術面)：{blackboard.prob_xgb:.2%}
+        - 右腦 (DL 深度學習 K 線)：{blackboard.prob_dl:.2%}
+        - 第三腦 (Market Brain) 安全度：{getattr(blackboard, 'prob_market_safe', 1.0):.2%}
+        - LLM 新聞情緒：{score} 分 (1-10分)。判讀理由：{reason}
 
-        【任務要求】
-        1. 解釋為什麼系統會做出「{blackboard.action_decision}」的決策，若有損益請進行簡短點評。
-        2. 若大盤安全度偏低，請點出系統可能因此採取了防守策略。
-        3. 比較左右腦的勝率差異，分析技術指標與K線型態是否有共識或分歧。
-        4. 語氣請保持專業、客觀，避免過度承諾獲利。
+        【報告撰寫指引】
+        1. 破題直接說明系統今天執行了什麼動作 (買進/賣出/觀望)。
+        2. 綜合技術面勝率、大盤雷達與新聞情緒，簡述「為什麼系統會觸發這個動作」。
+        3. 語氣保持冷靜、客觀的法人機構風格，不使用強烈情緒化字眼。
         """
 
-        # 呼叫 Gemini API (這裡先用 Mock 替代，等你接上真實 API)
         try:
-            # 這裡之後替換為真實的 LLM 呼叫程式碼
-            mock_response = f"【模擬 Gemini 回覆】\n根據綜合勝率 {blackboard.prob_final:.2%} 與 大盤安全度 {getattr(blackboard, 'prob_market_safe', 1.0):.2%}，系統目前判定為 {blackboard.action_decision}..."
-            blackboard.gemini_reasoning = mock_response
-            dbg.log("Gemini 報告生成完畢！")
+            if self.oracle:
+                model = self.oracle.model
+                response = model.generate_content(prompt)
+                final_report = response.text.strip()
+            else:
+                final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {blackboard.action_decision}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
+
+            blackboard.gemini_reasoning = final_report
+            dbg.log(f"📝 報告生成完畢：\n{final_report}")
             return NodeState.SUCCESS
 
         except Exception as e:
-            dbg.error(f"Gemini API 呼叫失敗: {e}")
+            dbg.error(f"Gemini 報告生成失敗: {e}")
             blackboard.gemini_reasoning = "API 呼叫失敗，無法生成報告。"
             return NodeState.FAILURE

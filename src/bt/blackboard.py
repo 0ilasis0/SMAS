@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from bt.account import Account
-from bt.const import DecisionAction
+from bt.const import BtVar, DecisionAction
 from bt.params import TaxRate
 
 
@@ -28,7 +28,7 @@ class Blackboard:
     # AI 分析與決策結果
     action_decision: str = DecisionAction.HOLD
     gemini_reasoning: str = ""    # Gemini 產出的分析報告
-    sentiment_score: int = 5       # 預設 5 分 (中立)
+    sentiment_score: int = BtVar.DEFAULT_LLM_SCORE
     sentiment_reason: str = ""     # 新聞情緒理由
 
     last_trade_shares: int = 0

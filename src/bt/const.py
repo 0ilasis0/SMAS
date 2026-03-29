@@ -8,6 +8,7 @@ class BtVar:
     GENERATE_GEMINI_REPORT = "generate_gemini_report"
     TRADE_UNIT = 1000
     COOLDOWN_TIMER = "cooldown_timer"
+    DEFAULT_LLM_SCORE = 5
 
 
 class ExecuteCol(StrEnum):

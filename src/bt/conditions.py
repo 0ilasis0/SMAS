@@ -42,12 +42,14 @@ class CheckSentimentFilterNode(BaseNode):
     """
     def __init__(self, min_score: int, name: str = ConditionCol.CHECK_SENTIMENT_FILTER):
         super().__init__(name)
-        # 預設：分數必須 >= min_score (非重大利空) 才能買進
         self.min_score = min_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        if blackboard.sentiment_score < self.min_score:
-            dbg.war(f"📰 [進攻取消] LLM 判讀新聞為重大利空 (分數: {blackboard.sentiment_score}/10, 理由: {blackboard.sentiment_reason})，拒絕買進！")
+        current_score = getattr(blackboard, 'sentiment_score', BtVar.DEFAULT_LLM_SCORE)
+        current_reason = getattr(blackboard, 'sentiment_reason', '無相關新聞或未啟用 LLM')
+
+        if current_score < self.min_score:
+            dbg.war(f"📰 [進攻取消] LLM 判讀新聞為重大利空 (分數: {current_score}/10, 理由: {current_reason})，拒絕買進！")
             return NodeState.FAILURE
 
         return NodeState.SUCCESS

@@ -14,6 +14,7 @@ from ml.const import FeatureCol, MetaCol, MLCol, MLConst
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
+from ml.model.llm_oracle import GeminiOracle, TradingMode
 from ml.model.meta_learner import MetaLearner
 from ml.params import DLHyperParams, SessionConfig
 from ml.trainers.dl_trainer import DLTrainer
@@ -27,7 +28,7 @@ class QuantAIEngine:
     量化 AI 引擎中樞。
     封裝了資料抓取、三腦模型訓練 (XGBoost + DL + Market)、Meta-Learner 融合，以及線上推論的完整管線。
     """
-    def __init__(self, ticker: str, oos_days: int = 0):
+    def __init__(self, ticker: str, oos_days: int = 0, api_keys: list[str] = None):
         self.config = SessionConfig(ticker=ticker)
         self.oos_days = oos_days
 
@@ -40,6 +41,11 @@ class QuantAIEngine:
         self.dl_model = None
         self.meta_learner = None
         self.market_model = None
+
+        if api_keys:
+            self.oracle = GeminiOracle(api_keys=api_keys, mode=TradingMode.SWING)
+        else:
+            self.oracle = None
 
         self.paths = {
             MLCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
@@ -223,7 +229,7 @@ class QuantAIEngine:
             dbg.error(f"模型載入失敗，請確認是否已經執行過訓練管線: {e}")
             return False
 
-    def predict_today(self) -> tuple[float, float] | None:
+    def predict_today(self) -> dict | None:
         """
         供 UI 或行為樹呼叫：預測今天的最終勝率與大盤安全度。
         回傳: (final_prob, prob_market_safe)
@@ -287,8 +293,30 @@ class QuantAIEngine:
         # 總指揮 (Meta-Learner) 融合
         final_prob = self.meta_learner.predict_final_probability(prob_xgb, prob_dl)
 
-        dbg.log(f"[{self.config.ticker} 今日預測] 勝率: {final_prob:.2%} | 大盤安全度: {prob_market_safe:.2%}")
-        return final_prob, prob_market_safe
+        #啟動 LLM (GeminiOracle) 獲取情緒分數
+        sentiment_score = 5
+        sentiment_reason = "未提供 API Key，略過情緒分析"
+
+        if self.oracle:
+            try:
+                dbg.log("啟動 LLM 神諭機，進行即時新聞情緒掃描...")
+                sentiment_score, sentiment_reason = self.oracle.get_sentiment_score(self.config.ticker)
+            except Exception as e:
+                dbg.war(f"神諭機執行失敗，退回中立情緒: {e}")
+
+        dbg.log(f"[{self.config.ticker} 今日總結] 勝率: {final_prob:.2%} | 大盤安全度: {prob_market_safe:.2%} | 新聞情緒: {sentiment_score}分")
+
+        # 將所有預測結果打包回傳
+        return {
+            "ticker": self.config.ticker,
+            "date": target_date.strftime('%Y-%m-%d'),
+            "prob_final": final_prob,
+            "prob_xgb": prob_xgb,
+            "prob_dl": prob_dl,
+            "prob_market_safe": prob_market_safe,
+            "sentiment_score": sentiment_score,
+            "sentiment_reason": sentiment_reason
+        }
 
     def generate_backtest_data(self) -> pd.DataFrame:
         """
