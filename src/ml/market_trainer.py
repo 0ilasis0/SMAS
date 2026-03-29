@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import joblib
 import lightgbm as lgb
 import numpy as np
@@ -8,7 +10,6 @@ from sklearn.model_selection import TimeSeriesSplit
 from debug import dbg
 from ml.market_features import MarketFeatureCol
 from ml.params import MarketLGBMConfig, TrainConfig
-from path import PathConfig
 
 
 class MarketTrainer:
@@ -18,7 +19,6 @@ class MarketTrainer:
     """
     def __init__(self, config: MarketLGBMConfig = None):
         self.config = config or MarketLGBMConfig()
-        self.model_save_path = PathConfig.UNIVERSAL_MARKET
         # 用來紀錄 CV 過程中得到的最佳迭代次數
         self.optimal_trees = self.config.n_estimators
 
@@ -98,7 +98,7 @@ class MarketTrainer:
 
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, df_clean: pd.DataFrame):
+    def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path | str):
         dbg.log(f"開始訓練最終上線版 LightGBM 大盤模型 (使用動態最佳樹量: {self.optimal_trees})...")
         features = MarketFeatureCol.get_features()
         X = df_clean[features]
@@ -109,18 +109,18 @@ class MarketTrainer:
         scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
 
         lgbm_params = self.config.to_dict()
-        # 強制覆蓋 n_estimators，避免無 Early Stopping 時的嚴重過擬合
         lgbm_params['n_estimators'] = self.optimal_trees
 
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        self.model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(final_model, self.model_save_path)
-        dbg.log(f"大盤防禦模型已成功儲存至: {self.model_save_path}")
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(final_model, save_path)
+        dbg.log(f"大盤防禦模型已成功儲存至: {save_path}")
 
     @staticmethod
-    def load_inference_model(model_path: str) -> lgb.LGBMClassifier:
+    def load_inference_model(model_path: Path | str) -> lgb.LGBMClassifier:
         try:
             model = joblib.load(model_path)
             dbg.log("成功載入 LightGBM 大盤防禦模型。")

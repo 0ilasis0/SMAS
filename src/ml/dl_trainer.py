@@ -1,5 +1,6 @@
 # dl_trainer.py
 import copy
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -14,7 +15,6 @@ from base import MathTool
 from debug import dbg
 from ml.const import RNNType
 from ml.params import DLHyperParams, TrainConfig
-from path import PathConfig
 
 
 # -----------------------------------------
@@ -90,15 +90,16 @@ class DLTrainer:
     def __init__(self, ticker: str, rnn_type: RNNType):
         self.rnn_type = rnn_type
         self.ticker = ticker
-        self.model_save_path = PathConfig.get_dl_model_path(self.ticker, self.rnn_type)
 
         self.device = self._detect_device()
 
-        dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.rnn_type.name}]，存檔路徑: {self.model_save_path}")
+        dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.rnn_type.name}]")
 
         self.batch_size = DLHyperParams.BATCH_SIZE
         self.epochs = DLHyperParams.EPOCHS
         self.learning_rate = DLHyperParams.LEARNING_RATE
+
+        self.optimal_epochs = self.epochs
 
     def _detect_device(self):
         """自動偵測是否支援 GPU 加速 or Mac 晶片加速"""
@@ -106,48 +107,54 @@ class DLTrainer:
         if torch.backends.mps.is_available(): return torch.device("mps")
         return torch.device("cpu")
 
-    def train_with_cv(self, X: np.ndarray, y: np.ndarray, original_index: pd.Index, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
-        """
-        執行 TimeSeriesSplit 交叉驗證，並回傳 OOF 預測值給 Meta-Learner。
-        """
+    def train_with_cv(self, X: np.ndarray, y: np.ndarray, original_index: pd.Index, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
-        dbg.log(f"開始執行 DL (CNN-LSTM) TimeSeriesSplit (Fold={n_splits})...")
+        dbg.log(f"開始執行 DL (CNN-LSTM) 嚴格三階段交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
 
-        tscv = TimeSeriesSplit(n_splits=n_splits)
+        tscv = TimeSeriesSplit(n_splits=n_splits, gap=lookahead)
         oof_predictions = pd.Series(index=original_index, dtype=float)
 
         cv_accuracies, cv_aucs = [], []
+        best_epochs = [] # 紀錄每個 Fold 的最佳停止點
         num_features = X.shape[2]
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-            X_train, X_val = X[train_idx], X[val_idx]
-            y_train, y_val = y[train_idx], y[val_idx]
+            # 嚴格三階段切分 (Train, EarlyStop, Test)
+            split_point = len(val_idx) // 2
+            early_stop_end = split_point - lookahead
 
+            if early_stop_end <= 0 or split_point >= len(val_idx):
+                dbg.war(f"Fold {fold+1}: 樣本數不足以切割三階段，跳過。")
+                continue
+
+            early_stop_idx = val_idx[:early_stop_end]
+            test_idx = val_idx[split_point:]
+
+            X_train, y_train = X[train_idx], y[train_idx]
+            X_es, y_es = X[early_stop_idx], y[early_stop_idx]
+            X_test, y_test = X[test_idx], y[test_idx]
+
+            # 建立三組 DataLoader
             train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
-            val_loader = self._create_dataloader(X_val, y_val, shuffle=False)
+            es_loader = self._create_dataloader(X_es, y_es, shuffle=False)
+            test_loader = self._create_dataloader(X_test, y_test, shuffle=False)
 
-            # 動態計算 BCE Loss 的正樣本權重
             pos_count = y_train.sum()
             neg_count = len(y_train) - pos_count
             pos_weight_val = neg_count / pos_count if pos_count > 0 else 1.0
             pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
 
             model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
-            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor) # 套用權重
-
-            # 加入 weight_decay (L2 正規化) 提高泛化能力
+            criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
-
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                mode='min',
-                factor=DLHyperParams.SCHEDULER_FACTOR,
-                patience=DLHyperParams.SCHEDULER_PATIENCE
+                optimizer, mode='min', factor=DLHyperParams.SCHEDULER_FACTOR, patience=DLHyperParams.SCHEDULER_PATIENCE
             )
 
             best_val_loss = float('inf')
             patience_counter = 0
             best_model_wts = copy.deepcopy(model.state_dict())
+            best_epoch_for_fold = 0
 
             # --- Training Loop ---
             for epoch in range(self.epochs):
@@ -160,53 +167,59 @@ class DLTrainer:
                     nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
 
-                # --- Validation & Early Stopping ---
+                # --- Validation (Early Stopping) ---
                 model.eval()
                 val_loss = 0.0
                 with torch.no_grad():
-                    for X_v, y_v in val_loader:
+                    # 只看 es_loader (提早停止驗證集)
+                    for X_v, y_v in es_loader:
                         X_v, y_v = X_v.to(self.device), y_v.to(self.device)
                         val_loss += criterion(model(X_v), y_v).item()
 
-                avg_val_loss = val_loss / len(val_loader)
+                avg_val_loss = val_loss / len(es_loader)
                 if avg_val_loss < best_val_loss:
                     best_val_loss = avg_val_loss
                     patience_counter = 0
-                    # 在 Loss 最低時，趕緊把大腦狀態備份下來！
+                    best_epoch_for_fold = epoch + 1 # 紀錄最佳 Epoch
                     best_model_wts = copy.deepcopy(model.state_dict())
                 else:
                     patience_counter += 1
                     if patience_counter >= TrainConfig.EARLY_STOP_ROUND:
-                        break # 觸發 Early Stopping
+                        break
 
                 scheduler.step(avg_val_loss)
 
-            # --- 收集 OOF 預測 ---
+            best_epochs.append(best_epoch_for_fold)
+
+            # --- 收集 OOF 預測 (只針對完全沒看過的 test_loader) ---
             model.load_state_dict(best_model_wts)
             model.eval()
-            val_preds = []
+            test_preds = []
             with torch.no_grad():
-                for X_v, _ in val_loader:
-                    # 推論後搬回 CPU 並轉成 numpy
-                    preds = torch.sigmoid(model(X_v.to(self.device))).cpu().numpy()
-                    val_preds.extend(np.atleast_1d(preds))
+                for X_t, _ in test_loader:
+                    preds = torch.sigmoid(model(X_t.to(self.device))).cpu().numpy()
+                    test_preds.extend(np.atleast_1d(preds))
 
-            val_preds = np.array(val_preds)
-            oof_predictions.iloc[val_idx] = val_preds
+            test_preds = np.array(test_preds)
+            oof_predictions.iloc[test_idx] = test_preds
 
-            # --- 計算指標 ---
-            y_pred_binary = (val_preds > 0.5).astype(int)
-            acc = accuracy_score(y_val, y_pred_binary)
+            # --- 計算指標 (用 y_test 對答案) ---
+            y_pred_binary = (test_preds > 0.5).astype(int)
+            acc = accuracy_score(y_test, y_pred_binary)
             cv_accuracies.append(acc)
 
-            if len(np.unique(y_val)) > 1:
-                auc = roc_auc_score(y_val, val_preds)
+            if len(np.unique(y_test)) > 1:
+                auc = roc_auc_score(y_test, test_preds)
                 cv_aucs.append(auc)
                 auc_str = f"{auc:.4f}"
             else:
                 auc_str = "N/A"
 
-            dbg.log(f"Fold {fold+1}: Accuracy = {acc:.4f}, AUC = {auc_str}")
+            dbg.log(f"Fold {fold+1}: Accuracy={acc:.4f}, AUC={auc_str} (最佳 Epoch: {best_epoch_for_fold})")
+
+        if best_epochs:
+            self.optimal_epochs = int(np.mean(best_epochs))
+            dbg.log(f"💡 CV 判定最佳平均 Epoch 數為: {self.optimal_epochs} (原設定 {self.epochs})")
 
         if not cv_accuracies:
             dbg.error("交叉驗證失敗：資料量不足。")
@@ -215,9 +228,9 @@ class DLTrainer:
         dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {np.mean(cv_aucs):.4f}")
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, X: np.ndarray, y: np.ndarray):
+    def train_and_save_final_model(self, X: np.ndarray, y: np.ndarray, save_path: Path | str):
         """使用全量資料訓練最終上線版本"""
-        dbg.log("開始訓練最終上線版 DL 模型 (使用全量資料)...")
+        dbg.log(f"開始訓練最終上線版 DL 模型 (動態 Epoch={self.optimal_epochs})...")
         num_features = X.shape[2]
         full_loader = self._create_dataloader(X, y, shuffle=True)
 
@@ -231,7 +244,7 @@ class DLTrainer:
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
 
         model.train()
-        for epoch in range(self.epochs):
+        for epoch in range(self.optimal_epochs):
             for X_batch, y_batch in full_loader:
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
                 optimizer.zero_grad()
@@ -240,9 +253,10 @@ class DLTrainer:
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
-        self.model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(model.state_dict(), self.model_save_path)
-        dbg.log(f"最終模型權重已儲存至: {self.model_save_path}")
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(model.state_dict(), save_path)
+        dbg.log(f"最終模型權重已儲存至: {save_path}")
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
         X_tensor = torch.tensor(X, dtype=torch.float32)
@@ -260,13 +274,13 @@ class DLTrainer:
             pin_memory=use_pin_memory
         )
 
-    def load_inference_model(self, num_features: int) -> nn.Module:
+    def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """【供 UI 推論端使用】載入訓練好的模型權重"""
         try:
             model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
-            model.load_state_dict(torch.load(self.model_save_path, map_location=self.device, weights_only=True))
-            model.eval() # 記得切換到推論模式
-            dbg.log(f"成功載入 DL 模型: {self.model_save_path}")
+            model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
+            model.eval()
+            dbg.log(f"成功載入 DL 模型: {model_path}")
             return model
         except Exception as e:
             dbg.error(f"模型載入失敗: {e}")

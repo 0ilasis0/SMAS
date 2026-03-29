@@ -10,7 +10,7 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MetaCol, MLConst
+from ml.const import FeatureCol, MetaCol, MLCol, MLConst
 from ml.dl_features import DLFeatureEngine
 from ml.dl_trainer import DLTrainer
 from ml.market_features import MarketFeatureCol, MarketFeatureEngine
@@ -27,8 +27,9 @@ class QuantAIEngine:
     量化 AI 引擎中樞。
     封裝了資料抓取、三腦模型訓練 (XGBoost + DL + Market)、Meta-Learner 融合，以及線上推論的完整管線。
     """
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, oos_days: int = 0):
         self.config = SessionConfig(ticker=ticker)
+        self.oos_days = oos_days
 
         # 基礎設施
         self.db = DataManager()
@@ -39,11 +40,15 @@ class QuantAIEngine:
         self.dl_model = None
         self.meta_learner = None
         self.market_model = None
-
-        # DL 推論的縮放器
         self.dl_scaler = None
 
-        self.scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type)
+        self.paths = {
+            MLCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
+            MLCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.rnn_type, self.oos_days),
+            MLCol.SCALER: PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days),
+            MLCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
+            MLCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
+        }
 
     # ==========================================
     # 模組 1：資料更新
@@ -74,11 +79,11 @@ class QuantAIEngine:
     # ==========================================
     # 模組 2：自動化訓練與存檔
     # ==========================================
-    def train_all_models(self, save_models: bool = True, oos_days: int = 0):
+    def train_all_models(self, save_models: bool = True,):
         """
         供 UI 或開發者觸發：執行完整的 Stacking 訓練管線。
         """
-        dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {oos_days} 天做為純淨測試集)")
+        dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {self.oos_days} 天做為純淨測試集)")
 
         # 取得「已對齊大盤特徵」的完整資料集
         macro_tickers = [e.value for e in MacroTicker]
@@ -88,40 +93,60 @@ class QuantAIEngine:
             dbg.error(f"資料庫中無 {self.config.ticker} 的資料，請先執行 update_market_data()。")
             return
 
-        df_train_only = df_raw_full.iloc[:-oos_days] if oos_days > 0 else df_raw_full
+        df_train_only = df_raw_full.iloc[:-self.oos_days] if self.oos_days > 0 else df_raw_full
 
         # XGBoost 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 左腦：XGBoost ---")
         xgb_engine = XGBFeatureEngine()
         df_xgb_train = xgb_engine.process_pipeline(df_train_only, self.config.lookahead)
         xgb_trainer = XGBTrainer(self.config.ticker)
-        oof_xgb = xgb_trainer.train_with_cv(df_xgb_train)
-        y_true = df_xgb_train[FeatureCol.TARGET]
-
+        xgb_trainer.model_save_path = self.paths[MLCol.XGB]
+        oof_xgb = xgb_trainer.train_with_cv(df_xgb_train, lookahead=self.config.lookahead)
         if save_models:
-            xgb_trainer.train_and_save_final_model(df_xgb_train)
+            xgb_trainer.train_and_save_final_model(df_xgb_train, self.paths[MLCol.XGB])
+
+        y_true = df_xgb_train[FeatureCol.TARGET]
 
         # DL (CNN-RNN) 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 右腦：Deep Learning ---")
         dl_engine = DLFeatureEngine(self.config.lookahead)
         X_dl_train, y_dl_train, scaler, valid_index_train = dl_engine.process_pipeline(df_train_only)
         dl_trainer = DLTrainer(ticker=self.config.ticker, rnn_type=self.config.rnn_type)
-        oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train)
+        oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train, lookahead=self.config.lookahead)
 
         if save_models:
-            dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train)
+            dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[MLCol.DL])
             import joblib
-            joblib.dump(scaler, self.scaler_path)
+            joblib.dump(scaler, self.paths[MLCol.SCALER])
 
         # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
-        market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
-        df_market_train = market_engine.process_pipeline(df_train_only, is_training=True)
-        market_trainer = MarketTrainer()
-        oof_market = market_trainer.train_with_cv(df_market_train, lookahead=self.config.lookahead)
 
-        if save_models:
-            market_trainer.train_and_save_final_model(df_market_train)
+        if not self.paths[MLCol.MARKET].exists():
+            dbg.log(f"未發現 OOS={self.oos_days} 的大盤防禦模型，開始進行全局訓練...")
+
+            # 使用 Enum 避免字串打錯
+            twii = MacroTicker.TWII.value
+            sox = MacroTicker.SOX.value
+
+            # 給第三腦專屬的「純淨大盤資料」，以 ^TWII 為主體！
+            df_market_pure = self.db.get_aligned_market_data(twii, [sox])
+
+            # 確保訓練時也避開 oos_days
+            df_market_pure_train = df_market_pure.iloc[:-self.oos_days] if self.oos_days > 0 else df_market_pure
+
+            market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
+            df_market_train = market_engine.process_pipeline(df_market_pure_train, is_training=True)
+
+            # 將專屬路徑傳給 Trainer
+            market_trainer = MarketTrainer()
+            market_trainer.train_with_cv(df_market_train, lookahead=self.config.lookahead)
+
+            if save_models:
+                market_trainer.train_and_save_final_model(df_market_train, self.paths[MLCol.MARKET])
+
+        else:
+            dbg.log(f"大盤防禦模型 (OOS={self.oos_days}) 已存在，跳過重複訓練。")
 
         # 清理 GPU 記憶體
         if torch.cuda.is_available(): torch.cuda.empty_cache()
@@ -154,14 +179,13 @@ class QuantAIEngine:
         aligned_y_true = df_oof[FeatureCol.TARGET]
 
         meta_learner = MetaLearner(ticker=self.config.ticker)
-        # 餵入完美對齊的資料
         X_meta, y_meta = meta_learner.evaluate_oof(aligned_oof_xgb, aligned_oof_dl, aligned_y_true)
 
         if save_models:
-            meta_learner.train_and_save_final_model(X_meta, y_meta)
+            meta_learner.train_and_save_final_model(X_meta, y_meta, self.paths[MLCol.META])
 
         gc.collect()
-        dbg.log(f"\n🎉 雙層架構與三大腦模型訓練完畢！(完美避開最後 {oos_days} 天的資料)")
+        dbg.log(f"\n🎉 雙層架構與三大腦模型訓練完畢！(完美避開最後 {self.oos_days} 天的資料)")
 
     # ==========================================
     # 模組 3：載入模型 (為線上推論做準備)
@@ -170,21 +194,18 @@ class QuantAIEngine:
         """
         供 UI 啟動時觸發：將儲存在硬碟的權重檔載入至記憶體中。
         """
-        dbg.log(f"[{self.config.ticker}] 準備載入線上推論模型...")
+        dbg.log(f"[{self.config.ticker}] 準備載入線上推論模型 (OOS={self.oos_days})...")
         try:
-            xgb_path = PathConfig.get_xgboost_model_path(self.config.ticker)
-            self.xgb_model = XGBTrainer.load_inference_model(xgb_path)
+            self.xgb_model = XGBTrainer.load_inference_model(self.paths[MLCol.XGB])
 
-            self.dl_scaler = joblib.load(self.scaler_path)
+            self.dl_scaler = joblib.load(self.paths[MLCol.SCALER])
             dl_input_size = DLHyperParams.INPUT_SIZE
-            self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size)
+            self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[MLCol.DL])
 
-            meta = MetaLearner(self.config.ticker)
-            meta.load_inference_model()
-            self.meta_learner = meta
+            self.meta_learner = MetaLearner(self.config.ticker)
+            self.meta_learner.load_inference_model(self.paths[MLCol.META])
 
-            # 載入 Market Brain
-            self.market_model = MarketTrainer.load_inference_model(PathConfig.UNIVERSAL_MARKET)
+            self.market_model = MarketTrainer.load_inference_model(self.paths[MLCol.MARKET])
 
             if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model, self.market_model):
                 raise ValueError("部分模型或 Scaler 回傳為 None")
@@ -240,10 +261,14 @@ class QuantAIEngine:
 
         # 第三腦 (Market Brain) 推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
-        df_market_clean = market_engine.process_pipeline(df_recent, is_training=False)
+
+        df_market_pure = self.db.get_aligned_market_data('^TWII', ['^SOX']).tail(MLConst.MAX_LOOKBACK)
+        df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
+
         if target_date not in df_market_clean.index:
             dbg.error(f"大盤缺失 {target_date} 特徵 (可能是總經資料 API 延遲)！拒絕預測。")
             return None
+
         latest_market_features = df_market_clean.loc[[target_date], MarketFeatureCol.get_features()]
         prob_danger = self.market_model.predict_proba(latest_market_features)[0, 1]
         prob_market_safe = 1.0 - prob_danger
@@ -292,16 +317,21 @@ class QuantAIEngine:
 
         # Market 批次推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
-        df_market_clean = market_engine.process_pipeline(df_raw, is_training=False)
+
+        # 抓取純淨的大盤全量資料
+        df_market_pure = self.db.get_aligned_market_data('^TWII', ['^SOX'])
+        df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
+
         X_market = df_market_clean[MarketFeatureCol.get_features()]
         prob_danger_array = self.market_model.predict_proba(X_market)[:, 1]
+
         prob_market_safe_series = pd.Series(
             1.0 - prob_danger_array,
-            index=df_market_clean.index,
+            index=df_market_clean.index,  # 這裡的 index 是 TWII 的日期
             name="prob_market_safe"
         )
 
-        # 神級索引對齊 (Index Alignment)
+        # df_raw (個股日期) 會自動去 Left Join TWII 的日期，完美對齊！
         df_backtest = df_raw.copy()
         df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
 

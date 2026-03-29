@@ -1,5 +1,5 @@
 import math
-import warnings
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -11,7 +11,6 @@ from base import MathTool
 from debug import dbg
 from ml.const import MetaCol
 from ml.params import MetaHyperParams, TrainConfig
-from path import PathConfig
 
 
 class MetaLearner:
@@ -21,7 +20,6 @@ class MetaLearner:
     """
     def __init__(self, ticker: str):
         self.ticker = ticker
-        self.model_save_path = PathConfig.get_meta_model_path(self.ticker)
 
         self.model = LogisticRegression(
             C=MetaHyperParams.C,
@@ -32,25 +30,24 @@ class MetaLearner:
             max_iter=MetaHyperParams.MAX_ITER
         )
 
-    def evaluate_oof(self, oof_xgb: pd.Series, oof_dl: pd.Series, y_true: pd.Series) -> tuple[pd.DataFrame, pd.Series]:
+    def evaluate_oof(self, aligned_oof_xgb: pd.Series, aligned_oof_dl: pd.Series, aligned_y_true: pd.Series) -> tuple[pd.DataFrame, pd.Series]:
         """
-        對齊雙腦的 OOF 預測，並執行交叉驗證評估。
+        接收已對齊雙腦的 OOF 預測，並執行交叉驗證評估。
         :return: (X_meta, y_meta) 供後續最終訓練使用
         """
         dbg.log("開始進行 Meta-Learner (Level 1) OOF 整合評估...")
 
-        # 對齊資料
-        df_meta = pd.concat([oof_xgb, oof_dl, y_true], axis=1, join='inner').sort_index()
-        df_meta.columns = [MetaCol.PROB_XGB, MetaCol.PROB_DL, MetaCol.TARGET]
+        X_meta = pd.DataFrame({
+            MetaCol.PROB_XGB: aligned_oof_xgb,
+            MetaCol.PROB_DL: aligned_oof_dl
+        })
+        y_meta = aligned_y_true.astype(int)
 
-        if df_meta.empty:
-            dbg.error("資料對齊後為空，請檢查 OOF 預測值的 Index 是否正確！")
+        if X_meta.empty:
+            dbg.error("接收到的 OOF 資料為空！")
             return pd.DataFrame(), pd.Series()
 
-        dbg.log(f"成功對齊 OOF 資料，共獲得 {len(df_meta)} 筆有效整合樣本。")
-
-        X_meta = df_meta[[MetaCol.PROB_XGB, MetaCol.PROB_DL]]
-        y_meta = df_meta[MetaCol.TARGET].astype(int)
+        dbg.log(f"成功接收 OOF 資料，共獲得 {len(X_meta)} 筆有效整合樣本。")
 
         # 誠實評估 (CV)
         tscv = TimeSeriesSplit(n_splits=TrainConfig.N_SPLITS)
@@ -68,7 +65,7 @@ class MetaLearner:
 
         return X_meta, y_meta
 
-    def train_and_save_final_model(self, X_meta: pd.DataFrame, y_meta: pd.Series):
+    def train_and_save_final_model(self, X_meta: pd.DataFrame, y_meta: pd.Series, save_path: Path | str):
         """
         使用對齊後的完整 OOF 資料訓練最終邏輯迴歸權重，並存檔。
         """
@@ -89,18 +86,21 @@ class MetaLearner:
         dbg.log(f" ➔ DL 模型 權重: {weights[1]:.4f}")
         dbg.log(f" ➔ 基礎截距 (偏誤): {intercept:.4f}")
 
-        # 儲存模型
-        self.model_save_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.model, self.model_save_path)
-        dbg.log(f"Meta-Learner 權重已儲存至: {self.model_save_path}")
+        # 🚀 使用外部傳入的路徑儲存
+        save_path = Path(save_path)
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(self.model, save_path)
+        dbg.log(f"Meta-Learner 權重已儲存至: {save_path}")
 
-    def load_inference_model(self):
+    def load_inference_model(self, model_path: Path | str) -> bool:
         """【供 UI 推論端使用】載入訓練好的 Meta-Learner"""
         try:
-            self.model = joblib.load(self.model_save_path)
-            dbg.log(f"成功載入 Meta-Learner: {self.model_save_path}")
+            self.model = joblib.load(model_path)
+            dbg.log(f"成功載入 Meta-Learner: {model_path}")
+            return True
         except Exception as e:
             dbg.error(f"Meta-Learner 載入失敗: {e}")
+            return False
 
     def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
         if math.isnan(prob_xgb) or math.isnan(prob_dl):
@@ -112,16 +112,3 @@ class MetaLearner:
 
         X_new = np.array([[prob_xgb, prob_dl]])
         return self.model.predict_proba(X_new)[0, 1]
-
-    # def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
-    #     """
-    #     給線上實戰 (UI / 階段三行為樹) 呼叫用。
-    #     輸入雙腦機率，輸出最終決定性的勝率。
-    #     """
-    #     if math.isnan(prob_xgb) or math.isnan(prob_dl):
-    #         dbg.war("接收到 NaN 機率，回傳中性勝率 0.5")
-    #         return 0.5
-
-    #     prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)
-    #     prob_dl = MathTool.clamp(prob_dl, 0.0, 1.0)
-    #     return (prob_xgb + prob_dl) / 2.0

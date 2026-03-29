@@ -34,37 +34,37 @@ class PathConfig:
     IDSS_DATA = PathBase.processed / "idss_data.db"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
-    UNIVERSAL_MARKET = PathBase.model / "universal_market_model.joblib"
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:
         return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, "_backtest", ".csv")
 
     @classmethod
-    def get_xgboost_model_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json")
+    def get_xgboost_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json", oos_days)
 
     @classmethod
-    def get_dl_model_path(cls, ticker: str, rnn_type: "RNNType") -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_model", ".pth")
+    def get_dl_model_path(cls, ticker: str, rnn_type: "RNNType", oos_days: int = 0) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_model", ".pth", oos_days)
 
     @classmethod
-    def get_dl_scalar_path(cls, ticker: str, rnn_type: "RNNType") -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_dl_scaler", ".joblib")
+    def get_dl_scalar_path(cls, ticker: str, rnn_type: "RNNType", oos_days: int = 0) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_dl_scaler", ".joblib", oos_days)
 
     @classmethod
-    def get_meta_model_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_meta_model", ".joblib")
-
+    def get_meta_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_meta_model", ".joblib", oos_days)
 
     @classmethod
-    def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str) -> Path:
-        """
-        通用路徑生成邏輯 (通式)
-        """
-        # 確保目錄存在
+    def get_market_model_path(cls, oos_days: int = 0) -> Path:
+        cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
+        return cls.MODEL_DIR / f"universal_market_model{oos_suffix}.joblib"
+
+    @classmethod
+    def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str, oos_days: int = 0) -> Path:
+        """通用路徑生成邏輯 """
         base_dir.mkdir(parents=True, exist_ok=True)
-        # 統一處理 Ticker
         clean_ticker = ticker.split('.')[0]
-        # 組合最終路徑
-        return base_dir / f"{clean_ticker}{suffix}{ext}"
+        oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
+        return base_dir / f"{clean_ticker}{suffix}{oos_suffix}{ext}"
