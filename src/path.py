@@ -62,6 +62,10 @@ class PathConfig:
         return cls.MODEL_DIR / f"universal_market_model{oos_suffix}.joblib"
 
     @classmethod
+    def get_report_path(cls, ticker: str) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_report", ".png")
+
+    @classmethod
     def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str, oos_days: int = 0) -> Path:
         """通用路徑生成邏輯 """
         base_dir.mkdir(parents=True, exist_ok=True)
