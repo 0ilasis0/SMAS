@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data.const import MacroTicker, TimeUnit
+from data.const import MacroTicker, StockCol, TimeUnit
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
@@ -43,7 +43,7 @@ class QuantAIEngine:
         self.market_model = None
 
         if api_keys:
-            self.oracle = GeminiOracle(api_keys=api_keys, mode=TradingMode.SWING)
+            self.oracle = GeminiOracle(api_keys=api_keys)
         else:
             self.oracle = None
 
@@ -229,7 +229,7 @@ class QuantAIEngine:
             dbg.error(f"模型載入失敗，請確認是否已經執行過訓練管線: {e}")
             return False
 
-    def predict_today(self) -> dict | None:
+    def predict_today(self, mode: TradingMode = TradingMode.SWING) -> dict | None:
         """
         供 UI 或行為樹呼叫：預測今天的最終勝率與大盤安全度。
         回傳: (final_prob, prob_market_safe)
@@ -297,12 +297,15 @@ class QuantAIEngine:
         sentiment_score = 5
         sentiment_reason = "未提供 API Key，略過情緒分析"
 
+        current_price = df_recent[StockCol.CLOSE].iloc[-1]
+        avg_5d_vol = df_recent[StockCol.VOLUME].tail(5).mean()
+
         if self.oracle:
             try:
-                dbg.log("啟動 LLM 神諭機，進行即時新聞情緒掃描...")
+                self.oracle.mode = mode
                 sentiment_score, sentiment_reason = self.oracle.get_sentiment_score(self.config.ticker)
             except Exception as e:
-                dbg.war(f"神諭機執行失敗，退回中立情緒: {e}")
+                dbg.war(f"LLM AI執行失敗，退回中立情緒: {e}")
 
         dbg.log(f"[{self.config.ticker} 今日總結] 勝率: {final_prob:.2%} | 大盤安全度: {prob_market_safe:.2%} | 新聞情緒: {sentiment_score}分")
 
@@ -315,7 +318,9 @@ class QuantAIEngine:
             "prob_dl": prob_dl,
             "prob_market_safe": prob_market_safe,
             "sentiment_score": sentiment_score,
-            "sentiment_reason": sentiment_reason
+            "sentiment_reason": sentiment_reason,
+            "current_price": float(current_price),
+            "avg_5d_vol": float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0
         }
 
     def generate_backtest_data(self) -> pd.DataFrame:
