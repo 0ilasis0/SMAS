@@ -29,13 +29,13 @@ class MarketFeatureEngine:
         # ==========================================
         # 2. 美股衍生特徵 (無未來函數對齊版)
         # ==========================================
-        if "SOX_Close" in data.columns:
-            data[MarketFeatureCol.SOX_RET_1D] = data["SOX_Close"].pct_change()
-            data[MarketFeatureCol.SOX_RET_5D] = data["SOX_Close"].pct_change(5)
+        if MarketFeatureCol.SOX_CLOSE in data.columns:
+            data[MarketFeatureCol.SOX_RET_1D] = data[MarketFeatureCol.SOX_CLOSE].pct_change()
+            data[MarketFeatureCol.SOX_RET_5D] = data[MarketFeatureCol.SOX_CLOSE].pct_change(5)
             # 台美相對強弱差 (Spread)。若費半暴跌但台股抗跌，數值會大於 0
             data[MarketFeatureCol.SOX_TWII_SPREAD] = twii_ret_1d - data[MarketFeatureCol.SOX_RET_1D]
         else:
-            dbg.war("警告：未發現 SOX_Close 欄位，費半相關特徵將補 0。")
+            dbg.war("警告：未發現 sox_close 欄位，費半相關特徵將補 0。")
             data[MarketFeatureCol.SOX_RET_1D] = 0.0
             data[MarketFeatureCol.SOX_RET_5D] = 0.0
             data[MarketFeatureCol.SOX_TWII_SPREAD] = 0.0

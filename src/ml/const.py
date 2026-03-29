@@ -54,6 +54,7 @@ class MarketFeatureCol(StrEnum):
     SOX_RET_1D = "sox_ret_1d"
     SOX_RET_5D = "sox_ret_5d"
     SOX_TWII_SPREAD = "sox_twii_spread" # 台美相對強弱差
+    SOX_CLOSE  = "sox_close"
 
     TARGET_DANGER = "target_danger" # 1:危險(將崩盤), 0:安全
 

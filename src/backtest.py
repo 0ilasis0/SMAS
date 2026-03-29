@@ -1,3 +1,7 @@
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from enum import StrEnum
+
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -11,6 +15,33 @@ from data.const import StockCol
 from debug import dbg
 from ml.const import MetaCol
 
+
+class HistoryCol(StrEnum):
+    """回測紀錄欄位名稱常量"""
+    DATE = "Date"
+    CLOSE = "Close"
+    CASH = "Cash"
+    POSITION = "Position"
+    TOTAL_EQUITY = "Total_Equity"
+    ACTION = "Action"
+    PROB_FINAL = "prob_final"
+    PROB_MARKET = "prob_market_safe"
+
+@dataclass(frozen=True)
+class BacktestRecord:
+    """單日回測數據載體"""
+    Date: datetime
+    Close: float
+    Cash: float
+    Position: int
+    Total_Equity: float
+    Action: DecisionAction
+    prob_final: float
+    prob_market_safe: float
+
+    def to_dict(self):
+        """轉換為字典供 Pandas 使用"""
+        return asdict(self)
 
 class BacktestEngine:
     """
@@ -54,9 +85,11 @@ class BacktestEngine:
                 executable_price=next_row[StockCol.OPEN],  # 實際執行交易的價格
                 daily_volume=next_row[StockCol.VOLUME]     # 流動性上限
             )
+            self.bb.prob_market_safe = row.get(MetaCol.PROB_MARKET_SAFE, 1.0)
+            self.bb.prob_final = row[MetaCol.PROB_FINAL]
+
             self.bb.prob_xgb = row[MetaCol.PROB_XGB]
             self.bb.prob_dl = row[MetaCol.PROB_DL]
-            self.bb.prob_final = row[MetaCol.PROB_FINAL]
 
             # 清空前一天的決策紀錄
             self.bb.action_decision = DecisionAction.HOLD
@@ -74,50 +107,47 @@ class BacktestEngine:
             total_equity = self.bb.cash + stock_value
 
             # 紀錄歷史
-            self.history_records.append({
-                'Date': date,
-                'Close': current_close,
-                'Cash': self.bb.cash,
-                'Position': self.bb.position,
-                'Total_Equity': total_equity,
-                'Action': self.bb.action_decision,
-                MetaCol.PROB_FINAL: self.bb.prob_final
-            })
+            record = BacktestRecord(
+                Date=date,
+                Close=current_close,
+                Cash=self.bb.cash,
+                Position=self.bb.position,
+                Total_Equity=total_equity,
+                Action=self.bb.action_decision,
+                prob_final=self.bb.prob_final,
+                prob_market_safe=self.bb.prob_market_safe
+            )
+            self.history_records.append(record.to_dict())
 
         self._generate_report()
 
     def _generate_report(self):
-        """計算績效指標並繪製資金曲線"""
+        """計算績效指標並繪製三層量化儀表板"""
         if not self.history_records:
-            dbg.error("沒有回測紀錄可供產出報告！")
             return
 
-        df_res = pd.DataFrame(self.history_records).set_index('Date')
+        df_res = pd.DataFrame(self.history_records).set_index(HistoryCol.DATE)
 
-        # 總報酬率與年化報酬率 (CAGR)
-        final_equity = df_res['Total_Equity'].iloc[-1]
+        final_equity = df_res[HistoryCol.TOTAL_EQUITY].iloc[-1]
         total_return = (final_equity - self.initial_cash) / self.initial_cash
 
-        # 計算 CAGR (假設一年約 252 個交易日)
+        # 計算年化報酬率 (CAGR)
         trading_days = len(df_res)
-        cagr = (final_equity / self.initial_cash) ** (252 / trading_days) - 1
+        cagr = (final_equity / self.initial_cash) ** (252 / trading_days) - 1 if trading_days > 0 else 0
 
-        # 計算最大回撤 (Max Drawdown, MDD)
-        df_res['Peak'] = df_res['Total_Equity'].cummax()
-        df_res['Drawdown'] = (df_res['Total_Equity'] - df_res['Peak']) / df_res['Peak']
+        # 計算 MDD
+        df_res['Peak'] = df_res[HistoryCol.TOTAL_EQUITY].cummax()
+        df_res['Drawdown'] = (df_res[HistoryCol.TOTAL_EQUITY] - df_res['Peak']) / df_res['Peak']
         max_drawdown = df_res['Drawdown'].min()
 
-        # 計算夏普值 (Sharpe Ratio，假設無風險利率為 1%)
-        df_res['Daily_Return'] = df_res['Total_Equity'].pct_change().fillna(0)
+        # 計算夏普值 (Sharpe Ratio)
+        df_res['Daily_Return'] = df_res[HistoryCol.TOTAL_EQUITY].pct_change().fillna(0)
         daily_volatility = df_res['Daily_Return'].std()
-        if daily_volatility > 0:
-            sharpe_ratio = (df_res['Daily_Return'].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252)
-        else:
-            sharpe_ratio = 0.0
+        sharpe_ratio = (df_res['Daily_Return'].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
 
         # 統計交易次數
-        buy_count = len(df_res[df_res['Action'] == DecisionAction.BUY])
-        sell_count = len(df_res[df_res['Action'] == DecisionAction.SELL])
+        buy_count = len(df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY])
+        sell_count = len(df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL])
 
         dbg.log("\n" + "="*40)
         dbg.log("📊 IDSS 行為樹回測績效報告")
@@ -132,65 +162,63 @@ class BacktestEngine:
         dbg.log(f"💸 賣出次數: \t{sell_count} 次")
         dbg.log("="*40)
 
-        # 繪製資金曲線圖
-        plt.figure(figsize=(12, 6))
+        # 整合為一個專業的三層儀表板
+        plt.figure(figsize=(14, 10))
 
-        ax1 = plt.subplot(2, 1, 1)
-        ax1.plot(df_res.index, df_res['Total_Equity'], label='Total Equity', color='blue')
-        ax1.set_title('IDSS Strategy Equity Curve')
-        ax1.set_ylabel('NTD')
-        ax1.grid(True)
-        ax1.legend()
+        # 第一層：資金曲線與回撤
+        ax1 = plt.subplot(3, 1, 1)
+        ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color='blue', linewidth=2)
+        ax1.set_title(f'IDSS Quant Strategy Dashboard - {self.bb.ticker}', fontsize=14, fontweight='bold')
+        ax1.set_ylabel('Total Equity (NTD)')
+        ax1.grid(True, alpha=0.3)
 
-        ax2 = plt.subplot(2, 1, 2, sharex=ax1)
-        ax2.plot(df_res.index, df_res['Close'], label='Stock Price', color='gray', alpha=0.6)
+        # 在同一個圖表加入回撤 (Drawdown) 的紅色面積圖，共用 X 軸但使用右側 Y 軸
+        ax1_dd = ax1.twinx()
+        ax1_dd.fill_between(df_res.index, df_res['Drawdown'], 0, color='red', alpha=0.2, label='Drawdown')
+        ax1_dd.set_ylabel('Drawdown (%)', color='red')
+        ax1_dd.tick_params(axis='y', labelcolor='red')
 
-        buys = df_res[df_res['Action'] == DecisionAction.BUY]
-        sells = df_res[df_res['Action'] == DecisionAction.SELL]
-        ax2.scatter(buys.index, buys['Close'], marker='^', color='green', s=80, label='Buy')
-        ax2.scatter(sells.index, sells['Close'], marker='v', color='red', s=80, label='Sell')
+        # 合併兩個軸的圖例
+        lines_1, labels_1 = ax1.get_legend_handles_labels()
+        lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
+        ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
 
+        # 第二層：股價走勢與買賣點
+        ax2 = plt.subplot(3, 1, 2, sharex=ax1)
+        ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color='gray', alpha=0.7)
+        buys = df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY]
+        sells = df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL]
+        ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color='green', s=100, label='Buy', zorder=5)
+        ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color='red', s=100, label='Sell', zorder=5)
         ax2.set_ylabel('Stock Price')
-        ax2.grid(True)
-        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc='upper left')
 
-        plt.tight_layout()
-        plt.show()
+        # 第三層：AI 勝率與大盤防禦雷達
+        ax3 = plt.subplot(3, 1, 3, sharex=ax1)
+        ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color='orange', linewidth=1.5)
+        ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color='purple', linestyle='--', linewidth=1.5)
+        ax3.axhline(y=0.5, color='red', linestyle=':', alpha=0.5, label='50% Threshold')
 
-# ==========================================
-# 模擬測試區 (如果還沒有真實的 ML 預測數據，可以用這個測試行為樹邏輯)
-# ==========================================
-def generate_mock_data(days) -> pd.DataFrame:
-    """生成具有趨勢的假 K 線與假 AI 勝率，用來測試行為樹是否正常運作"""
-    np.random.seed(42)
+        # 將大盤危險區域標示為紅色背景
+        ax3.fill_between(
+            df_res.index, 0, 1,
+            where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
+            color='red', alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
+        )
 
-    # 模擬股價走勢 (Random Walk with Drift)
-    returns = np.random.normal(0.001, 0.02, days)
-    price = 100 * np.cumprod(1 + returns)
+        ax3.set_ylabel('Probability')
+        ax3.set_xlabel('Date')
+        ax3.grid(True, alpha=0.3)
+        ax3.legend(loc='upper left')
 
-    df = pd.DataFrame({
-        'Close': price,
-        'High': price * np.random.uniform(1.0, 1.03, days)
-    }, index=pd.date_range(start='2025-01-01', periods=days, freq='B'))
-
-    # 模擬 AI 勝率：假設 AI 能稍微預測到未來的股價變化
-    # 我們給它一點雜訊，讓它的勝率在 0.2 ~ 0.9 之間震盪
-    df[MetaCol.PROB_XGB] = np.clip(0.5 + np.random.normal(0, 0.1, days) + (returns * 5), 0.1, 0.9)
-    df[MetaCol.PROB_DL] = np.clip(0.5 + np.random.normal(0, 0.1, days) + (returns * 5), 0.1, 0.9)
-    df[MetaCol.PROB_FINAL] = (df[MetaCol.PROB_XGB] + df[MetaCol.PROB_DL]) / 2
-
-    # 手動創造一個極端暴跌，測試停損機制
-    df.loc[df.index[100:105], 'Close'] *= 0.8
-    df.loc[df.index[100:105], MetaCol.PROB_FINAL] = 0.2 # 讓 AI 亮紅燈
-
-    return df
 
 if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
     ticker = "5469.TW"
     test_days = 240
-    ai_engine = QuantAIEngine(ticker=ticker)
+    ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
 
     # # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
     ai_engine.update_market_data()
@@ -210,8 +238,8 @@ if __name__ == "__main__":
     df_test = df_real_data.tail(test_days)
 
     print("\n📊 【AI 預測勝率分佈統計】")
-    print(df_test['prob_final'].describe())
+    print(df_test[MetaCol.PROB_FINAL].describe())
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    engine = BacktestEngine(initial_cash=2000000.0)
+    engine = BacktestEngine(initial_cash=2000000)
     engine.run(df_test)
