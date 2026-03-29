@@ -132,6 +132,10 @@ class QuantAIEngine:
             # 給第三腦專屬的「純淨大盤資料」，以 ^TWII 為主體！
             df_market_pure = self.db.get_aligned_market_data(twii, [sox])
 
+            if df_market_pure.empty:
+                dbg.error(f"🚨 資料庫找不到大盤資料 {twii}！請務必先執行 ai_engine.update_market_data()！")
+                return
+
             # 確保訓練時也避開 oos_days
             df_market_pure_train = df_market_pure.iloc[:-self.oos_days] if self.oos_days > 0 else df_market_pure
 

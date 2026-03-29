@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from data.const import MacroTicker
+from data.const import MacroTicker, StockCol
 from debug import dbg
 from path import PathConfig
 
@@ -71,10 +71,13 @@ class DataManager:
         """將日 K 線 DataFrame 存入 SQLite"""
         if df.empty: return
 
+        df = df.copy()
+        df.columns = [str(c).strip().capitalize() for c in df.columns]
+
         records = [
             (
                 ticker,
-                row.Index.strftime('%Y-%m-%d'),
+                row.Index.strftime('%Y-%m-%d') if hasattr(row.Index, 'strftime') else str(row.Index),
                 row.Open, row.High, row.Low, row.Close,
                 int(row.Volume) if pd.notna(row.Volume) else 0
             )
@@ -95,10 +98,13 @@ class DataManager:
         """將分時 K 線 DataFrame 存入 SQLite"""
         if df.empty: return
 
+        df = df.copy()
+        df.columns = [str(c).strip().capitalize() for c in df.columns]
+
         records = [
             (
                 ticker,
-                row.Index.strftime('%Y-%m-%d %H:%M:%S'),
+                row.Index.strftime('%Y-%m-%d %H:%M:%S') if hasattr(row.Index, 'strftime') else str(row.Index),
                 row.Open, row.High, row.Low, row.Close,
                 int(row.Volume) if pd.notna(row.Volume) else 0
             )
@@ -204,7 +210,7 @@ class DataManager:
             df = pd.read_sql_query(query, conn, params=params, index_col=time_col, parse_dates=[time_col])
 
         # 整理 DataFrame：剔除不參與訓練的 ticker 欄位
-        if not df.empty and 'ticker' in df.columns:
-            df = df.drop(columns=['ticker'])
+        if not df.empty and StockCol.TICKER in df.columns:
+            df = df.drop(columns=[StockCol.TICKER])
 
         return df
