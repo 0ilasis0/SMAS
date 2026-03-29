@@ -40,6 +40,10 @@ class PathConfig:
         return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, "_backtest", ".csv")
 
     @classmethod
+    def get_chart_report_path(cls, ticker: str) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, f"_chart", ".png")
+
+    @classmethod
     def get_xgboost_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
         return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json", oos_days)
 
@@ -60,10 +64,6 @@ class PathConfig:
         cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
         oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
         return cls.MODEL_DIR / f"universal_market_model{oos_suffix}.joblib"
-
-    @classmethod
-    def get_report_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_report", ".png")
 
     @classmethod
     def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str, oos_days: int = 0) -> Path:
