@@ -7,10 +7,10 @@ from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
                            CheckTakeProfitNode, CheckTrailingStopNode,
                            CheckTrendFilterNode)
 from bt.core import Inverter, Selector, Sequence
-from bt.params import StrategyConfig
+from bt.strategy_config import StrategyConfig
 
 
-def build_trading_tree(config: StrategyConfig = StrategyConfig()) -> Selector:
+def build_trading_tree(config: StrategyConfig) -> Selector:
     """
     建構 IDSS 量化交易行為樹主邏輯。
     :param config: 策略參數設定，若不傳入則使用預設值。
