@@ -1,8 +1,6 @@
-# ml/dl_features.py
 import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
-from sklearn.preprocessing import RobustScaler
 
 from data.const import StockCol
 from debug import dbg
@@ -12,10 +10,8 @@ from ml.params import DLHyperParams
 
 class DLFeatureEngine:
     """
-    專為時序深度學習模型 (TCN/LSTM) 設計的特徵工程 (純動能視角)。
-    負責特徵縮放 (RobustScaler) 與產生 3D 滑動視窗矩陣 (Sliding Window)。
-    :para: lookahead -> 預測未來幾天後的漲跌
-    :para: time_steps -> 模型要回看過去幾根(天) K 線
+    專為時序深度學習模型 (CNN/LSTM) 設計的特徵工程 (純動能視角)。
+    僅負責生成原始特徵與 3D 滑動視窗，正規化 (Scaling) 交由 Trainer 在 CV 迴圈內處理以防止未來資料外洩。
     """
     def __init__(
             self,
@@ -24,65 +20,62 @@ class DLFeatureEngine:
         ):
         self.lookahead = lookahead
         self.time_steps = time_steps
+        self.max_warmup = 19
 
-    def process_pipeline(self, df: pd.DataFrame, scaler: RobustScaler | None = None):
-        """
-        執行 DL 特徵管線。
-        :param df: 原始 DataFrame
-        :param scaler: 若傳入已訓練好的 Scaler，則進入「推論/測試模式」；若不傳入，則進入「訓練模式」。
-        :return: X (3D Numpy Array), y (1D Numpy Array), scaler (用來在線上推論時縮放新資料), valid_index(對應的正確日期 Index)
-        """
-        dbg.log("開始建立 Deep Learning 時序特徵矩陣 (Sliding Window)...")
+    def process_pipeline(self, df: pd.DataFrame, is_training: bool = True):
+        dbg.log("開始建立 Deep Learning 原始時序特徵矩陣 (Sliding Window)...")
 
-        is_training = scaler is None
-        min_required_len = self.time_steps + self.lookahead if is_training else self.time_steps
+        min_required_len = self.time_steps + self.max_warmup
+        if is_training:
+            min_required_len += self.lookahead
 
         if df.empty or len(df) <= min_required_len:
-            dbg.war(f"資料量不足。需要 {min_required_len} 筆，目前僅有 {len(df)} 筆。")
-            return None, None, None, None
+            dbg.war(f"資料量不足。需要 {min_required_len} 筆 (含暖機期)，目前僅有 {len(df)} 筆。")
+            return None, None, None
 
-        # 選取要餵給神經網路的原始特徵
+        data = df.copy().ffill()
+
+        new_features = {}
         dl_features = []
-        data = df.copy()
-        # 基礎 K 線變化
+
+        # 基礎 K 線變化 (對數報酬率)
         for col in StockCol.get_ohlcv():
             feat_name = f"{col}_log_chg"
             if col == StockCol.VOLUME:
-                data[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
+                new_features[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
             else:
-                data[feat_name] = np.log(data[col] / data[col].shift(1))
+                new_features[feat_name] = np.log(data[col] / (data[col].shift(1) + 1e-9))
             dl_features.append(feat_name)
 
         ma_w = data[StockCol.CLOSE].rolling(window=5).mean()
         ma_m = data[StockCol.CLOSE].rolling(window=20).mean()
         rolling_std = data[StockCol.CLOSE].rolling(window=20).std()
 
-        data[FeatureCol.BIAS_WEEK] = (data[StockCol.CLOSE] - ma_w) / ma_w
-        data[FeatureCol.BIAS_MONTH] = (data[StockCol.CLOSE] - ma_m) / ma_m
-        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / ma_m
+        new_features[FeatureCol.BIAS_WEEK] = (data[StockCol.CLOSE] - ma_w) / (ma_w + 1e-9)
+        new_features[FeatureCol.BIAS_MONTH] = (data[StockCol.CLOSE] - ma_m) / (ma_m + 1e-9)
+        new_features[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
         dl_features.extend([FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH])
 
-        # 處理極端值與 0 填補
-        data[dl_features] = data[dl_features].replace([np.inf, -np.inf], np.nan)
-        data[dl_features] = data[dl_features].fillna(0)
+        data = data.assign(**new_features)
 
-        # 特徵正規化 (Scaling 到 0 ~ 1)
-        if is_training:
-            dbg.log("訓練模式：重新 Fit Scaler")
-            scaler = RobustScaler()
-            scaled_features = scaler.fit_transform(data[dl_features].values)
-        else:
-            dbg.log("推論模式：使用既有 Scaler 進行 Transform")
-            scaled_features = scaler.transform(data[dl_features].values)
+        data = data.replace([np.inf, -np.inf], np.nan)
+        data = data.dropna(subset=dl_features)
 
-        # 建立滑動視窗
-        X = sliding_window_view(scaled_features, window_shape=self.time_steps, axis=0)
+        if len(data) < self.time_steps:
+            dbg.war("扣除暖機期後，資料量不足以建立滑動視窗。")
+            return None, None, None
+
+        # 直接使用未縮放的原始特徵建立滑動視窗
+        raw_features = data[dl_features].values
+
+        # 建立滑動視窗 (batch, features, time_steps)
+        X = sliding_window_view(raw_features, window_shape=self.time_steps, axis=0)
+        # 轉置給 PyTorch LSTM (batch, time_steps, features)
         X = np.transpose(X, (0, 2, 1))
-        # 對齊索引
+
         aligned_index = data.index[self.time_steps - 1:]
 
-        # 處理標籤 (Target) 與切分
         if is_training:
             future_high_max = data[StockCol.HIGH].rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
             target_condition = future_high_max > (data[StockCol.CLOSE] * 1.025)
@@ -101,6 +94,7 @@ class DLFeatureEngine:
             valid_index = aligned_index
 
         y_shape_str = str(y.shape) if y is not None else "None"
-        dbg.log(f"時序矩陣建立完成！ X 形狀: {X.shape}, y 形狀: {y_shape_str}")
+        dbg.log(f"時序矩陣建立完成！ X 原始形狀: {X.shape}, y 形狀: {y_shape_str}")
 
-        return X, y, scaler, valid_index
+        # 回傳原始矩陣，交由 Trainer 處理縮放
+        return X, y, valid_index

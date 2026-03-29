@@ -49,10 +49,10 @@ class BacktestEngine:
     IDSS 行為樹專用回測引擎。
     結合歷史 K 線與 AI 預測勝率，逐日進行沙盤推演，並計算最終績效。
     """
-    def __init__(self, initial_cash: int, strategy: StrategyConfig =  StrategyConfig()):
+    def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
         self.account = Account(cash=initial_cash)
-        self.bb = Blackboard(ticker="BACKTEST", account=self.account)
+        self.bb = Blackboard(ticker=ticker, account=self.account)
         self.tree = build_trading_tree(strategy)
 
         self.history_records = []
@@ -250,14 +250,14 @@ if __name__ == "__main__":
     # 測試參數
     ticker = "5469.TW"
     test_days = 240
-    user_persona = TradingPersona.AGGRESSIVE
+    user_persona = TradingPersona.MODERATE
     strategy_config = PersonaFactory.get_config(user_persona)
 
     ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
 
-    # # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
+    # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
+    # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
     # ai_engine.update_market_data()
-    # # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
     # ai_engine.train_all_models(save_models=True)
 
     if not ai_engine.load_inference_models():
@@ -276,5 +276,5 @@ if __name__ == "__main__":
     print(df_test[MetaCol.PROB_FINAL].describe())
 
     dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-    engine = BacktestEngine(initial_cash=2000000, strategy=strategy_config)
+    engine = BacktestEngine(initial_cash=2000000, ticker=ticker, strategy=strategy_config)
     engine.run(df_test)

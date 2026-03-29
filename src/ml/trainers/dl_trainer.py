@@ -8,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import RobustScaler
 from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool
@@ -106,7 +107,7 @@ class DLTrainer:
         if torch.backends.mps.is_available(): return torch.device("mps")
         return torch.device("cpu")
 
-    def train_with_cv(self, X: np.ndarray, y: np.ndarray, original_index: pd.Index, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
+    def train_with_cv(self, X_raw: np.ndarray, y: np.ndarray, original_index: pd.Index, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
         dbg.log(f"開始執行 DL (CNN-LSTM) 嚴格三階段交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
 
@@ -114,11 +115,10 @@ class DLTrainer:
         oof_predictions = pd.Series(index=original_index, dtype=float)
 
         cv_accuracies, cv_aucs = [], []
-        best_epochs = [] # 紀錄每個 Fold 的最佳停止點
-        num_features = X.shape[2]
+        best_epochs = []
+        num_features = X_raw.shape[2]
 
-        for fold, (train_idx, val_idx) in enumerate(tscv.split(X)):
-            # 嚴格三階段切分 (Train, EarlyStop, Test)
+        for fold, (train_idx, val_idx) in enumerate(tscv.split(X_raw)):
             split_point = len(val_idx) // 2
             early_stop_end = split_point - lookahead
 
@@ -129,11 +129,22 @@ class DLTrainer:
             early_stop_idx = val_idx[:early_stop_end]
             test_idx = val_idx[split_point:]
 
-            X_train, y_train = X[train_idx], y[train_idx]
-            X_es, y_es = X[early_stop_idx], y[early_stop_idx]
-            X_test, y_test = X[test_idx], y[test_idx]
+            # 取出原始資料
+            X_train_raw, y_train = X_raw[train_idx], y[train_idx]
+            X_es_raw, y_es = X_raw[early_stop_idx], y[early_stop_idx]
+            X_test_raw, y_test = X_raw[test_idx], y[test_idx]
 
-            # 建立三組 DataLoader
+            scaler = RobustScaler()
+
+            # 將 3D (Batch, TimeSteps, Features) 壓平為 2D 讓 Scaler 學習
+            X_train_2d = X_train_raw.reshape(-1, num_features)
+            scaler.fit(X_train_2d)
+
+            # 轉換並膨脹回原來的 3D 形狀
+            X_train = scaler.transform(X_train_2d).reshape(X_train_raw.shape)
+            X_es = scaler.transform(X_es_raw.reshape(-1, num_features)).reshape(X_es_raw.shape)
+            X_test = scaler.transform(X_test_raw.reshape(-1, num_features)).reshape(X_test_raw.shape)
+
             train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
             es_loader = self._create_dataloader(X_es, y_es, shuffle=False)
             test_loader = self._create_dataloader(X_test, y_test, shuffle=False)
@@ -227,11 +238,14 @@ class DLTrainer:
         dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {np.mean(cv_aucs):.4f}")
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, X: np.ndarray, y: np.ndarray, save_path: Path | str):
-        """使用全量資料訓練最終上線版本"""
+    def train_and_save_final_model(self, X_raw: np.ndarray, y: np.ndarray, save_path: Path | str):
         dbg.log(f"開始訓練最終上線版 DL 模型 (動態 Epoch={self.optimal_epochs})...")
-        num_features = X.shape[2]
-        full_loader = self._create_dataloader(X, y, shuffle=True)
+        num_features = X_raw.shape[2]
+        final_scaler = RobustScaler()
+        X_2d = X_raw.reshape(-1, num_features)
+        X_scaled = final_scaler.fit_transform(X_2d).reshape(X_raw.shape)
+
+        full_loader = self._create_dataloader(X_scaled, y, shuffle=True)
 
         pos_count = y.sum()
         neg_count = len(y) - pos_count
@@ -256,6 +270,7 @@ class DLTrainer:
         save_path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(model.state_dict(), save_path)
         dbg.log(f"最終模型權重已儲存至: {save_path}")
+        return final_scaler
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
         X_tensor = torch.tensor(X, dtype=torch.float32)

@@ -40,12 +40,10 @@ class QuantAIEngine:
         self.dl_model = None
         self.meta_learner = None
         self.market_model = None
-        self.dl_scaler = None
 
         self.paths = {
             MLCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
             MLCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.rnn_type, self.oos_days),
-            MLCol.SCALER: PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days),
             MLCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
             MLCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
         }
@@ -110,14 +108,18 @@ class QuantAIEngine:
         # DL (CNN-RNN) 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 右腦：Deep Learning ---")
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        X_dl_train, y_dl_train, scaler, valid_index_train = dl_engine.process_pipeline(df_train_only)
+
+        X_dl_train, y_dl_train, valid_index_train = dl_engine.process_pipeline(df_train_only, is_training=True)
+
         dl_trainer = DLTrainer(ticker=self.config.ticker, rnn_type=self.config.rnn_type)
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train, lookahead=self.config.lookahead)
 
         if save_models:
-            dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[MLCol.DL])
-            import joblib
-            joblib.dump(scaler, self.paths[MLCol.SCALER])
+            final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[MLCol.DL])
+
+            scaler_save_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
+            joblib.dump(final_dl_scaler, scaler_save_path)
+            dbg.log(f"DL Scaler 已儲存至: {scaler_save_path}")
 
         # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
@@ -195,14 +197,14 @@ class QuantAIEngine:
     # 模組 3：載入模型 (為線上推論做準備)
     # ==========================================
     def load_inference_models(self) -> bool:
-        """
-        供 UI 啟動時觸發：將儲存在硬碟的權重檔載入至記憶體中。
-        """
+        """供 UI 啟動時觸發：將儲存在硬碟的權重檔載入至記憶體中。"""
         dbg.log(f"[{self.config.ticker}] 準備載入線上推論模型 (OOS={self.oos_days})...")
         try:
             self.xgb_model = XGBTrainer.load_inference_model(self.paths[MLCol.XGB])
 
-            self.dl_scaler = joblib.load(self.paths[MLCol.SCALER])
+            scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
+            self.dl_scaler = joblib.load(scaler_path)
+
             dl_input_size = DLHyperParams.INPUT_SIZE
             self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[MLCol.DL])
 
@@ -214,7 +216,7 @@ class QuantAIEngine:
             if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model, self.market_model):
                 raise ValueError("部分模型或 Scaler 回傳為 None")
 
-            dbg.log("✅ 四大元件 (XGB, DL, Meta, Market) 載入成功，系統已就緒！")
+            dbg.log("✅ 四大元件與 DL Scaler 載入成功，系統已就緒！")
             return True
 
         except Exception as e:
@@ -250,17 +252,22 @@ class QuantAIEngine:
 
         # 右腦 (DL) 推論
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        X_dl, _, _, valid_index = dl_engine.process_pipeline(df_recent, scaler=self.dl_scaler)
+        X_dl_raw, _, valid_index = dl_engine.process_pipeline(df_recent, is_training=False)
+
         if target_date not in valid_index:
             dbg.error(f"[{self.config.ticker}] DL 缺失 {target_date} 特徵，無法預測！")
             return None
 
         target_idx = list(valid_index).index(target_date)
 
+        num_features = X_dl_raw.shape[2]
+        X_dl_2d = X_dl_raw[[target_idx]].reshape(-1, num_features)
+        X_dl_scaled = self.dl_scaler.transform(X_dl_2d).reshape(1, DLHyperParams.TIME_STEPS, num_features)
+
         self.dl_model.eval()
         with torch.no_grad():
             device = next(self.dl_model.parameters()).device
-            X_tensor = torch.as_tensor(X_dl[[target_idx]], dtype=torch.float32, device=device)
+            X_tensor = torch.as_tensor(X_dl_scaled, dtype=torch.float32, device=device)
             prob_dl = torch.sigmoid(self.dl_model(X_tensor)).item()
 
         # 第三腦 (Market Brain) 推論
@@ -311,11 +318,16 @@ class QuantAIEngine:
 
         # DL 批次推論
         dl_engine = DLFeatureEngine(self.config.lookahead)
-        X_dl, _, _, valid_index = dl_engine.process_pipeline(df_raw, scaler=self.dl_scaler)
+        X_dl_raw, _, valid_index = dl_engine.process_pipeline(df_raw, is_training=False)
+
+        num_features = X_dl_raw.shape[2]
+        X_dl_2d = X_dl_raw.reshape(-1, num_features)
+        X_dl_scaled = self.dl_scaler.transform(X_dl_2d).reshape(X_dl_raw.shape)
+
         self.dl_model.eval()
         with torch.no_grad():
             device = next(self.dl_model.parameters()).device
-            X_tensor = torch.as_tensor(X_dl, dtype=torch.float32, device=device)
+            X_tensor = torch.as_tensor(X_dl_scaled, dtype=torch.float32, device=device)
             prob_dl_array = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
         prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MetaCol.PROB_DL)
 

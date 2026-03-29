@@ -4,7 +4,6 @@ from enum import StrEnum
 class MLCol(StrEnum):
     XGB = "xgb",
     DL = "dl",
-    SCALER = "scaler",
     META = "meta",
     MARKET = "market"
 
