@@ -26,7 +26,7 @@ class XGBTrainer:
         ):
         self.ticker = ticker
         self.params = asdict(hp)
-        self.optimal_trees = self.params.get('n_estimators', 300)
+        self.optimal_trees = self.params.get('n_estimators', 100)
 
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)

@@ -35,7 +35,7 @@ class XGBHyperParams:
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
     max_depth: int = 5                  # 限制樹的深度，防止過度擬合 (Overfitting)
     learning_rate: float = 0.05
-    n_estimators: int = 300
+    n_estimators: int = 100
     subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
     colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
     random_state: int = 42              # 固定亂數種子，確保結果可重現
@@ -72,7 +72,7 @@ class MarketLGBMConfig:
     boosting_type: str = 'gbdt'
     max_depth: int = 4              # 限制深度防止過擬合
     learning_rate: float = 0.05
-    n_estimators: int = 300
+    n_estimators: int = 100
     subsample: float = 0.8
     colsample_bytree: float = 0.8
     random_state: int = 42
