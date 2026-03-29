@@ -67,6 +67,7 @@ class MetaCol(StrEnum):
     PROB_XGB = "prob_xgb"
     PROB_DL = "prob_dl"
     PROB_FINAL = "prob_final"
+    PROB_MARKET_SAFE = "prob_market_safe"
     # 直接引用 FeatureCol 的 TARGET，確保一致性
     TARGET = FeatureCol.TARGET
 

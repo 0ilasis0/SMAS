@@ -18,16 +18,17 @@ class MetaLearner:
     Level 1 Meta-Learner (元學習器)。
     負責整合 Level 0 (XGBoost & DL) 的 OOF 預測機率，輸出最終綜合勝率。
     """
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, hp: MetaHyperParams = MetaHyperParams()):
         self.ticker = ticker
 
+        self.hp = hp
         self.model = LogisticRegression(
-            C=MetaHyperParams.C,
-            class_weight=MetaHyperParams.CLASS_WEIGHT,
-            penalty=MetaHyperParams.PENALTY,
-            solver=MetaHyperParams.SOLVER,
-            random_state=MetaHyperParams.RANDOM_STATE,
-            max_iter=MetaHyperParams.MAX_ITER
+            C=self.hp.C,
+            class_weight=self.hp.CLASS_WEIGHT,
+            penalty=self.hp.PENALTY,
+            solver=self.hp.SOLVER,
+            random_state=self.hp.RANDOM_STATE,
+            max_iter=self.hp.MAX_ITER
         )
 
     def evaluate_oof(self, aligned_oof_xgb: pd.Series, aligned_oof_dl: pd.Series, aligned_y_true: pd.Series) -> tuple[pd.DataFrame, pd.Series]:

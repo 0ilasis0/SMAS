@@ -328,7 +328,7 @@ class QuantAIEngine:
         prob_market_safe_series = pd.Series(
             1.0 - prob_danger_array,
             index=df_market_clean.index,  # 這裡的 index 是 TWII 的日期
-            name="prob_market_safe"
+            name=MetaCol.PROB_MARKET_SAFE
         )
 
         # df_raw (個股日期) 會自動去 Left Join TWII 的日期，完美對齊！
@@ -336,7 +336,7 @@ class QuantAIEngine:
         df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
 
         # 清除暖機期的 NaN (只要有一顆大腦沒訊號，那天就不能做決策)
-        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, "prob_market_safe"], inplace=True)
+        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, MetaCol.PROB_MARKET_SAFE], inplace=True)
 
         if df_backtest.empty:
             dbg.war("合併後的預測資料為空，請檢查資料長度是否足夠讓模型暖機。")

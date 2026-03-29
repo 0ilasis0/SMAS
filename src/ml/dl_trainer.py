@@ -43,7 +43,7 @@ class CNN_RNN(nn.Module):
         self.bn1 = nn.BatchNorm1d(cnn_out_channels)
         self.relu = nn.ReLU()
         # MaxPool 負責將時間軸長度減半
-        self.pool = nn.MaxPool1d(kernel_size=2)
+        self.pool = nn.MaxPool1d(kernel_size=DLHyperParams.KERNEL_SIZE)
 
         # --- RNN 區塊 (動態生成) ---
         # 輸入形狀預期: (Batch, 縮短後的Time_Steps, cnn_out_channels)

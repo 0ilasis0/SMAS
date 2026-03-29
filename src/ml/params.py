@@ -62,6 +62,7 @@ class DLHyperParams:
     DROPOUT: float = 0.2
     SCHEDULER_PATIENCE: int = 3
     SCHEDULER_FACTOR: float = 0.5
+    KERNEL_SIZE: int = 2
 
 @dataclass
 class MarketLGBMConfig:
