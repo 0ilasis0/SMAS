@@ -20,8 +20,6 @@ class StrategyConfig:
     take_profit_target: float = 0.30         # 極端停利目標 (+30%)
     take_profit_sell_ratio: float = 0.5      # 觸發極端停利時的減碼比例 (先入袋 50%)
 
-    llm_min_score: int = 4
-
     # ================= 進攻與資金控管參數 =================
     max_entries: int = 3                     # 單一波段最大加碼次數
     max_gap_ratio: float = 0.07              # 低價股的跳空容忍度
@@ -35,6 +33,10 @@ class StrategyConfig:
     # ================= 大盤防禦雷達門檻 =================
     safe_threshold: float = 0.45
     cooldown_days: int = 2
+
+    # LLM 總開關
+    enable_llm_oracle: bool = False
+    min_sentiment_score: int = 4
 
 
 class PersonaFactory:
@@ -51,7 +53,8 @@ class PersonaFactory:
                 strong_buy_threshold=0.55,        # 稍微看漲就 All-in
                 conservative_buy_threshold=0.52,  # 勝率 52% 就敢試水溫
                 safe_threshold=0.20,              # 幾乎無視大盤 (除非大盤極度恐慌低於20%)
-                cooldown_days=1                   # 停損後隔天立刻又想進場
+                cooldown_days=1,
+                min_sentiment_score=3
             )
 
         elif persona == TradingPersona.CONSERVATIVE:
@@ -64,7 +67,8 @@ class PersonaFactory:
                 strong_buy_threshold=0.65,        # 要求極高勝率才 All-in
                 conservative_buy_threshold=0.60,
                 safe_threshold=0.65,              # 大盤安全度必須大於 65% 才准買！
-                cooldown_days=4                   # 停損後冷靜一整個禮拜
+                cooldown_days=4,
+                min_sentiment_score=5
             )
 
         else:

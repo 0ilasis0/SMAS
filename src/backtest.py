@@ -250,7 +250,9 @@ if __name__ == "__main__":
     # 測試參數
     tickers = ["5469.TW"]
     test_days = 240
+    user_cash = 2000000
     user_persona = TradingPersona.AGGRESSIVE
+
     strategy_config = PersonaFactory.get_config(user_persona)
 
     for ticker in tickers:
@@ -277,5 +279,5 @@ if __name__ == "__main__":
         print(df_test[MetaCol.PROB_FINAL].describe())
 
         dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-        engine = BacktestEngine(initial_cash=2000000, ticker=ticker, strategy=strategy_config)
+        engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy_config)
         engine.run(df_test)

@@ -56,12 +56,14 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     # ==========================================
     # 策略 2：進攻與建倉 (允許連續加碼)
     # ==========================================
-    attack_strategy = Sequence("進攻策略大門", [
-        # 共同防禦：必須通過這兩關 (回傳 SUCCESS)，才有資格往下走
+    attack_conditions = [
         CheckCooldownNode(cooldown_days=config.cooldown_days),
-        CheckTrendFilterNode(safe_threshold=config.safe_threshold),
-        CheckSentimentFilterNode(min_score=config.llm_min_score),
+        CheckTrendFilterNode(safe_threshold=config.safe_threshold)
+    ]
+    if config.enable_llm_oracle:
+        attack_conditions.append(CheckSentimentFilterNode(min_score=config.min_sentiment_score))
 
+    attack_strategy = Sequence("進攻策略大門", attack_conditions + [
         # 通過防禦後，才進入選擇器分配力道
         Selector("買進力道分配", [
 
