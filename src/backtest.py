@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from base import KeyManager
 from bt.account import Account
 from bt.blackboard import Blackboard
 from bt.const import BtVar, DecisionAction
@@ -254,9 +255,11 @@ if __name__ == "__main__":
     user_persona = TradingPersona.AGGRESSIVE
 
     strategy_config = PersonaFactory.get_config(user_persona)
+    # user_keys = KeyManager.get_gemini_keys()
+    user_keys = None
 
     for ticker in tickers:
-        ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days)
+        ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days, api_keys=user_keys)
 
         # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
         # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
