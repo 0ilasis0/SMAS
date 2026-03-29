@@ -33,7 +33,7 @@ class IndicatorParams:
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    max_depth: int = 5                  # 限制樹的深度，防止過度擬合 (Overfitting)
+    max_depth: int = 4                  # 限制樹的深度，防止過度擬合 (Overfitting)
     learning_rate: float = 0.05
     n_estimators: int = 100
     subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
@@ -57,7 +57,7 @@ class DLHyperParams:
     LSTM_HIDDEN: int = 32               # LSTM 隱藏層神經元數量
     NUM_LAYERS: int = 1
     BATCH_SIZE: int = 32
-    LEARNING_RATE: float = 0.001
+    LEARNING_RATE: float = 0.002
     EPOCHS: int = 50
     DROPOUT: float = 0.2
     SCHEDULER_PATIENCE: int = 3
