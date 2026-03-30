@@ -92,8 +92,9 @@ class GeminiOracle:
             summaries = []
             for item in items[:5]:
                 title = item.find('title').text if item.find('title') is not None else ""
-                # Google News 的 title 通常長這樣："台積電法說會驚喜... - Yahoo奇摩股市"
-                summaries.append(f"【新聞】{title}")
+                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else "未知時間"
+
+                summaries.append(f"[{pub_date}] 【新聞】{title}")
 
             return "\n".join(summaries)
 
@@ -121,8 +122,14 @@ class GeminiOracle:
                     )
 
                     raw_text = response.text.strip()
-                    if raw_text.startswith("```"):
+                    if "```" in raw_text:
                         raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+                    # 避免 LLM 廢話開頭，直接找第一個 { 和最後一個 }
+                    start_idx = raw_text.find('{')
+                    end_idx = raw_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        raw_text = raw_text[start_idx:end_idx+1]
 
                     return json.loads(raw_text)
 

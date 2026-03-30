@@ -2,8 +2,10 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from bt.const import DecisionAction
 from bt.strategy_config import TradingPersona
 from controller import IDSSController
+from data.const import StockCol
 from ml.model.llm_oracle import TradingMode
 
 
@@ -63,24 +65,100 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
         return persona_mapping[selected_persona_str], mode_mapping[selected_mode_str]
 
+@st.cache_data(ttl=3600) # 快取 1 小時，避免頻繁戳資料庫
+def get_cached_market_data(ticker: str):
+    # 這裡必須在函數內實例化或傳入 db，避免 thread 問題
+    from data.manager import DataManager
+    db = DataManager()
+    return db.get_aligned_market_data(ticker, []).tail(60)
+
 def render_chart():
-    """渲染中央 K 線圖"""
-    with st.expander("📉 近期走勢圖 (近 60 日)", expanded=True):
+    """渲染中央 K 線圖 (支援動態縮放、全中文月份、無縫接合斷點)"""
+    with st.expander("📉 近期走勢圖 (預設顯示近 1 年，可自由縮放檢視歷史)", expanded=True):
         try:
             ctrl = st.session_state.controller
-            df_recent = ctrl.engine.db.get_aligned_market_data(st.session_state.current_ticker, []).tail(60)
+
+            # 抓取近 3 年的資料，讓年線算得出來，且有足夠歷史可回顧
+            df_recent = ctrl.engine.db.get_aligned_market_data(st.session_state.current_ticker, []).tail(720)
+
             if not df_recent.empty:
                 fig = go.Figure()
-                fig.add_trace(go.Candlestick(x=df_recent.index, open=df_recent['Open'], high=df_recent['High'], low=df_recent['Low'], close=df_recent['Close'], increasing_line_color='red', decreasing_line_color='green', name='K線'))
+                fig.add_trace(go.Candlestick(x=df_recent.index,
+                                             open=df_recent[StockCol.OPEN],
+                                             high=df_recent[StockCol.HIGH],
+                                             low=df_recent[StockCol.LOW],
+                                             close=df_recent[StockCol.CLOSE],
+                                             increasing_line_color='red',
+                                             decreasing_line_color='green',
+                                             name='K線'))
 
-                ma5 = df_recent['Close'].rolling(window=5).mean().bfill()
-                ma20 = df_recent['Close'].rolling(window=20).mean().bfill()
+                # 計算所有均線
+                ma5 = df_recent[StockCol.CLOSE].rolling(window=5).mean().bfill()
+                ma20 = df_recent[StockCol.CLOSE].rolling(window=20).mean().bfill()
+                ma60 = df_recent[StockCol.CLOSE].rolling(window=60).mean().bfill()
+                # 🚀 新增 2：加入 240MA (年線)
+                ma240 = df_recent[StockCol.CLOSE].rolling(window=240).mean().bfill()
 
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color='orange', width=1.5), name='5MA'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color='purple', width=1.5), name='20MA'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color='orange', width=1.5), name='5MA(週線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color='purple', width=1.5), name='20MA(月線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color='blue', width=1.5), name='60MA(季線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color='black', width=1.5), name='240MA(年線)'))
 
-                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=350, xaxis_rangeslider_visible=False, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1), xaxis=dict(rangebreaks=[dict(bounds=["sat", "mon"])]))
-                st.plotly_chart(fig, use_container_width=True)
+                # 建立從第一天到最後一天的連續日曆
+                all_dates = pd.date_range(start=df_recent.index.min(), end=df_recent.index.max())
+                # 找出 DataFrame 中沒有的日期 (週末 + 國定假日)
+                missing_dates = all_dates.difference(df_recent.index)
+                missing_dates_str = missing_dates.strftime('%Y-%m-%d').tolist()
+
+                # 找出每個月的第一個交易日來放置標籤
+                first_days_of_month = df_recent.groupby([df_recent.index.year, df_recent.index.month]).head(1)
+                tickvals = first_days_of_month.index
+                # 如果是 1 月，加上年份 (如 2026年1月)，其餘只顯示月份 (如 2月、3月)
+                ticktext = [f"{d.year}年{d.month}月" if d.month == 1 else f"{d.month}月" for d in tickvals]
+
+                # 計算初始畫面要顯示的範圍 (最近 240 天)
+                initial_start_date = df_recent.index[-240] if len(df_recent) >= 240 else df_recent.index[0]
+                end_date = df_recent.index[-1]
+
+                fig.update_layout(
+                    margin=dict(l=0, r=0, t=10, b=0),
+                    height=450,
+                    xaxis_rangeslider_visible=True,
+
+                    legend=dict(
+                        orientation="h",
+                        yanchor="top",
+                        y=0.98,
+                        xanchor="left",
+                        x=0.01,
+                        bgcolor="rgba(255, 255, 255, 0.6)"
+                    ),
+
+                    xaxis=dict(
+                        # 抽掉所有非交易日，完美接合 K 線
+                        rangebreaks=[dict(values=missing_dates_str)],
+
+                        # 右側邊界精準鎖定在最後一個交易日，不會顯示未來的空白
+                        range=[initial_start_date, end_date],
+
+                        # 套用中文月份標籤
+                        tickmode='array',
+                        tickvals=tickvals,
+                        ticktext=ticktext,
+                        showgrid=True,
+                        gridcolor="rgba(200, 200, 200, 0.2)"
+                    )
+                )
+
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    config={
+                        'scrollZoom': True,       # 允許滑鼠滾輪縮放
+                        'displayModeBar': False,  # 隱藏右上角所有小工具 (畫圖、刪除等)，回歸極簡
+                        'displaylogo': False
+                    }
+                )
         except Exception as e:
             st.caption(f"無法渲染 K 線圖: {e}")
 
@@ -89,17 +167,37 @@ def render_report(result: dict):
     st.success(f"決策生成完畢！(目標日期: {result.get('date', '未知')})")
 
     action = result["decision"]["action"]
-    color = "#ff4b4b" if action == "BUY" else "#00cc66" if action == "SELL" else "#a6a6a6"
-    icon = "🔥" if action == "BUY" else "🩸" if action == "SELL" else "🛡️"
 
-    st.markdown(f"<h2 style='text-align: center; color: {color};'>{icon} 終極指令：{action}</h2>", unsafe_allow_html=True)
+    action_style_map = {
+        DecisionAction.BUY:  {"label": "買進", "color": "#ff4b4b", "icon": "🔥"},
+        DecisionAction.SELL: {"label": "賣出", "color": "#00cc66", "icon": "🩸"},
+        DecisionAction.HOLD: {"label": "觀望", "color": "#a6a6a6", "icon": "🛡️"}
+    }
 
+    style = action_style_map.get(action, {"label": "未知操作", "color": "#a6a6a6", "icon": "❓"})
+
+    # 渲染主標題
+    st.markdown(
+        f"<h2 style='text-align: center; color: {style['color']};'>"
+        f"{style['icon']} 建議執行：{style['label']}</h2>",
+        unsafe_allow_html=True
+    )
+
+    # 副標題：判斷是否需要顯示交易細節
     if action != "HOLD":
         shares = result['decision']['trade_shares']
         price = result['decision']['trade_price']
-        st.markdown(f"<p style='text-align: center; font-size: 18px;'>建議股數：<b>{shares:,}</b> 股 | 預估觸價：<b>{price:,.2f}</b> 元</p>", unsafe_allow_html=True)
+        st.markdown(
+            f"<p style='text-align: center; font-size: 18px;'>"
+            f"建議股數：<b>{shares:,}</b> 股 | 預估觸價：<b>{price:,.2f}</b> 元</p>",
+            unsafe_allow_html=True
+        )
     else:
-        st.markdown(f"<p style='text-align: center; font-size: 18px; color: gray;'>無觸發交易訊號，維持既有資金與持股配置</p>", unsafe_allow_html=True)
+        st.markdown(
+            f"<p style='text-align: center; font-size: 18px; color: gray;'>"
+            f"無觸發交易訊號，維持既有資金與持股配置</p>",
+            unsafe_allow_html=True
+        )
 
     st.markdown("---")
 
