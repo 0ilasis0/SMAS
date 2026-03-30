@@ -2,6 +2,9 @@ import hashlib
 import json
 import sqlite3
 import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from enum import StrEnum
 
 import yfinance as yf
@@ -58,12 +61,42 @@ class GeminiOracle:
         return hashlib.md5(payload.encode('utf-8')).hexdigest()
 
     def fetch_recent_news(self, ticker: str) -> str:
+        """
+        透過 Google News RSS 抓取台股在地化繁體中文新聞。
+        比 yfinance 穩定 100 倍，且精準度極高。
+        """
         try:
-            stock = yf.Ticker(ticker)
-            news_list = stock.news
-            if not news_list: return ""
-            summaries = [f"【{item.get('publisher', '')}】{item.get('title', '')}" for item in news_list[:5]]
+            # 確保關鍵字精準：例如把 "2330.TW" 變成 "2330 股票"
+            search_keyword = ticker.replace('.TW', '').replace('.TWO', '') + " 股票"
+
+            # 將中文與符號進行 URL 編碼
+            query = urllib.parse.quote(search_keyword)
+
+            # 組裝 Google News RSS 網址 (指定台灣地區、繁體中文)
+            url = f"https://news.google.com/rss/search?q={query}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+
+            # 偽裝成正常瀏覽器發送請求，避免被擋
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                xml_data = response.read()
+
+            # 解析 XML 資料
+            root = ET.fromstring(xml_data)
+            items = root.findall('.//item')
+
+            if not items:
+                dbg.war(f"[{ticker}] Google 新聞查無資料")
+                return ""
+
+            # 萃取前 5 則最新新聞標題與來源
+            summaries = []
+            for item in items[:5]:
+                title = item.find('title').text if item.find('title') is not None else ""
+                # Google News 的 title 通常長這樣："台積電法說會驚喜... - Yahoo奇摩股市"
+                summaries.append(f"【新聞】{title}")
+
             return "\n".join(summaries)
+
         except Exception as e:
             dbg.war(f"抓取 {ticker} 新聞失敗: {e}")
             return ""

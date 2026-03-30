@@ -118,9 +118,6 @@ def render_report(result: dict):
     st.markdown("### 🤖 總裁戰報")
     st.warning(result["report"], icon="💡")
 
-    with st.expander("🛠️ 展開系統底層 JSON 數據"):
-        st.json(result)
-
 # ==========================================
 # 2. 主程式流 (Main Application Flow)
 # ==========================================
