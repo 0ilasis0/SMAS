@@ -20,8 +20,9 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     # ==========================================
     # 策略 1：防守與獲利了結 (優先級最高)
     # ==========================================
+    ai_sell_conditions = []
     if config.enable_llm_oracle:
-        ai_sell_conditions = [CheckSellSentimentFilterNode(block_score=config.block_sell_sentiment_score)]
+        ai_sell_conditions.append(CheckSellSentimentFilterNode(block_score=config.block_sell_sentiment_score))
 
     defense_strategy = Sequence("絕對防禦", [
         CheckHasPositionNode(),
