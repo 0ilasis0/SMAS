@@ -1,10 +1,9 @@
 from datetime import datetime
 
-import pandas as pd
-
 from base import KeyManager
 from bt.account import Account
 from bt.blackboard import Blackboard
+from bt.const import LLMCol
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from debug import dbg
@@ -76,8 +75,8 @@ class IDSSController:
         bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, 0.5)
         bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, 1.0) # 補上這行
 
-        bb.sentiment_score = prediction_result.get("sentiment_score", 5)           # 補上這行
-        bb.sentiment_reason = prediction_result.get("sentiment_reason", "無")
+        bb.sentiment_score = prediction_result.get(LLMCol.SENTIMENT_SCORE, 5)           # 補上這行
+        bb.sentiment_reason = prediction_result.get(LLMCol.SENTIMENT_REASON, "無")
 
         # 寫入 UI 傳來的真實部位狀態
         bb.position = current_position

@@ -248,7 +248,7 @@ if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
     # 測試參數
-    tickers = ["5469.TW"]
+    tickers = ["2388.TW"]
     test_days = 240
     user_cash = 2000000
     user_persona = TradingPersona.AGGRESSIVE
