@@ -1,5 +1,5 @@
 from bt.blackboard import Blackboard
-from bt.const import BtVar, ConditionCol
+from bt.const import BtVar, ConditionCol, LLMCol
 from bt.core import BaseNode, NodeState
 from bt.params import ConsiderConfig, TaxRate
 from debug import dbg
@@ -45,13 +45,36 @@ class CheckSentimentFilterNode(BaseNode):
         self.min_score = min_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_score = getattr(blackboard, 'sentiment_score', BtVar.DEFAULT_LLM_SCORE)
-        current_reason = getattr(blackboard, 'sentiment_reason', '無相關新聞或未啟用 LLM')
+        current_score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
+        current_reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
 
         if current_score < self.min_score:
             dbg.war(f"📰 [進攻取消] LLM 判讀新聞為重大利空 (分數: {current_score}/10, 理由: {current_reason})，拒絕買進！")
             return NodeState.FAILURE
 
+        return NodeState.SUCCESS
+
+
+class CheckSellSentimentFilterNode(BaseNode):
+    """
+    LLM 停利防禦過濾節點 (News Sentiment 賣出守門員)。
+    若近期新聞被判定為極度利多 (分數 >= 門檻)，則退回賣出請求，繼續讓獲利奔跑。
+    ⚠️ 嚴格警告：此節點絕對不可放在「強制停損 (Stop-Loss)」的邏輯分支出去！
+    """
+    def __init__(self, block_score: int, name: str = ConditionCol.CHECK_SELL_SENTIMENT_FILTER):
+        super().__init__(name)
+        self.block_score = block_score
+
+    def tick(self, blackboard: Blackboard) -> NodeState:
+        current_score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, 5)
+        current_reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
+
+        # 如果情緒極度樂觀，阻止這次的賣出 (回傳 FAILURE 打斷 Sequence)
+        if current_score >= self.block_score:
+            dbg.log(f"🛡️ [停利攔截] LLM 判讀新聞為極度利多 (分數: {current_score}/10, 理由: {current_reason})。阻擋 AI 賣出訊號，讓獲利繼續奔跑！")
+            return NodeState.FAILURE
+
+        # 情緒普普或看跌，同意放行技術面賣出
         return NodeState.SUCCESS
 
 

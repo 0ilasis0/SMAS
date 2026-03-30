@@ -3,9 +3,10 @@ from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
 from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
                            CheckEntryCountLimitNode, CheckGapLimitNode,
                            CheckHasPositionNode, CheckNotPartialTakenNode,
-                           CheckSellSignalNode, CheckSentimentFilterNode,
-                           CheckStopLossNode, CheckTakeProfitNode,
-                           CheckTrailingStopNode, CheckTrendFilterNode)
+                           CheckSellSentimentFilterNode, CheckSellSignalNode,
+                           CheckSentimentFilterNode, CheckStopLossNode,
+                           CheckTakeProfitNode, CheckTrailingStopNode,
+                           CheckTrendFilterNode)
 from bt.core import Inverter, Selector, Sequence
 from bt.strategy_config import StrategyConfig
 
@@ -19,6 +20,9 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     # ==========================================
     # 策略 1：防守與獲利了結 (優先級最高)
     # ==========================================
+    if config.enable_llm_oracle:
+        ai_sell_conditions = [CheckSellSentimentFilterNode(block_score=config.block_sell_sentiment_score)]
+
     defense_strategy = Sequence("絕對防禦", [
         CheckHasPositionNode(),
 
@@ -37,8 +41,9 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
 
             # 級別 2：AI 預警 -> 勝率低迷，先減碼降風險
             Sequence("勝率低迷_戰術減碼", [
-                CheckSellSignalNode(threshold=config.sell_signal_threshold),
-                ExecuteSellNode(position_ratio=config.warning_sell_ratio),
+                CheckSellSignalNode(threshold=config.sell_signal_threshold)] +
+                ai_sell_conditions +
+                [ExecuteSellNode(position_ratio=config.warning_sell_ratio),
                 IgnoreFailure(GenerateGeminiReportNode())
             ]),
 

@@ -37,6 +37,7 @@ class StrategyConfig:
     # LLM 總開關
     enable_llm_oracle: bool = False
     min_sentiment_score: int = 4
+    block_sell_sentiment_score: int = 8
 
 
 class PersonaFactory:

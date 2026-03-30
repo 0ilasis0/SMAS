@@ -1,7 +1,7 @@
 import pandas as pd
 
 from bt.blackboard import Blackboard
-from bt.const import BtVar, DecisionAction, ExecuteCol
+from bt.const import BtVar, DecisionAction, ExecuteCol, LLMCol
 from bt.core import BaseNode, NodeState
 from bt.params import TaxRate
 from debug import dbg
@@ -191,8 +191,8 @@ class GenerateGeminiReportNode(BaseNode):
         else:
             trade_info_str = "- 實際執行動作：系統判定維持現狀【觀望 (HOLD)】。"
 
-        score = getattr(blackboard, 'sentiment_score', BtVar.DEFAULT_LLM_SCORE)
-        reason = getattr(blackboard, 'sentiment_reason', '無相關新聞或未啟用 LLM')
+        score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
+        reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
 
         prompt = f"""
         【最高指令】：你是一個只負責「事後覆盤」的量化分析助理。
