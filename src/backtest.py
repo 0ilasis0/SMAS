@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from base import KeyManager
 from bt.account import Account
 from bt.blackboard import Blackboard
 from bt.const import BtVar, DecisionAction

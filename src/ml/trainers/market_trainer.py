@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
-
+from ml.const import MLCol
+from base import MLTool
 from debug import dbg
 from ml.data.market_features import MarketFeatureCol
 from ml.params import MarketLGBMConfig, TrainConfig
@@ -58,9 +59,7 @@ class MarketTrainer:
             # 宣告 y_test 供後續驗證使用
             X_test, y_test = X.iloc[test_index], y.iloc[test_index]
 
-            pos_count = y_train.sum()
-            neg_count = len(y_train) - pos_count
-            scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
+            scale_weight = MLTool.calculate_scale_weight(y_train)
 
             model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
 
@@ -104,12 +103,10 @@ class MarketTrainer:
         X = df_clean[features]
         y = df_clean[MarketFeatureCol.TARGET_DANGER].astype(int)
 
-        pos_count = y.sum()
-        neg_count = len(y) - pos_count
-        scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
-
+        scale_weight = MLTool.calculate_scale_weight(y)
+        
         lgbm_params = self.config.to_dict()
-        lgbm_params['n_estimators'] = self.optimal_trees
+        lgbm_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)

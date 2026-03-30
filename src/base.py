@@ -1,10 +1,12 @@
 import os
 
 from dotenv import load_dotenv
-
+import pandas as pd
+import numbers as np
 from const import GlobalVar
 from debug import dbg
 from path import PathConfig
+from numpy.typing import NDArray
 
 
 class FrozenMeta(type):
@@ -20,6 +22,14 @@ class MathTool:
             dbg.war("clamp 參數顛倒，已自動交換 min/max")
             min_val, max_val = max_val, min_val
         return max(min(val, max_val), min_val)
+
+class MLTool:
+    @staticmethod
+    def calculate_scale_weight(y: pd.Series | NDArray) -> float:
+        """計算正負樣本不平衡的權重比例"""
+        pos_count = y.sum()
+        neg_count = len(y) - pos_count
+        return float(neg_count / pos_count) if pos_count > 0 else 1.0
 
 
 class KeyManager:

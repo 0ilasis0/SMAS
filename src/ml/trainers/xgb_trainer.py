@@ -8,9 +8,9 @@ import xgboost as xgb
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
-from base import MathTool
+from base import MathTool, MLTool
 from debug import dbg
-from ml.const import FeatureCol
+from ml.const import FeatureCol, MLCol
 from ml.params import TrainConfig, XGBHyperParams
 
 
@@ -26,7 +26,7 @@ class XGBTrainer:
         ):
         self.ticker = ticker
         self.params = asdict(hp)
-        self.optimal_trees = self.params.get('n_estimators', 100)
+        self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS, 100)
 
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
@@ -56,9 +56,7 @@ class XGBTrainer:
             X_val, y_val = X.iloc[early_stop_index], y.iloc[early_stop_index]
             X_test, y_test = X.iloc[test_index], y.iloc[test_index]
 
-            pos_count = y_train.sum()
-            neg_count = len(y_train) - pos_count
-            scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
+            scale_weight = MLTool.calculate_scale_weight(y_train)
 
             model = xgb.XGBClassifier(
                 **self.params,
@@ -107,18 +105,16 @@ class XGBTrainer:
         X = df_clean[features]
         y = df_clean[FeatureCol.TARGET].astype(int)
 
-        pos_count = y.sum()
-        neg_count = len(y) - pos_count
-        scale_weight = neg_count / pos_count if pos_count > 0 else 1.0
+        scale_weight = MLTool.calculate_scale_weight(y)
 
         # 套用 CV 計算出的最佳樹量
         final_params = self.params.copy()
-        final_params['n_estimators'] = self.optimal_trees
+        final_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        # 🚀 使用傳入的路徑儲存
+        # 使用傳入的路徑儲存
         save_path.parent.mkdir(parents=True, exist_ok=True)
         final_model.save_model(save_path)
         dbg.log(f"最終模型已成功儲存至: {save_path}")

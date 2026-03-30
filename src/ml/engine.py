@@ -10,7 +10,7 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MetaCol, MLCol, MLConst
+from ml.const import FeatureCol, MetaCol, ModelCol, MLConst
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
@@ -48,10 +48,10 @@ class QuantAIEngine:
             self.oracle = None
 
         self.paths = {
-            MLCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
-            MLCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.rnn_type, self.oos_days),
-            MLCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
-            MLCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
+            ModelCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
+            ModelCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.rnn_type, self.oos_days),
+            ModelCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
+            ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
         }
 
     # ==========================================
@@ -102,12 +102,12 @@ class QuantAIEngine:
         # XGBoost 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 左腦：XGBoost ---")
         xgb_engine = XGBFeatureEngine()
-        df_xgb_train = xgb_engine.process_pipeline(df_train_only, self.config.lookahead)
+        df_xgb_train = xgb_engine.process_pipeline(df_train_only, self.config.lookahead, is_training=True)
         xgb_trainer = XGBTrainer(self.config.ticker)
-        xgb_trainer.model_save_path = self.paths[MLCol.XGB]
+        xgb_trainer.model_save_path = self.paths[ModelCol.XGB]
         oof_xgb = xgb_trainer.train_with_cv(df_xgb_train, lookahead=self.config.lookahead)
         if save_models:
-            xgb_trainer.train_and_save_final_model(df_xgb_train, self.paths[MLCol.XGB])
+            xgb_trainer.train_and_save_final_model(df_xgb_train, self.paths[ModelCol.XGB])
 
         y_true = df_xgb_train[FeatureCol.TARGET]
 
@@ -121,7 +121,7 @@ class QuantAIEngine:
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train, lookahead=self.config.lookahead)
 
         if save_models:
-            final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[MLCol.DL])
+            final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[ModelCol.DL])
 
             scaler_save_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
             joblib.dump(final_dl_scaler, scaler_save_path)
@@ -130,7 +130,7 @@ class QuantAIEngine:
         # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
 
-        if not self.paths[MLCol.MARKET].exists():
+        if not self.paths[ModelCol.MARKET].exists():
             dbg.log(f"未發現 OOS={self.oos_days} 的大盤防禦模型，開始進行全局訓練...")
 
             # 使用 Enum 避免字串打錯
@@ -155,7 +155,7 @@ class QuantAIEngine:
             market_trainer.train_with_cv(df_market_train, lookahead=self.config.lookahead)
 
             if save_models:
-                market_trainer.train_and_save_final_model(df_market_train, self.paths[MLCol.MARKET])
+                market_trainer.train_and_save_final_model(df_market_train, self.paths[ModelCol.MARKET])
 
         else:
             dbg.log(f"大盤防禦模型 (OOS={self.oos_days}) 已存在，跳過重複訓練。")
@@ -194,7 +194,7 @@ class QuantAIEngine:
         X_meta, y_meta = meta_learner.evaluate_oof(aligned_oof_xgb, aligned_oof_dl, aligned_y_true)
 
         if save_models:
-            meta_learner.train_and_save_final_model(X_meta, y_meta, self.paths[MLCol.META])
+            meta_learner.train_and_save_final_model(X_meta, y_meta, self.paths[ModelCol.META])
 
         gc.collect()
         dbg.log(f"\n🎉 雙層架構與三大腦模型訓練完畢！(完美避開最後 {self.oos_days} 天的資料)")
@@ -206,18 +206,18 @@ class QuantAIEngine:
         """供 UI 啟動時觸發：將儲存在硬碟的權重檔載入至記憶體中。"""
         dbg.log(f"[{self.config.ticker}] 準備載入線上推論模型 (OOS={self.oos_days})...")
         try:
-            self.xgb_model = XGBTrainer.load_inference_model(self.paths[MLCol.XGB])
+            self.xgb_model = XGBTrainer.load_inference_model(self.paths[ModelCol.XGB])
 
             scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
             self.dl_scaler = joblib.load(scaler_path)
 
             dl_input_size = DLHyperParams.INPUT_SIZE
-            self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[MLCol.DL])
+            self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[ModelCol.DL])
 
             self.meta_learner = MetaLearner(self.config.ticker)
-            self.meta_learner.load_inference_model(self.paths[MLCol.META])
+            self.meta_learner.load_inference_model(self.paths[ModelCol.META])
 
-            self.market_model = MarketTrainer.load_inference_model(self.paths[MLCol.MARKET])
+            self.market_model = MarketTrainer.load_inference_model(self.paths[ModelCol.MARKET])
 
             if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model, self.market_model):
                 raise ValueError("部分模型或 Scaler 回傳為 None")

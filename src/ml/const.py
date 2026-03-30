@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 
-class MLCol(StrEnum):
+class ModelCol(StrEnum):
     XGB = "xgb",
     DL = "dl",
     META = "meta",
@@ -74,3 +74,6 @@ class MetaCol(StrEnum):
 class MLConst:
     # 依據：MA_YEAR(240) + DL_TIME_STEPS(20) + 安全緩衝 = 抓取 300~500 天足矣
     MAX_LOOKBACK = 400
+
+class MLCol(StrEnum):
+    N_ESTIMATORS = "'n_estimators'"

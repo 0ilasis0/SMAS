@@ -11,7 +11,7 @@ from sklearn.model_selection import TimeSeriesSplit
 from sklearn.preprocessing import RobustScaler
 from torch.utils.data import DataLoader, TensorDataset
 
-from base import MathTool
+from base import MathTool, MLTool
 from debug import dbg
 from ml.const import RNNType
 from ml.params import DLHyperParams, TrainConfig
@@ -149,9 +149,7 @@ class DLTrainer:
             es_loader = self._create_dataloader(X_es, y_es, shuffle=False)
             test_loader = self._create_dataloader(X_test, y_test, shuffle=False)
 
-            pos_count = y_train.sum()
-            neg_count = len(y_train) - pos_count
-            pos_weight_val = neg_count / pos_count if pos_count > 0 else 1.0
+            pos_weight_val = MLTool.calculate_scale_weight(y_train)
             pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
 
             model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
@@ -247,9 +245,7 @@ class DLTrainer:
 
         full_loader = self._create_dataloader(X_scaled, y, shuffle=True)
 
-        pos_count = y.sum()
-        neg_count = len(y) - pos_count
-        pos_weight_val = neg_count / pos_count if pos_count > 0 else 1.0
+        pos_weight_val = MLTool.calculate_scale_weight(y)
         pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
 
         model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
