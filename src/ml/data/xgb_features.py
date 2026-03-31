@@ -79,6 +79,7 @@ class XGBFeatureEngine:
         # 價格與成交量動能
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
         data[FeatureCol.CLOSE_CHANGE] = data[StockCol.CLOSE].pct_change()
+        data[FeatureCol.RETURN_5D] = data[StockCol.CLOSE].pct_change(periods=5)
 
         return data
 

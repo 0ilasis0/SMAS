@@ -28,6 +28,7 @@ class FeatureCol(StrEnum):
     VOL_CHANGE = "vol_change"
     CLOSE_CHANGE = "close_change"
     BB_WIDTH = "bb_width"
+    RETURN_5D = "return_5d"
 
     # 標籤 (Label)
     TARGET = "target"

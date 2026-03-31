@@ -21,6 +21,7 @@ class ExecuteCol(StrEnum):
     HOLD = "hold"
 
 class ConditionCol(StrEnum):
+    CHECK_NOT_OVERHEATED = "check_not_overheated_node"
     CHECK_COOLDOWN = "check_cooldown"
     CHECK_TREND_FILTER = "check_trend_filter"
     CHECK_SENTIMENT_FILTER = "check_sentiment_filter"

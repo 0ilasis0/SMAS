@@ -2,7 +2,8 @@ from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
                         GenerateGeminiReportNode, IgnoreFailure)
 from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
                            CheckEntryCountLimitNode, CheckGapLimitNode,
-                           CheckHasPositionNode, CheckNotPartialTakenNode,
+                           CheckHasPositionNode, CheckNotOverheatedNode,
+                           CheckNotPartialTakenNode,
                            CheckSellSentimentFilterNode, CheckSellSignalNode,
                            CheckSentimentFilterNode, CheckStopLossNode,
                            CheckTakeProfitNode, CheckTrailingStopNode,
@@ -64,7 +65,8 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     # ==========================================
     attack_conditions = [
         CheckCooldownNode(cooldown_days=config.cooldown_days),
-        CheckTrendFilterNode(safe_threshold=config.safe_threshold)
+        CheckTrendFilterNode(safe_threshold=config.safe_threshold),
+        CheckNotOverheatedNode(max_return_5d=StrategyConfig.max_return_5d, max_bias_20=StrategyConfig.max_bias_20)
     ]
     if config.enable_llm_oracle:
         attack_conditions.append(CheckSentimentFilterNode(min_score=config.min_sentiment_score))

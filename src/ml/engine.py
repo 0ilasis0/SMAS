@@ -305,6 +305,9 @@ class QuantAIEngine:
         current_price = df_recent[StockCol.CLOSE].iloc[-1]
         avg_5d_vol = df_recent[StockCol.VOLUME].tail(5).mean()
 
+        latest_bias_20 = df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]
+        latest_return_5d = df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]
+
         if self.oracle:
             try:
                 self.oracle.mode = mode
@@ -325,7 +328,9 @@ class QuantAIEngine:
             "sentiment_score": sentiment_score,
             "sentiment_reason": sentiment_reason,
             "current_price": float(current_price),
-            "avg_5d_vol": float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0
+            "avg_5d_vol": float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
+            FeatureCol.BIAS_MONTH: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
+            FeatureCol.RETURN_5D: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
         }
 
     def generate_backtest_data(self) -> pd.DataFrame:

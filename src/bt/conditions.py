@@ -1,8 +1,36 @@
 from bt.blackboard import Blackboard
-from bt.const import BtVar, ConditionCol, LLMCol
+from bt.const import BtVar, ConditionCol, DecisionAction, LLMCol
 from bt.core import BaseNode, NodeState
 from bt.params import ConsiderConfig, TaxRate
 from debug import dbg
+from ml.const import FeatureCol
+
+
+class CheckNotOverheatedNode(BaseNode):
+    """
+    防線 2：追高防呆鎖 (IDSS 自訂引擎版)。
+    如果股票短線漲太多 (近 5 日)、乖離過大 (月線)，強制禁止買進。
+    """
+    def __init__(self, max_return_5d: float, max_bias_20: float, name=ConditionCol.CHECK_NOT_OVERHEATED):
+        super().__init__(name)
+        self.max_return_5d = max_return_5d
+        self.max_bias_20 = max_bias_20
+
+    def tick(self, blackboard: Blackboard) -> NodeState:
+        # 1. 取得黑板上的防呆數據
+        ret_5d = getattr(blackboard, FeatureCol.RETURN_5D, 0.0)
+        bias_20 = getattr(blackboard, FeatureCol.BIAS_MONTH, 0.0)
+
+        # 2. 判斷是否過熱
+        if ret_5d > self.max_return_5d or bias_20 > self.max_bias_20:
+
+            # 物理煞車：強制寫入 HOLD 並記錄警告
+            blackboard.action_decision = DecisionAction.HOLD
+            blackboard.gemini_reasoning = f"⚠️ 系統觸發追高防呆鎖 (近5日漲幅: {ret_5d:.1%}, 月線乖離: {bias_20:.1%})。為防主力出貨，強制阻斷買進訊號。"
+
+            return NodeState.FAILURE
+
+        return NodeState.SUCCESS
 
 
 class CheckCooldownNode(BaseNode):

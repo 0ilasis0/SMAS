@@ -13,7 +13,7 @@ from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, StrategyConfig, TradingPersona
 from data.const import StockCol
 from debug import dbg
-from ml.const import MetaCol
+from ml.const import FeatureCol, MetaCol
 from path import PathConfig
 
 
@@ -91,6 +91,9 @@ class BacktestEngine:
 
             self.bb.prob_xgb = row[MetaCol.PROB_XGB]
             self.bb.prob_dl = row[MetaCol.PROB_DL]
+
+            self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH, 0.0)
+            self.bb.return_5d = row.get(FeatureCol.RETURN_5D, 0.0)
 
             # 清空前一天的決策紀錄
             self.bb.action_decision = DecisionAction.HOLD

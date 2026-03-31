@@ -8,7 +8,7 @@ from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from data.const import TimeUnit, YfInterval
 from debug import dbg
-from ml.const import MetaCol
+from ml.const import FeatureCol, MetaCol
 from ml.engine import QuantAIEngine
 from ml.model.llm_oracle import TradingMode
 
@@ -78,9 +78,9 @@ class IDSSController:
         bb.prob_final = prediction_result.get(MetaCol.PROB_FINAL, 0.5)
         bb.prob_xgb = prediction_result.get(MetaCol.PROB_XGB, 0.5)
         bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, 0.5)
-        bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, 1.0) # 補上這行
+        bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, 1.0)
 
-        bb.sentiment_score = prediction_result.get(LLMCol.SENTIMENT_SCORE, 5)           # 補上這行
+        bb.sentiment_score = prediction_result.get(LLMCol.SENTIMENT_SCORE, 5)
         bb.sentiment_reason = prediction_result.get(LLMCol.SENTIMENT_REASON, "無")
 
         # 寫入 UI 傳來的真實部位狀態
@@ -90,6 +90,9 @@ class IDSSController:
         bb.current_price = prediction_result.get("current_price", 0.0)
         bb.executable_price = bb.current_price # 實盤觸價妥協
         bb.daily_volume = prediction_result.get("avg_5d_vol", 0.0)
+
+        bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH, 0.0)
+        bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D, 0.0)
 
         # 4. 執行行為樹決策 (Tick)
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (模式: {mode.value})...")

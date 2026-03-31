@@ -34,6 +34,9 @@ class StrategyConfig:
     safe_threshold: float = 0.45
     cooldown_days: int = 2
 
+    max_return_5d: float = 0.3
+    max_bias_20: float = 0.25
+
     # LLM 總開關
     enable_llm_oracle: bool = False
     min_sentiment_score: int = 4
@@ -55,7 +58,8 @@ class PersonaFactory:
                 conservative_buy_threshold=0.52,  # 勝率 52% 就敢試水溫
                 safe_threshold=0.20,              # 幾乎無視大盤 (除非大盤極度恐慌低於20%)
                 cooldown_days=1,
-                min_sentiment_score=3
+                min_sentiment_score=3,
+                max_return_5d = 0.4
             )
 
         elif persona == TradingPersona.CONSERVATIVE:
