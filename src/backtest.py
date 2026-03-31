@@ -262,7 +262,7 @@ if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
     # 測試參數
-    tickers = ["00981A.TW"]
+    tickers = ["3481.TW"]
     test_days = 0
     user_cash = 2000000
     user_persona = TradingPersona.MODERATE
