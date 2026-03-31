@@ -56,7 +56,7 @@ class PersonaFactory:
                 take_profit_target=0.10,          # 賺 10% 才開始停利
                 strong_buy_threshold=0.55,        # 稍微看漲就 All-in
                 conservative_buy_threshold=0.52,  # 勝率 52% 就敢試水溫
-                safe_threshold=0.20,              # 幾乎無視大盤 (除非大盤極度恐慌低於20%)
+                safe_threshold=0.3,              # 幾乎無視大盤
                 cooldown_days=1,
                 min_sentiment_score=3,
                 max_return_5d = 0.4
@@ -69,7 +69,7 @@ class PersonaFactory:
                 trailing_stop_drawdown=-0.025,    # 回落 2.5% 立刻閃人
                 take_profit_target=0.03,          # 賺 3% 就跑
                 take_profit_sell_ratio=1.0,       # 停利直接全賣，不留戀
-                strong_buy_threshold=0.65,        # 要求極高勝率才 All-in
+                strong_buy_threshold=0.6,        # 要求極高勝率才 All-in
                 conservative_buy_threshold=0.60,
                 safe_threshold=0.65,              # 大盤安全度必須大於 65% 才准買！
                 cooldown_days=4,

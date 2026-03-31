@@ -265,8 +265,8 @@ if __name__ == "__main__":
     from ml.engine import QuantAIEngine
 
     # 測試參數
-    tickers = ["3481.TW", "2388.TW", "5469.TW", "2337.TW"]
-    test_days = 0
+    tickers = ["2388.TW"]
+    test_days = 240
     user_cash = 2000000
     user_persona = TradingPersona.MODERATE
 
@@ -277,8 +277,8 @@ if __name__ == "__main__":
 
         # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
         # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-        ai_engine.update_market_data()
-        ai_engine.train_all_models(save_models=True)
+        # ai_engine.update_market_data()
+        # ai_engine.train_all_models(save_models=True)
 
         if not ai_engine.load_inference_models():
             dbg.error("❌ 模型載入失敗...")
