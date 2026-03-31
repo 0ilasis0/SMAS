@@ -23,6 +23,10 @@ class DLFeatureEngine:
         self.max_warmup = 19
 
     def process_pipeline(self, df: pd.DataFrame, is_training: bool = True):
+        if df is None or df.empty:
+            dbg.war("⚠️ [XGBFeatureEngine] 輸入 DataFrame 為空，無法計算特徵。")
+            return pd.DataFrame()
+
         dbg.log("開始建立 Deep Learning 原始時序特徵矩陣 (Sliding Window)...")
 
         min_required_len = self.time_steps + self.max_warmup

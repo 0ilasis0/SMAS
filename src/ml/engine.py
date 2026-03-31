@@ -344,7 +344,9 @@ class QuantAIEngine:
         macro_tickers = [e.value for e in MacroTicker]
         df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
 
-        if df_raw.empty: return pd.DataFrame()
+        if df_raw.empty:
+            dbg.error(f"❌ [{self.config.ticker}] 回測資料對齊後為空！請檢查 DB 內是否有該股與大盤資料。")
+            return pd.DataFrame()
 
         # XGBoost 批次推論
         xgb_engine = XGBFeatureEngine()
