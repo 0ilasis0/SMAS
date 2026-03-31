@@ -2,7 +2,8 @@ import streamlit as st
 
 from bt.strategy_config import TradingPersona
 from ml.model.llm_oracle import TradingMode
-from ui.state import on_ticker_change, reset_result, save_watchlist
+from ui.state import (on_ticker_change, reset_result, save_settings,
+                      save_watchlist)
 
 
 def render_sidebar() -> tuple[TradingPersona, TradingMode]:
@@ -62,11 +63,36 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
         st.markdown("---")
 
-        persona_mapping = {"激進型 (AGGRESSIVE)": TradingPersona.AGGRESSIVE, "穩健型 (MODERATE)": TradingPersona.MODERATE, "保守型 (CONSERVATIVE)": TradingPersona.CONSERVATIVE}
-        selected_persona_str = st.selectbox("🧠 戰術性格", list(persona_mapping.keys()), index=1, on_change=reset_result, disabled=is_locked)
+        persona_mapping = {
+            "激進型 (AGGRESSIVE)": TradingPersona.AGGRESSIVE,
+            "穩健型 (MODERATE)": TradingPersona.MODERATE,
+            "保守型 (CONSERVATIVE)": TradingPersona.CONSERVATIVE
+        }
 
-        mode_mapping = {"波段模式 (SWING)": TradingMode.SWING, "當沖模式 (DAY_TRADE)": TradingMode.DAY_TRADE}
-        selected_mode_str = st.selectbox("⚡ 交易模式", list(mode_mapping.keys()), index=0, on_change=reset_result, disabled=is_locked)
+        mode_mapping = {
+            "波段模式 (SWING)": TradingMode.SWING,
+            "當沖模式 (DAY_TRADE)": TradingMode.DAY_TRADE
+        }
+
+        saved_persona = st.session_state.user_settings.get("persona", "穩健型 (MODERATE)")
+        saved_mode = st.session_state.user_settings.get("mode", "波段模式 (SWING)")
+        p_index = list(persona_mapping.keys()).index(saved_persona) if saved_persona in persona_mapping else 1
+        m_index = list(mode_mapping.keys()).index(saved_mode) if saved_mode in mode_mapping else 0
+
+        def on_setting_change():
+            save_settings(st.session_state.ui_persona, st.session_state.ui_mode)
+            st.session_state.user_settings = {"persona": st.session_state.ui_persona, "mode": st.session_state.ui_mode}
+            reset_result()
+
+        selected_persona_str = st.selectbox(
+            "🧠 戰術性格", list(persona_mapping.keys()), index=p_index,
+            key="ui_persona", on_change=on_setting_change, disabled=is_locked
+        )
+
+        selected_mode_str = st.selectbox(
+            "⚡ 交易模式", list(mode_mapping.keys()), index=m_index,
+            key="ui_mode", on_change=on_setting_change, disabled=is_locked
+        )
 
         st.markdown("---")
 
