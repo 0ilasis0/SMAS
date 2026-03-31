@@ -58,7 +58,7 @@ class GeminiOracle:
 
     def _get_payload_hash(self, ticker: str, news_text: str) -> str:
         payload = f"{ticker}_{news_text}"
-        return hashlib.md5(payload.encode(EncodingConst.STD_FONT)).hexdigest()
+        return hashlib.md5(payload.encode(EncodingConst.UTF8)).hexdigest()
 
     def fetch_recent_news(self, ticker: str) -> str:
         """

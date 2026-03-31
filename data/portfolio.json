@@ -1,0 +1,70 @@
+{
+    "global_cash": 438629.0,
+    "positions": {
+        "2337.TW": {
+            "shares": 3000,
+            "avg_cost": 87.12366666666667,
+            "history": [
+                {
+                    "date": "2026-03-31 21:52:57",
+                    "action": "BUY",
+                    "price": 115.5,
+                    "shares": 1000,
+                    "total": 115500.0
+                },
+                {
+                    "date": "2026-03-31 21:56:29",
+                    "action": "BUY",
+                    "price": 105.5,
+                    "shares": 1000,
+                    "total": 105500.0
+                },
+                {
+                    "date": "2026-03-31 21:56:48",
+                    "action": "SELL",
+                    "price": 115.5,
+                    "shares": 2000,
+                    "total": 231000.0
+                },
+                {
+                    "date": "2026-03-31 22:00:35",
+                    "action": "BUY",
+                    "price": 110.0,
+                    "shares": 1000,
+                    "fee": 156,
+                    "tax": 0,
+                    "total": 110156.0
+                },
+                {
+                    "date": "2026-03-31 22:04:41",
+                    "action": "BUY",
+                    "price": 75.5,
+                    "shares": 2000,
+                    "fee": 215,
+                    "tax": 0,
+                    "total": 151215.0
+                }
+            ]
+        },
+        "2330.TW": {
+            "shares": 0,
+            "avg_cost": 0.0,
+            "history": [
+                {
+                    "date": "2026-03-31 21:53:26",
+                    "action": "BUY",
+                    "price": 1000.0,
+                    "shares": 1000,
+                    "total": 1000000.0
+                },
+                {
+                    "date": "2026-03-31 21:56:43",
+                    "action": "SELL",
+                    "price": 1760.0,
+                    "shares": 1000,
+                    "total": 1760000.0
+                }
+            ]
+        }
+    }
+}

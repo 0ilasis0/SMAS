@@ -2,7 +2,7 @@ from enum import StrEnum
 
 
 class EncodingConst(StrEnum):
-    STD_FONT = "utf-8"
+    UTF8 = "utf-8"
 
 
 class Page(StrEnum):
