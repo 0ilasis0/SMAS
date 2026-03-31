@@ -138,12 +138,13 @@ class BacktestEngine:
             )
             self.history_records.append(final_record.to_dict())
 
-        self._generate_report()
+        report_stats = self._generate_report()
+
+        return report_stats
 
     def _generate_report(self):
         """計算績效指標並繪製三層量化儀表板"""
-        if not self.history_records:
-            return
+        if not self.history_records: return {}
 
         df_res = pd.DataFrame(self.history_records).set_index(HistoryCol.DATE)
 
@@ -182,7 +183,7 @@ class BacktestEngine:
         dbg.log("="*40)
 
         # 整合為一個專業的三層儀表板
-        plt.figure(figsize=(14, 10))
+        fig = plt.figure(figsize=(14, 10))
 
         # 第一層：資金曲線與回撤
         ax1 = plt.subplot(3, 1, 1)
@@ -191,13 +192,11 @@ class BacktestEngine:
         ax1.set_ylabel('Total Equity (NTD)')
         ax1.grid(True, alpha=0.3)
 
-        # 在同一個圖表加入回撤 (Drawdown) 的紅色面積圖，共用 X 軸但使用右側 Y 軸
         ax1_dd = ax1.twinx()
         ax1_dd.fill_between(df_res.index, df_res['Drawdown'], 0, color='red', alpha=0.2, label='Drawdown')
         ax1_dd.set_ylabel('Drawdown (%)', color='red')
         ax1_dd.tick_params(axis='y', labelcolor='red')
 
-        # 合併兩個軸的圖例
         lines_1, labels_1 = ax1.get_legend_handles_labels()
         lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
         ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
@@ -219,7 +218,6 @@ class BacktestEngine:
         ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color='purple', linestyle='--', linewidth=1.5)
         ax3.axhline(y=0.5, color='red', linestyle=':', alpha=0.5, label='50% Threshold')
 
-        # 將大盤危險區域標示為紅色背景
         ax3.fill_between(
             df_res.index, 0, 1,
             where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
@@ -234,14 +232,30 @@ class BacktestEngine:
         plt.tight_layout()
 
         try:
-            report_img_path = PathConfig.get_chart_report_path(ticker=ticker)
+            report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
             report_img_path.parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(report_img_path, dpi=300)
-            dbg.log(f"📸 儀表板圖片已自動儲存至: {report_img_path}")
-        except Exception as e:
-            dbg.war(f"圖片存檔失敗: {e}")
 
-        plt.show()
+            fig.savefig(str(report_img_path), dpi=300, bbox_inches='tight')
+            dbg.log(f"📸 儀表板圖片已自動儲存至: {report_img_path}")
+
+        except Exception as e:
+            dbg.error(f"圖片存檔失敗: {e}")
+
+        finally:
+            plt.close(fig)
+
+        stats = {
+            "initial_cash": self.initial_cash,
+            "final_equity": final_equity,
+            "total_return": total_return,
+            "cagr": cagr,
+            "mdd": max_drawdown,
+            "sharpe": sharpe_ratio,
+            "buy_count": buy_count,
+            "sell_count": sell_count
+        }
+
+        return stats
 
 
 if __name__ == "__main__":

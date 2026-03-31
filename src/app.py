@@ -2,11 +2,13 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from backtest import BacktestEngine
 from bt.const import DecisionAction
-from bt.strategy_config import TradingPersona
+from bt.strategy_config import PersonaFactory, TradingPersona
 from controller import IDSSController
 from data.const import StockCol
 from ml.model.llm_oracle import TradingMode
+from path import PathConfig
 
 
 # ==========================================
@@ -162,6 +164,78 @@ def render_chart():
         except Exception as e:
             st.caption(f"無法渲染 K 線圖: {e}")
 
+# ==========================================
+# (新增) UI 模組：歷史回測分頁
+# ==========================================
+def render_backtest_tab(selected_persona):
+    """渲染歷史回測模擬介面"""
+    st.markdown("### ⚙️ 回測參數設定")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=60, max_value=240, value=240, step=10)
+    with col2:
+        asset_option = st.radio("💰 模擬資金來源", ["使用當前設定資金 (預設 200 萬)", "自訂暫時資金"])
+        if asset_option == "自訂暫時資金":
+            sim_cash = st.number_input("請輸入自訂資金 (NTD)", min_value=100000, max_value=100000000, value=1000000, step=100000)
+        else:
+            sim_cash = 2000000.0
+
+    st.markdown("---")
+
+    if st.button("🚀 啟動 IDSS 歷史回測", type="primary", use_container_width=True):
+        with st.spinner(f"正在擷取近 {test_days} 天 AI 預測勝率，並進行沙盤推演..."):
+            ctrl = st.session_state.controller
+            df_bt = ctrl.engine.generate_backtest_data()
+
+            if not df_bt.empty:
+                df_test = df_bt.tail(test_days)
+                strategy_config = PersonaFactory.get_config(selected_persona)
+                strategy_config.enable_llm_oracle = False # 回測強制關閉 LLM 防爆流量
+
+                # 執行回測並接住數據！
+                bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=st.session_state.current_ticker, strategy=strategy_config)
+
+                # 🚀 接住從 backtest.py 吐出來的績效字典
+                stats = bt_engine.run(df_test)
+
+                if stats:
+                    st.success(f"✅ {test_days} 天歷史回測推演完成！")
+
+                    # ==========================================
+                    # 🚀 升級：動態渲染 8 宮格 KPI 績效看板
+                    # ==========================================
+                    st.markdown("### 🏆 IDSS 策略績效總覽")
+
+                    # 第一排數據
+                    m1, m2, m3, m4 = st.columns(4)
+                    # 判斷賺賠給予顏色 (台股紅漲綠跌)
+                    profit_color = "normal" if stats['total_return'] > 0 else "inverse"
+                    m1.metric("🏦 最終總淨值", f"${stats['final_equity']:,.0f}", f"初始: ${stats['initial_cash']:,.0f}", delta_color="off")
+                    m2.metric("📈 區間總報酬率", f"{stats['total_return']:.2%}", delta=f"{stats['total_return']:.2%}", delta_color=profit_color)
+                    m3.metric("🚀 年化報酬 (CAGR)", f"{stats['cagr']:.2%}")
+                    m4.metric("📉 最大回撤 (MDD)", f"{stats['mdd']:.2%}", delta="風險評估", delta_color="off")
+
+                    # 第二排數據
+                    m5, m6, m7, m8 = st.columns(4)
+                    m5.metric("⚖️ 夏普值 (Sharpe)", f"{stats['sharpe']:.2f}")
+                    m6.metric("🛒 AI 買進次數", f"{stats['buy_count']} 次")
+                    m7.metric("💸 AI 賣出次數", f"{stats['sell_count']} 次")
+                    m8.metric("📊 總交易頻率", f"{stats['buy_count'] + stats['sell_count']} 次")
+
+                    st.markdown("---")
+
+                    # ==========================================
+                    # 渲染圖表
+                    # ==========================================
+                    chart_path = PathConfig.get_chart_report_path(st.session_state.current_ticker)
+                    if chart_path.exists():
+                        st.image(str(chart_path), use_container_width=True)
+                    else:
+                        st.error("❌ 找不到回測圖表，請確認 BacktestEngine 有成功儲存圖片。")
+            else:
+                st.error("❌ 無法生成回測資料，請確認模型是否已訓練完畢。")
+
 def render_report(result: dict):
     """將戰報渲染邏輯獨立，保持主程式乾淨"""
     if result.get("status") != "success":
@@ -250,8 +324,8 @@ def main():
 
     # 主畫面
     st.title(f"📊 IDSS 決策大廳 - {st.session_state.current_ticker}")
-
     st.markdown("---")
+
     c1, c2, c3 = st.columns(3)
     c1.metric("💰 總淨值 (預覽)", "2,000,000")
     c2.metric("💵 可用現金 (預覽)", "2,000,000")
@@ -260,21 +334,31 @@ def main():
 
     render_chart()
 
-    # 執行按鈕
-    if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True):
-        with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
-            result = st.session_state.controller.execute_decision(
-                current_cash=2000000.0,
-                current_position=0,
-                avg_cost=0.0,
-                persona=selected_persona,
-                mode=selected_mode
-            )
-            st.session_state.last_result = result
+    tab1, tab2 = st.tabs(["🎯 今日行動指令", "⏱️ IDSS 歷史回測模擬"])
 
-    # 渲染戰報
-    if st.session_state.last_result is not None:
-        render_report(st.session_state.last_result)
+    # 執行按鈕
+    with tab1:
+        st.markdown("<br>", unsafe_allow_html=True)
+        # 執行按鈕
+        if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True):
+            with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
+                result = st.session_state.controller.execute_decision(
+                    current_cash=2000000.0,
+                    current_position=0,
+                    avg_cost=0.0,
+                    persona=selected_persona,
+                    mode=selected_mode
+                )
+                st.session_state.last_result = result
+
+        # 渲染戰報
+        if st.session_state.last_result is not None:
+            render_report(st.session_state.last_result)
+
+    # --- Tab 2: 全新的回測模擬 ---
+    with tab2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        render_backtest_tab(selected_persona)
 
 if __name__ == "__main__":
     st.set_page_config(page_title="IDSS 量化交易終端", page_icon="📈", layout="wide")
