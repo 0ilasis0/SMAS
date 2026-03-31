@@ -28,7 +28,7 @@ class QuantAIEngine:
     量化 AI 引擎中樞。
     封裝了資料抓取、三腦模型訓練 (XGBoost + DL + Market)、Meta-Learner 融合，以及線上推論的完整管線。
     """
-    def __init__(self, ticker: str, oos_days: int = 0, api_keys: list[str] = None):
+    def __init__(self, ticker: str, oos_days: int, api_keys: list[str] = None):
         self.config = SessionConfig(ticker=ticker)
         self.oos_days = oos_days
 
