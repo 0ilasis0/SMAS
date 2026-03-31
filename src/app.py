@@ -226,7 +226,7 @@ def render_report(result: dict):
 def main():
     # 初始化狀態
     if 'watch_list' not in st.session_state:
-        st.session_state.watch_list = ["00631L.TW", "2330.TW", "2388.TW", "5469.TW", "2337.TW"]
+        st.session_state.watch_list = ["2330.TW", "2388.TW", "5469.TW", "2337.TW"]
     if 'current_ticker' not in st.session_state:
         st.session_state.current_ticker = st.session_state.watch_list[0]
     if 'controller' not in st.session_state:

@@ -5,12 +5,12 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data.const import MacroTicker, StockCol, TimeUnit
+from data.const import MacroTicker, StockCol, TimeUnit, YfInterval
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MetaCol, ModelCol, MLConst
+from ml.const import FeatureCol, MetaCol, MLConst, ModelCol
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
@@ -88,6 +88,8 @@ class QuantAIEngine:
         供 UI 或開發者觸發：執行完整的 Stacking 訓練管線。
         """
         dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {self.oos_days} 天做為純淨測試集)")
+
+        self.run_data_watchdog(self.config.ticker)
 
         # 取得「已對齊大盤特徵」的完整資料集
         macro_tickers = [e.value for e in MacroTicker]
@@ -238,6 +240,9 @@ class QuantAIEngine:
             dbg.error("模型未完全載入，無法進行推論！")
             return None
 
+        # 先檢查資料庫裡的個股歷史有沒有除權息斷層，有就自動修復！
+        self.run_data_watchdog(self.config.ticker)
+
         # 抓取最新資料時，必須包含對齊後的大盤數據
         macro_tickers = [e.value for e in MacroTicker]
         df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
@@ -333,6 +338,8 @@ class QuantAIEngine:
 
         dbg.log(f"[{self.config.ticker}] 正在批次生成歷史預測勝率 (Backtest Data)...")
 
+        self.run_data_watchdog(self.config.ticker)
+
         # 基底改為具備大盤特徵的 DataFrame
         macro_tickers = [e.value for e in MacroTicker]
         df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
@@ -397,3 +404,72 @@ class QuantAIEngine:
 
         dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")
         return df_backtest
+
+    def run_data_watchdog(self, ticker: str):
+        """ 撈出資料並檢查是否有除權息斷層，有則啟動修復 """
+        df_raw = self.db.get_daily_data(ticker)
+        self._auto_heal_corporate_actions(ticker, df_raw)
+
+    def _auto_heal_corporate_actions(self, ticker: str, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        自動偵測除權息與股票分割。
+        若 Yahoo API 提供的資料未還原，啟動「本地強制平滑演算法 (Backward Adjustment)」手動修復。
+        """
+        if len(df) < 2:
+            return df
+
+        # 注意：請確保傳入的常數有加上 .value 或是字串，避免 KeyError
+        col_close = StockCol.CLOSE.value if hasattr(StockCol.CLOSE, 'value') else 'close'
+        col_open = StockCol.OPEN.value if hasattr(StockCol.OPEN, 'value') else 'open'
+        col_high = StockCol.HIGH.value if hasattr(StockCol.HIGH, 'value') else 'high'
+        col_low = StockCol.LOW.value if hasattr(StockCol.LOW, 'value') else 'low'
+        col_vol = StockCol.VOLUME.value if hasattr(StockCol.VOLUME, 'value') else 'volume'
+
+        daily_returns = df[col_close].pct_change().dropna()
+        anomaly_mask = daily_returns.abs() > 0.4  # 台股不可能單日漲跌超過 40%
+
+        if anomaly_mask.any():
+            dbg.war(f"🚨 [Watchdog] 偵測到 {ticker} 出現異常跳空 (大於 40%)！")
+
+            # 清空 DB 並嘗試重抓，看 Yahoo 是否有更新
+            self.db.clear_ticker_data(ticker)
+            df_healed = self.fetcher.fetch_daily_data(ticker, period=10, unit='y')
+
+            if not df_healed.empty:
+                new_returns = df_healed[col_close].pct_change().dropna()
+                new_anomaly_mask = new_returns.abs() > 0.4
+
+                if new_anomaly_mask.any():
+                    dbg.war(f"⚠️ [Watchdog] Yahoo 源頭資料依然損毀！啟動「本地端強制平滑修復」...")
+
+                    # 找出所有斷層日，從最新的時間往前依序修復
+                    anomaly_dates = new_returns[new_anomaly_mask].index.sort_values(ascending=False)
+
+                    for adate in anomaly_dates:
+                        idx_loc = df_healed.index.get_loc(adate)
+                        if idx_loc > 0:
+                            prev_date = df_healed.index[idx_loc - 1]
+                            price_after = df_healed.loc[adate, col_close]
+                            price_before = df_healed.loc[prev_date, col_close]
+
+                            # 計算分割/配息比例
+                            ratio = price_after / price_before
+                            dbg.log(f"🛠️ 正在修復 {adate.strftime('%Y-%m-%d')} 的斷層，還原比例: {ratio:.4f}")
+
+                            # 核心：將斷層日之前的所有股價乘以比例，成交量除以比例
+                            price_cols = [col_open, col_high, col_low, col_close]
+                            df_healed.loc[:prev_date, price_cols] *= ratio
+                            df_healed.loc[:prev_date, col_vol] /= ratio
+
+                    dbg.log(f"✅ [Watchdog] {ticker} 本地強制還原修復完成！所有技術指標將恢復正常。")
+                else:
+                    dbg.log(f"✅ [Watchdog] {ticker} Yahoo 資料自動還原成功！")
+
+                # 存入完美平滑的資料
+                self.db.save_daily_data(ticker, df_healed)
+                return df_healed
+            else:
+                dbg.error(f"❌ [Watchdog] 修復失敗：無法重新抓取資料。")
+                return df
+
+        return df

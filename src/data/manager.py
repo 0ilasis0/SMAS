@@ -28,7 +28,6 @@ class DataManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
-            # 日 K 線表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS daily_k_lines (
                     ticker TEXT,
@@ -42,7 +41,6 @@ class DataManager:
                 )
             ''')
 
-            # 分時 K 線表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS intraday_k_lines (
                     ticker TEXT,
@@ -56,7 +54,6 @@ class DataManager:
                 )
             ''')
 
-            # 自選股清單
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_watchlist (
                     ticker TEXT PRIMARY KEY,
@@ -66,10 +63,7 @@ class DataManager:
             conn.commit()
 
     def clear_ticker_data(self, ticker: str):
-        """
-        刪除特定標的的所有歷史日線與分時資料。
-        用於確保寫入新抓取的「還原股價」時，不會與舊的未還原髒資料發生混層。
-        """
+        """刪除特定標的的所有歷史日線與分時資料。"""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM daily_k_lines WHERE ticker = ?", (ticker,))
@@ -78,27 +72,19 @@ class DataManager:
             dbg.log(f"已徹底清空 {ticker} 的歷史資料快取。")
 
     def save_daily_data(self, ticker: str, df: pd.DataFrame):
-        """將日 K 線 DataFrame 存入 SQLite"""
+        """將日 K 線 DataFrame 存入 SQLite (修復 UPSERT 陷阱)"""
         if df.empty: return
 
-        df = df.copy()
-        df = df.dropna(subset=[StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE], ignore_index=False)
+        df_save = df.copy()
+        df_save = df_save.dropna(subset=[StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE])
+        if df_save.empty: return
 
-        if df.empty:
-            dbg.war(f"[{ticker}] 資料清洗後為空，取消寫入。")
-            return
-
-        df.columns = [str(c).strip().capitalize() for c in df.columns]
-
-        records = [
-            (
-                ticker,
-                row.Index.strftime('%Y-%m-%d') if hasattr(row.Index, 'strftime') else str(row.Index),
-                row.Open, row.High, row.Low, row.Close,
-                int(row.Volume) if pd.notna(row.Volume) else 0
-            )
-            for row in df.itertuples()
-        ]
+        # 確保順序與 Schema 一致，並處理 Volume 的 NaN
+        records = []
+        for index, row in df_save.iterrows():
+            date_str = str(index).split(' ')[0]
+            vol = int(row[StockCol.VOLUME]) if pd.notna(row[StockCol.VOLUME]) else 0
+            records.append((ticker, date_str, row[StockCol.OPEN], row[StockCol.HIGH], row[StockCol.LOW], row[StockCol.CLOSE], vol))
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -114,28 +100,17 @@ class DataManager:
         """將分時 K 線 DataFrame 存入 SQLite"""
         if df.empty: return
 
-        df = df.copy()
-        df.columns = [str(c).strip().capitalize() for c in df.columns]
+        df_save = df.copy()
+        df_save.columns = [str(c).strip().lower() for c in df_save.columns]
+        df_save['ticker'] = ticker
 
-        records = [
-            (
-                ticker,
-                row.Index.strftime('%Y-%m-%d %H:%M:%S') if hasattr(row.Index, 'strftime') else str(row.Index),
-                row.Open, row.High, row.Low, row.Close,
-                int(row.Volume) if pd.notna(row.Volume) else 0
-            )
-            for row in df.itertuples()
-        ]
+        df_save = df_save.reset_index()
+        df_save = df_save.rename(columns={df_save.columns[0]: 'datetime'})
+        df_save['datetime'] = df_save['datetime'].astype(str) # 保留完整時間字串
 
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.executemany('''
-                INSERT OR REPLACE INTO intraday_k_lines
-                (ticker, datetime, open, high, low, close, volume)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', records)
-            conn.commit()
-            dbg.log(f"成功儲存 {ticker} 分時 K 線資料，共 {len(records)} 筆。")
+            df_save.to_sql('intraday_k_lines', conn, if_exists='append', index=False)
+            dbg.log(f"成功儲存 {ticker} 分時 K 線資料，共 {len(df_save)} 筆。")
 
     def add_to_watchlist(self, ticker: str):
         """新增標的至自選股清單"""
@@ -146,55 +121,6 @@ class DataManager:
             ''', (ticker,))
             conn.commit()
             dbg.log(f"已將 {ticker} 加入自選清單。")
-
-    def get_daily_data(self, ticker: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        return self._fetch_data(
-            table_name='daily_k_lines', time_col='date', ticker=ticker, start_time=start_date, end_time=end_date
-        )
-
-    def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
-        return self._fetch_data(
-            table_name='intraday_k_lines', time_col='datetime', ticker=ticker, start_time=start_datetime, end_time=end_datetime
-        )
-
-    def get_aligned_market_data(self, stock_ticker: str, macro_tickers: list[str]) -> pd.DataFrame:
-        """
-        機構級數據對齊引擎
-        以個股交易日為主體 (Left Join)，將大盤數據併入，並自動處理美股時差與休市問題。
-        """
-        df_stock = self.get_daily_data(stock_ticker)
-        if df_stock.empty:
-            return df_stock
-
-        aligned_df = df_stock.copy()
-        overseas_tickers = MacroTicker.get_overseas_tickers()
-
-        for mt in macro_tickers:
-            df_macro = self.get_daily_data(mt)
-            if df_macro.empty: continue
-
-            # 加上大盤字首
-            prefix = mt.replace('^', '') + "_"
-            df_macro = df_macro.add_prefix(prefix)
-
-            if mt in overseas_tickers:
-                # 1. 將美股本身往前補值 (處理美國國定假日，確保每天都有最後收盤價)
-                # 注意：這裡不能用全宇宙日期，直接用它自己的 index 填補即可，否則會跑出未來數據
-                df_macro_ffilled = df_macro.asfreq('D', method='ffill')
-
-                # 2. 將補值後的美股資料往未來推遲一天 (模擬台灣早上看到昨晚美股收盤 T+1)
-                df_macro_shifted = df_macro_ffilled.shift(1)
-
-                # 3. 把推遲後的美股貼近台股主體 (只保留台股有開盤的日期)
-                aligned_df = aligned_df.join(df_macro_shifted, how='left')
-            else:
-                # 國內大盤 (如 TWII) 無時差，直接 Left Join
-                aligned_df = aligned_df.join(df_macro, how='left')
-
-        # 最前端因 shift(1) 產生的 NaN 會保留，交由後續特徵工程處理
-        # 這裡再補一次 ffill，確保台股遇到颱風假之類造成的 NaN 被補齊
-        aligned_df = aligned_df.ffill()
-        return aligned_df
 
     def get_watchlist(self) -> list[str]:
         """讀取使用者的自選股清單"""
@@ -212,6 +138,48 @@ class DataManager:
             conn.commit()
             dbg.log(f"已將 {ticker} 從自選清單移除。")
 
+    def get_daily_data(self, ticker: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        return self._fetch_data(
+            table_name='daily_k_lines', time_col='date', ticker=ticker, start_time=start_date, end_time=end_date
+        )
+
+    def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
+        return self._fetch_data(
+            table_name='intraday_k_lines', time_col='datetime', ticker=ticker, start_time=start_datetime, end_time=end_datetime
+        )
+
+    def get_aligned_market_data(self, stock_ticker: str, macro_tickers: list[str]) -> pd.DataFrame:
+        """
+        機構級數據對齊引擎
+        """
+        df_stock = self.get_daily_data(stock_ticker)
+        if df_stock.empty:
+            return df_stock
+
+        aligned_df = df_stock.copy()
+        overseas_tickers = MacroTicker.get_overseas_tickers()
+        macro_cols = [] # 記錄所有加入的大盤欄位
+
+        for mt in macro_tickers:
+            df_macro = self.get_daily_data(mt)
+            if df_macro.empty: continue
+
+            prefix = mt.replace('^', '') + "_"
+            df_macro = df_macro.add_prefix(prefix)
+            macro_cols.extend(df_macro.columns.tolist())
+
+            if mt in overseas_tickers:
+                df_macro_ffilled = df_macro.asfreq('D', method='ffill')
+                df_macro_shifted = df_macro_ffilled.shift(1)
+                aligned_df = aligned_df.join(df_macro_shifted, how='left')
+            else:
+                aligned_df = aligned_df.join(df_macro, how='left')
+
+        if macro_cols:
+            aligned_df[macro_cols] = aligned_df[macro_cols].ffill()
+
+        return aligned_df
+
     def _fetch_data(self, table_name: str, time_col: str, ticker: str, start_time: str = None, end_time: str = None) -> pd.DataFrame:
         query = f"SELECT * FROM {table_name} WHERE ticker = ?"
         params = [ticker]
@@ -226,16 +194,18 @@ class DataManager:
         query += f" ORDER BY {time_col}"
 
         with sqlite3.connect(self.db_path) as conn:
+            # 讓 pandas 自動解析日期，並將其設為 index
             df = pd.read_sql_query(query, conn, params=params, index_col=time_col, parse_dates=[time_col])
 
         if not df.empty:
             if StockCol.TICKER in df.columns:
                 df = df.drop(columns=[StockCol.TICKER])
 
-            if df.index.tz is not None:
-                df.index = df.index.tz_localize(None)
+            df.columns = [str(c).strip().lower() for c in df.columns]
 
             df.index = pd.to_datetime(df.index)
+            if df.index.tz is not None:
+                df.index = df.index.tz_localize(None)
 
             df = df.sort_index()
 

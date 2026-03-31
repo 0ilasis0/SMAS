@@ -6,6 +6,7 @@ from bt.blackboard import Blackboard
 from bt.const import LLMCol
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
+from data.const import TimeUnit, YfInterval
 from debug import dbg
 from ml.const import MetaCol
 from ml.engine import QuantAIEngine
@@ -122,3 +123,26 @@ class IDSSController:
             },
             "report": bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
+
+    def sync_market_data(self) -> bool:
+        """
+        供 UI 點擊「🔄 同步並載入最新資料」時觸發的唯一窗口。
+        職責：只負責輕量級的「例行更新」（抓取近期個股與大盤資料）。
+        *若市場發生股票分割，新抓入的資料會與舊資料產生斷崖，
+         隨後預測時將由底層的 Watchdog 自動偵測並觸發深度清洗。*
+        """
+        dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
+
+        try:
+            success = self.engine.update_market_data(period=YfInterval.DAILY_MARKET_YEAR, unit=TimeUnit.YEAR)
+
+            if success:
+                dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
+            else:
+                dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
+
+            return success
+
+        except Exception as e:
+            dbg.error(f"[{self.ticker}] 資料同步過程中發生未預期錯誤: {e}")
+            return False

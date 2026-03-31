@@ -1,6 +1,7 @@
 import time
 
 import pandas as pd
+import requests
 import yfinance as yf
 
 from base import MathTool
@@ -44,17 +45,22 @@ class Fetcher:
             return pd.DataFrame()
 
         df.columns = df.columns.str.lower()
-        df = df[StockCol.get_ohlcv()]
+
+        # 容錯提取：只抓取存在的欄位，缺失的補 NaN 後轉 0
+        expected_cols = StockCol.get_ohlcv()
+        df = df.reindex(columns=expected_cols).fillna(0)
+
         df.index.name = self.DAILY_INDEX
 
+        # 精準時區校正：先轉為台灣時間，再拔除標籤
         if df.index.tz is not None:
-            df.index = df.index.tz_localize(None)
+            df.index = df.index.tz_convert('Asia/Taipei').tz_localize(None)
 
         return df
 
     def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_MAX_DAY) -> pd.DataFrame:
         """
-        抓取指定標的的分時資料 (3 分鐘 K 線)。
+        抓取指定標的的分時資料 (預設 5 分鐘 K 線)。
         """
         valid_days = MathTool.clamp(days, 1, DataLimit.INTRADAY_MAX_DAY)
 
@@ -69,16 +75,19 @@ class Fetcher:
         )
 
         if df.empty:
-            dbg.war("抓取失敗或無資料")
+            dbg.war(f"[{ticker_symbol}] 分時資料抓取失敗或無資料")
             return pd.DataFrame()
 
         df.columns = df.columns.str.lower()
-        df = df[StockCol.get_ohlcv()]
+
+        expected_cols = StockCol.get_ohlcv()
+        df = df.reindex(columns=expected_cols).fillna(0)
+
         df.index.name = self.INTRADAY_INDEX
 
-        # 同步拔除時區標籤
+        # 精準時區校正
         if df.index.tz is not None:
-            df.index = df.index.tz_localize(None)
+            df.index = df.index.tz_convert('Asia/Taipei').tz_localize(None)
 
         return df
 
@@ -95,7 +104,6 @@ class Fetcher:
             except Exception as e:
                 dbg.war(f"抓取發生例外錯誤: {e} (嘗試 {attempt + 1}/{self.MAX_RETRIES})")
 
-            # 如果還沒達到最大重試次數，則等待後重試
             if attempt < self.MAX_RETRIES - 1:
                 sleep_time = self.BACKOFF_FACTOR ** attempt
                 dbg.log(f"等待 {sleep_time} 秒後重試...")

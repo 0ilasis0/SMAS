@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -6,9 +7,12 @@ class TimeUnit(StrEnum):
     MONTH = 'mo'
     DAY = 'd'
 
-class YfInterval(StrEnum):
+@dataclass(frozen=True)
+class YfInterval:
     DAILY = "1d"
     INTRADAY_5M = "2m"
+    DAILY_STORAGE_YEAR = 20
+    DAILY_MARKET_YEAR = 5
 
 
 class StockCol(StrEnum):
