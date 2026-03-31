@@ -23,7 +23,7 @@ class TradingMode(StrEnum):
 class GeminiOracle:
     """
     量化系統的 LLM 。
-    升級至最新版 google.genai SDK，實作完美隔離的 API Key Client 切換機制。
+    實作完美隔離的 API Key Client 切換機制。
     """
     FALLBACK_MODELS = [
         'models/gemini-3.1-flash-lite-preview', # 🥇 (15 RPM / 500 RPD) - 海量掃描專用

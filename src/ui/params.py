@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class IDSSParams:
-    TRAIN_MAX_TIME = 240
-    TRAIN_MIX_TIME = 60
-    TRAIN_STEP_TIME = 10
+class BacktestParams:
+    MAX_DAYS = 240
+    MIN_DAYS = 60
+    STEP_DAYS = 10

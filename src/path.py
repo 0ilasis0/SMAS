@@ -35,6 +35,7 @@ class PathConfig:
     LLM_CACHE = PathBase.processed / "llm_cache.db"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
+    WATCHLIST_FILE = PathBase.processed / "watchlist.json"
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:

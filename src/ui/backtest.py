@@ -4,7 +4,7 @@ from backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory
 from controller import IDSSController
 from path import PathConfig
-from ui.params import IDSSParams
+from ui.params import BacktestParams
 
 
 def render_backtest_tab(selected_persona):
@@ -13,7 +13,7 @@ def render_backtest_tab(selected_persona):
 
     col1, col2 = st.columns(2)
     with col1:
-        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=IDSSParams.TRAIN_MIX_TIME, max_value=IDSSParams.TRAIN_MAX_TIME, value=IDSSParams.TRAIN_MAX_TIME, step=IDSSParams.TRAIN_STEP_TIME)
+        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=BacktestParams.MIN_DAYS, max_value=BacktestParams.MAX_DAYS, value=BacktestParams.MAX_DAYS, step=BacktestParams.STEP_DAYS)
     with col2:
         asset_option = st.radio("💰 模擬資金來源", ["使用當前設定資金 (預設 200 萬)", "自訂暫時資金"])
         if asset_option == "自訂暫時資金":
@@ -28,12 +28,12 @@ def render_backtest_tab(selected_persona):
 
             # 動態喚醒「回測專用大腦」
             if st.session_state.ctrl_bt is None:
-                st.toast(f"首次啟動回測，正在載入 OOS={IDSSParams.TRAIN_MAX_TIME} 的盲測模型...", icon="⏳")
-                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=IDSSParams.TRAIN_MAX_TIME)
+                st.toast(f"首次啟動回測，正在載入 OOS={BacktestParams.MAX_DAYS} 的盲測模型...", icon="⏳")
+                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=BacktestParams.MAX_DAYS)
                 if ctrl_bt.load_system():
                     st.session_state.ctrl_bt = ctrl_bt
                 else:
-                    st.error(f"❌ 找不到 OOS={IDSSParams.TRAIN_MAX_TIME} 的回測模型，請先在後台完成訓練！")
+                    st.error(f"❌ 找不到 OOS={BacktestParams.MAX_DAYS} 的回測模型，請先在後台完成訓練！")
                     st.stop()
 
             df_bt = st.session_state.ctrl_bt.engine.generate_backtest_data()
