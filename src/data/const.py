@@ -8,7 +8,7 @@ class TimeUnit(StrEnum):
 
 class YfInterval(StrEnum):
     DAILY = "1d"
-    INTRADAY_5M = "3m"
+    INTRADAY_5M = "2m"
 
 
 class StockCol(StrEnum):

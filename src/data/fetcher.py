@@ -30,7 +30,14 @@ class Fetcher:
             return pd.DataFrame()
 
         ticker = yf.Ticker(ticker_symbol)
-        df = self._safe_fetch(ticker, period=f"{valid_period}{unit}", interval=f"{YfInterval.DAILY}")
+
+        df = self._safe_fetch(
+            ticker,
+            period=f"{valid_period}{unit}",
+            interval=f"{YfInterval.DAILY}",
+            auto_adjust=True,
+            actions=False
+        )
 
         if df.empty:
             dbg.war(f"抓取失敗或無資料: {ticker_symbol}")
@@ -39,6 +46,9 @@ class Fetcher:
         df.columns = df.columns.str.lower()
         df = df[StockCol.get_ohlcv()]
         df.index.name = self.DAILY_INDEX
+
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
 
         return df
 
@@ -49,7 +59,14 @@ class Fetcher:
         valid_days = MathTool.clamp(days, 1, DataLimit.INTRADAY_MAX_DAY)
 
         ticker = yf.Ticker(ticker_symbol)
-        df = self._safe_fetch(ticker, period=f"{valid_days}{TimeUnit.DAY}", interval=f"{YfInterval.INTRADAY_5M}")
+
+        df = self._safe_fetch(
+            ticker,
+            period=f"{valid_days}{TimeUnit.DAY}",
+            interval=f"{YfInterval.INTRADAY_5M}",
+            auto_adjust=True,
+            actions=False
+        )
 
         if df.empty:
             dbg.war("抓取失敗或無資料")
@@ -59,9 +76,12 @@ class Fetcher:
         df = df[StockCol.get_ohlcv()]
         df.index.name = self.INTRADAY_INDEX
 
+        # 同步拔除時區標籤
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+
         return df
 
-    # para: kwargs -> period, interval
     def _safe_fetch(self, ticker: yf.Ticker, **kwargs) -> pd.DataFrame:
         """
         核心抓取引擎：內建 Exponential Backoff (指數退避) 重試機制
