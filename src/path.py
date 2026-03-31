@@ -31,12 +31,13 @@ class PathBase:
 @dataclass(frozen = True)
 class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
+    WATCHLIST = PathBase.processed / "watchlist.json"
+    SETTINGS = PathBase.processed / "settings.json"
+    PORTFOLIO = PathBase.processed / "portfolio.json"
     IDSS_DATA = PathBase.processed / "idss_data.db"
     LLM_CACHE = PathBase.processed / "llm_cache.db"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
-    WATCHLIST = PathBase.processed / "watchlist.json"
-    SETTINGS = PathBase.processed / "settings.json"
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:

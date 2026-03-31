@@ -1,5 +1,7 @@
 import streamlit as st
+
 from bt.const import DecisionAction
+
 
 def render_report(result: dict):
     """將戰報渲染邏輯獨立，保持主程式乾淨"""
@@ -48,7 +50,7 @@ def render_report(result: dict):
 
     st.markdown("### 📰 Gemini 新聞情緒")
     score = result['sentiment']['score']
-    sentiment_color = "red" if score >= 7 else "green" if score <= 3 else "orange"
+    sentiment_color = "red" if score >= 7 else Color.GREEN if score <= 3 else Color.ORANGE
     st.info(f"**情緒分數：:{sentiment_color}[{score} / 10]** \n\n**判讀理由：** {result['sentiment']['reason']}")
 
     st.markdown("### 🤖 總裁戰報")

@@ -13,7 +13,7 @@ from google.genai.errors import APIError
 
 from debug import dbg
 from path import PathConfig
-from ui.const import FontConst
+from ui.const import EncodingConst
 
 
 class TradingMode(StrEnum):
@@ -58,7 +58,7 @@ class GeminiOracle:
 
     def _get_payload_hash(self, ticker: str, news_text: str) -> str:
         payload = f"{ticker}_{news_text}"
-        return hashlib.md5(payload.encode(FontConst.STD_FONT)).hexdigest()
+        return hashlib.md5(payload.encode(EncodingConst.STD_FONT)).hexdigest()
 
     def fetch_recent_news(self, ticker: str) -> str:
         """

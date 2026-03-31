@@ -4,13 +4,14 @@ import os
 import streamlit as st
 
 from path import PathConfig
-from ui.const import FontConst
+from ui.const import EncodingConst, Page
+from ui.portfolio import load_portfolio
 
 
 def load_settings() -> dict:
     if os.path.exists(PathConfig.SETTINGS):
         try:
-            with open(PathConfig.SETTINGS, 'r', encoding=FontConst.STD_FONT) as f:
+            with open(PathConfig.SETTINGS, 'r', encoding=EncodingConst.STD_FONT) as f:
                 return json.load(f)
         except Exception:
             pass
@@ -18,14 +19,14 @@ def load_settings() -> dict:
 
 def save_settings(persona: str, mode: str):
     os.makedirs(os.path.dirname(PathConfig.SETTINGS), exist_ok=True)
-    with open(PathConfig.SETTINGS,  'w', encoding=FontConst.STD_FONT) as f:
+    with open(PathConfig.SETTINGS,  'w', encoding=EncodingConst.STD_FONT) as f:
         json.dump({"persona": persona, "mode": mode}, f, ensure_ascii=False, indent=4)
 
 def load_watchlist() -> list:
     """從本地讀取自選股記憶，若無則回傳預設值"""
     if os.path.exists(PathConfig.WATCHLIST):
         try:
-            with open(PathConfig.WATCHLIST, 'r', encoding=FontConst.STD_FONT) as f:
+            with open(PathConfig.WATCHLIST, 'r', encoding=EncodingConst.STD_FONT) as f:
                 return json.load(f)
         except Exception:
             pass
@@ -35,7 +36,7 @@ def save_watchlist(watchlist: list):
     """將自選股狀態寫入本地硬碟保存"""
     # 確保資料夾存在
     os.makedirs(os.path.dirname(PathConfig.WATCHLIST), exist_ok=True)
-    with open(PathConfig.WATCHLIST, 'w', encoding=FontConst.STD_FONT) as f:
+    with open(PathConfig.WATCHLIST, 'w', encoding=EncodingConst.STD_FONT) as f:
         json.dump(watchlist, f, ensure_ascii=False, indent=4)
 
 def reset_result():
@@ -59,6 +60,10 @@ def init_session_state():
 
     if 'user_settings' not in st.session_state:
         st.session_state.user_settings = load_settings()
+    if 'portfolio' not in st.session_state:
+        st.session_state.portfolio = load_portfolio()
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = Page.DASHBOARD
 
     if 'ctrl_live' not in st.session_state:
         st.session_state.ctrl_live = None

@@ -1,0 +1,13 @@
+{
+    "global_cash": 200000.0,
+    "positions": {
+        "2330.TW": {
+            "shares": 0,
+            "avg_cost": 0.0
+        },
+        "2603.TW": {
+            "shares": 2000,
+            "avg_cost": 150.0
+        }
+    }
+}

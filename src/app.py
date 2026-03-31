@@ -4,7 +4,9 @@ from controller import IDSSController
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
+from ui.const import Page, PortfolioCol
 from ui.params import BacktestParams
+from ui.portfolio import render_portfolio_page
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
@@ -56,7 +58,7 @@ def main():
         st.warning("👈 請先從左側邊欄新增並選擇一檔股票！")
         st.stop()
 
-    # 🚀 如果使用者按下了「強制重訓」，狀態會是 True，直接進入訓練管線
+    # 如果使用者按下了「強制重訓」，狀態會是 True，直接進入訓練管線
     if st.session_state.get('is_training', False):
         run_mlops_pipeline(st.session_state.current_ticker)
 
@@ -75,41 +77,58 @@ def main():
                 st.rerun()
             st.stop()
 
-    # 4. 主畫面排版
-    st.title(f"📊 IDSS 決策大廳 - {st.session_state.current_ticker}")
+    # 取得最新資金與部位資料
+    pf = st.session_state.portfolio
+    global_cash = pf.get(PortfolioCol.GLOBAL_CASH, 0.0)
+    pos_data = pf[PortfolioCol.POSITIONS].get(st.session_state.current_ticker, {PortfolioCol.SHARES: 0, PortfolioCol.AVG_COST: 0.0})
+    my_shares = pos_data.get(PortfolioCol.SHARES, 0)
+    my_avg_cost = pos_data.get(PortfolioCol.AVG_COST, 0.0)
+
+    # ==========================================
+    # 頁面路由系統 (Router)
+    # ==========================================
     st.markdown("---")
 
-    c1, c2, c3 = st.columns(3)
-    c1.metric("💰 總淨值 (預覽)", "2,000,000")
-    c2.metric("💵 可用現金 (預覽)", "2,000,000")
-    c3.metric("📂 持股市值 (預覽)", "0")
-    st.markdown("---")
+    if st.session_state.current_page == Page.PORTFOLIO: # ✨ 使用 Enum
+        # 進入資產管理頁面
+        db_manager = st.session_state.ctrl_live.engine.db if st.session_state.ctrl_live else None
+        render_portfolio_page(db_manager)
 
-    # 渲染圖表
-    render_chart()
+    else:
+        # 進入 IDSS 決策大廳
+        if st.session_state.current_ticker is None:
+            st.warning("👈 請先從左側邊欄新增並選擇一檔股票！")
+            st.stop()
 
-    # 5. 分頁渲染
-    tab1, tab2 = st.tabs(["🎯 今日行動指令", "⏱️ IDSS 歷史回測模擬"])
+        st.title(f"📊 IDSS 決策大廳 - {st.session_state.current_ticker}")
+        st.markdown("---")
 
-    with tab1:
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True):
-            with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
-                result = st.session_state.ctrl_live.execute_decision(
-                    current_cash=2000000.0,
-                    current_position=0,
-                    avg_cost=0.0,
-                    persona=selected_persona,
-                    mode=selected_mode
-                )
-                st.session_state.last_result = result
+        render_chart()
 
-        if st.session_state.last_result is not None:
-            render_report(st.session_state.last_result)
+        tab1, tab2 = st.tabs(["🎯 今日行動指令", "⏱️ IDSS 歷史回測模擬"])
 
-    with tab2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        render_backtest_tab(selected_persona)
+        with tab1:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=st.session_state.is_training):
+                with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
+                    # 這裡也要替換掉魔法字串
+                    result = st.session_state.ctrl_live.execute_decision(
+                        current_cash=global_cash,
+                        current_position=my_shares,
+                        avg_cost=my_avg_cost,
+                        persona=selected_persona,
+                        mode=selected_mode
+                    )
+                    st.session_state.last_result = result
+
+            if st.session_state.last_result is not None:
+                render_report(st.session_state.last_result)
+
+        with tab2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            render_backtest_tab(selected_persona)
+
+
 
 if __name__ == "__main__":
     st.set_page_config(page_title="IDSS 量化交易終端", page_icon="📈", layout="wide")

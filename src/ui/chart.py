@@ -1,7 +1,10 @@
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+
+from const import Color
 from data.const import StockCol
+
 
 @st.cache_data(ttl=3600)
 def get_cached_market_data(ticker: str):
@@ -26,8 +29,8 @@ def render_chart():
                                              high=df_recent[StockCol.HIGH],
                                              low=df_recent[StockCol.LOW],
                                              close=df_recent[StockCol.CLOSE],
-                                             increasing_line_color='red',
-                                             decreasing_line_color='green',
+                                             increasing_line_color=Color.RED,
+                                             decreasing_line_color=Color.GREEN,
                                              name='K線'))
 
                 ma5 = df_recent[StockCol.CLOSE].rolling(window=5).mean().bfill()
@@ -35,10 +38,10 @@ def render_chart():
                 ma60 = df_recent[StockCol.CLOSE].rolling(window=60).mean().bfill()
                 ma240 = df_recent[StockCol.CLOSE].rolling(window=240).mean().bfill()
 
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color='orange', width=1.5), name='5MA(週線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color='purple', width=1.5), name='20MA(月線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color='blue', width=1.5), name='60MA(季線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color='black', width=1.5), name='240MA(年線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE, width=1.5), name='5MA(週線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE, width=1.5), name='20MA(月線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE, width=1.5), name='60MA(季線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE, width=1.5), name='240MA(年線)'))
 
                 all_dates = pd.date_range(start=df_recent.index.min(), end=df_recent.index.max())
                 missing_dates = all_dates.difference(df_recent.index)

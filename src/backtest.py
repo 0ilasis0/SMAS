@@ -11,6 +11,7 @@ from bt.blackboard import Blackboard
 from bt.const import BtVar, DecisionAction
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, StrategyConfig, TradingPersona
+from const import Color
 from data.const import StockCol
 from debug import dbg
 from ml.const import FeatureCol, MetaCol
@@ -190,15 +191,15 @@ class BacktestEngine:
 
         # 第一層：資金曲線與回撤
         ax1 = plt.subplot(3, 1, 1)
-        ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color='blue', linewidth=2)
+        ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color=Color.BLUE, linewidth=2)
         ax1.set_title(f'IDSS Quant Strategy Dashboard - {self.bb.ticker}', fontsize=14, fontweight='bold')
         ax1.set_ylabel('Total Equity (NTD)')
         ax1.grid(True, alpha=0.3)
 
         ax1_dd = ax1.twinx()
-        ax1_dd.fill_between(df_res.index, df_res['Drawdown'], 0, color='red', alpha=0.2, label='Drawdown')
-        ax1_dd.set_ylabel('Drawdown (%)', color='red')
-        ax1_dd.tick_params(axis='y', labelcolor='red')
+        ax1_dd.fill_between(df_res.index, df_res['Drawdown'], 0, color=Color.RED, alpha=0.2, label='Drawdown')
+        ax1_dd.set_ylabel('Drawdown (%)', color=Color.RED)
+        ax1_dd.tick_params(axis='y', labelcolor=Color.RED)
 
         lines_1, labels_1 = ax1.get_legend_handles_labels()
         lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
@@ -209,22 +210,22 @@ class BacktestEngine:
         ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color='gray', alpha=0.7)
         buys = df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY]
         sells = df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL]
-        ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color='green', s=100, label='Buy', zorder=5)
-        ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color='red', s=100, label='Sell', zorder=5)
+        ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color=Color.GREEN, s=100, label='Buy', zorder=5)
+        ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color=Color.RED, s=100, label='Sell', zorder=5)
         ax2.set_ylabel('Stock Price')
         ax2.grid(True, alpha=0.3)
         ax2.legend(loc='upper left')
 
         # 第三層：AI 勝率與大盤防禦雷達
         ax3 = plt.subplot(3, 1, 3, sharex=ax1)
-        ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color='orange', linewidth=1.5)
-        ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color='purple', linestyle='--', linewidth=1.5)
-        ax3.axhline(y=0.5, color='red', linestyle=':', alpha=0.5, label='50% Threshold')
+        ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
+        ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
+        ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
 
         ax3.fill_between(
             df_res.index, 0, 1,
             where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
-            color='red', alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
+            color=Color.RED, alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
         )
 
         ax3.set_ylabel('Probability')
