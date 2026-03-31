@@ -1,13 +1,77 @@
 {
-    "global_cash": 200000.0,
+    "global_cash": 103366.0,
     "positions": {
         "2330.TW": {
-            "shares": 0,
-            "avg_cost": 0.0
+            "shares": 1000,
+            "avg_cost": 176.25,
+            "history": [
+                {
+                    "date": "2026-03-31 22:35:23",
+                    "action": "BUY",
+                    "price": 176.0,
+                    "shares": 1000,
+                    "fee": 250,
+                    "tax": 0,
+                    "total": 176250.0
+                }
+            ]
         },
         "2603.TW": {
-            "shares": 2000,
-            "avg_cost": 150.0
+            "shares": 0,
+            "avg_cost": 0.0,
+            "history": [
+                {
+                    "date": "2026-03-31 22:34:43",
+                    "action": "BUY",
+                    "price": 199.5,
+                    "shares": 1000,
+                    "fee": 284,
+                    "tax": 0,
+                    "total": 199784.0
+                },
+                {
+                    "date": "2026-03-31 22:35:01",
+                    "action": "SELL",
+                    "price": 200.0,
+                    "shares": 1000,
+                    "fee": 285,
+                    "tax": 600,
+                    "total": 199115.0
+                },
+                {
+                    "date": "2026-03-31 22:35:11",
+                    "action": "SELL",
+                    "price": 199.5,
+                    "shares": 2000,
+                    "fee": 568,
+                    "tax": 1197,
+                    "total": 397235.0
+                }
+            ]
+        },
+        "2337.TW": {
+            "shares": 3000,
+            "avg_cost": 105.65,
+            "history": [
+                {
+                    "date": "2026-03-31 22:35:32",
+                    "action": "BUY",
+                    "price": 115.5,
+                    "shares": 1000,
+                    "fee": 164,
+                    "tax": 0,
+                    "total": 115664.0
+                },
+                {
+                    "date": "2026-03-31 22:35:47",
+                    "action": "BUY",
+                    "price": 100.5,
+                    "shares": 2000,
+                    "fee": 286,
+                    "tax": 0,
+                    "total": 201286.0
+                }
+            ]
         }
     }
 }
