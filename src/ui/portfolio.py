@@ -9,6 +9,7 @@ from bt.params import TaxRate
 from data.const import StockCol
 from path import PathConfig
 from ui.const import EncodingConst, PortfolioCol
+from ui.stock_names import get_tw_stock_mapping
 
 
 # ==========================================
@@ -155,10 +156,10 @@ def history_dialog(ticker: str):
 # 3. 交易引擎：彈出式手動買賣視窗
 # ==========================================
 @st.dialog("⚖️ 新增交易", width="large")
-def trade_dialog(db_manager, prefill_ticker: str = ""):
+def trade_dialog(db_manager, prefill_ticker: str = "", prefill_action: str = None, prefill_price: float = None, prefill_shares: int = None):
     pf = st.session_state.portfolio
 
-    raw_ticker = st.text_input("🔍 股票代號 (輸入後按 Enter 抓取現價)", value=prefill_ticker, placeholder="例如: 2337.TW")
+    raw_ticker = st.text_input("🔍 股票代號 (輸入後按 Enter 抓取現價)", value=prefill_ticker, placeholder="例如: 2330.TW")
     if not raw_ticker: return
 
     ticker = raw_ticker.strip().upper()
@@ -173,8 +174,11 @@ def trade_dialog(db_manager, prefill_ticker: str = ""):
     current_shares = pos_data[PortfolioCol.SHARES]
     current_avg_cost = pos_data[PortfolioCol.AVG_COST]
 
+    # 🚀 動態抓取股價邏輯升級：若 AI 有傳入預期觸價，優先使用 AI 的價格
     fetched_price = current_avg_cost if current_avg_cost > 0 else 10.0
-    if db_manager:
+    if prefill_price is not None and prefill_price > 0:
+        fetched_price = float(prefill_price)
+    elif db_manager:
         try:
             df = db_manager.get_daily_data(ticker)
             if not df.empty:
@@ -182,28 +186,39 @@ def trade_dialog(db_manager, prefill_ticker: str = ""):
         except Exception:
             pass
 
-    # 只顯示構成「當前均價」的買進批次
     st.markdown("---")
     active_buys = get_active_buys(pos_data[PortfolioCol.HISTORY])
     if active_buys and current_shares > 0:
         st.caption(f"💡 目前持股均價 **${current_avg_cost:.2f}** 的構成批次 (有效買進明細)：")
         df_buys = pd.DataFrame(active_buys)
         df_buys = df_buys[["date", "price", "shares", "total"]]
-        df_buys.columns = ["買進時間", "買進單價", "股數", "含稅總成本"]
+        df_buys.columns = ["買進時間", "買進單價", "股數", "含費總成本"]
         st.dataframe(df_buys, use_container_width=True, hide_index=True)
     elif current_shares <= 0:
         st.info("目前無庫存。")
 
     st.markdown("---")
 
-    action = st.radio("交易動作", ["🟢 買進 (BUY)", "🔴 賣出 (SELL)"], horizontal=True)
+    # 🚀 自動切換買賣按鈕狀態
+    default_action_idx = 0
+    if prefill_action == "SELL":
+        default_action_idx = 1
+
+    action = st.radio("交易動作", ["🟢 買進 (BUY)", "🔴 賣出 (SELL)"], index=default_action_idx, horizontal=True)
     is_buy = action.startswith("🟢")
 
     col1, col2 = st.columns(2)
     with col1:
         trade_price = st.number_input("成交單價 (元)", min_value=0.01, value=fetched_price, step=0.5, format="%.2f")
     with col2:
-        trade_shares = st.number_input("成交股數 (股)", min_value=1, value=1000, step=1000)
+        # 🚀 載入 AI 建議的股數，並加上防呆 (若建議賣出但庫存不足，自動降至庫存最大值)
+        default_shares = prefill_shares if prefill_shares is not None else 1000
+        if default_shares <= 0:
+            default_shares = 1000
+        if not is_buy and default_shares > current_shares and current_shares > 0:
+            default_shares = current_shares
+
+        trade_shares = st.number_input("成交股數 (股)", min_value=1, value=int(default_shares), step=1000)
 
     base_amount = trade_price * trade_shares
     fee = int(max(TaxRate.MIN_FEE, base_amount * TaxRate.FEE_RATE))
@@ -339,6 +354,7 @@ def render_portfolio_page(db_manager=None):
     hc6.markdown("**操作**")
     st.divider()
 
+    name_map = get_tw_stock_mapping()
     for ticker in sorted(active_positions.keys()):
         pos_data = active_positions[ticker]
         shares = pos_data[PortfolioCol.SHARES]
@@ -352,8 +368,12 @@ def render_portfolio_page(db_manager=None):
 
         pnl_color = "#00cc66" if pnl >= 0 else "#ff4b4b"
         pnl_text = f"<span style='color: {pnl_color}; font-weight: bold;'>${pnl:,.0f} ({pnl_pct:.2%})</span>"
+        ch_name = name_map.get(ticker, "")
 
         rc1, rc2, rc3, rc4, rc5, rc6 = st.columns([2, 1.5, 1.5, 2, 2, 2])
+
+        rc1.markdown(f"**{ticker}** <br> <span style='font-size:0.85em; color:gray;'>{ch_name}</span>", unsafe_allow_html=True)
+        rc2.markdown(f"{shares:,}")
         rc1.markdown(f"**{ticker}**")
         rc2.markdown(f"{shares:,}")
         rc3.markdown(f"${avg_cost:,.2f}")

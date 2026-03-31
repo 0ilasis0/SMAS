@@ -5,11 +5,14 @@ from ml.model.llm_oracle import TradingMode
 from ui.const import Page
 from ui.state import (on_ticker_change, reset_result, save_settings,
                       save_watchlist)
+from ui.stock_names import get_tw_stock_mapping
 
 
 def render_sidebar() -> tuple[TradingPersona, TradingMode]:
     # 讀取當前的鎖定狀態
     is_locked = st.session_state.get('is_training', False)
+
+    name_map = get_tw_stock_mapping()
 
     with st.sidebar:
         st.title("⚙️ IDSS 控制台")
@@ -58,10 +61,12 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                     c1, c2 = st.columns([5, 1])
                     is_current = (ticker == st.session_state.current_ticker)
 
+                    # 從字典中查出中文名稱，查不到就留白
+                    ch_name = name_map.get(ticker, "")
+
                     with c1:
-                        btn_label = f"🟢 {ticker}" if is_current else ticker
-                        # 鎖定狀態或已選中時不可點擊
-                        if st.button(btn_label, key=f"btn_{ticker}", use_container_width=True, disabled=is_current or is_locked):
+                        display_text = f"🟢 {ticker} {ch_name}" if is_current else f"{ticker} {ch_name}"
+                        if st.button(display_text, key=f"btn_{ticker}", use_container_width=True, disabled=is_current or is_locked):
                             on_ticker_change(ticker)
                             st.rerun()
                     with c2:

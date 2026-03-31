@@ -6,7 +6,7 @@ from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
 from ui.const import Page, PortfolioCol
 from ui.params import BacktestParams
-from ui.portfolio import render_portfolio_page
+from ui.portfolio import render_portfolio_page, trade_dialog
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
@@ -111,7 +111,7 @@ def main():
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=st.session_state.is_training):
                 with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
-                    # 這裡也要替換掉魔法字串
+
                     result = st.session_state.ctrl_live.execute_decision(
                         current_cash=global_cash,
                         current_position=my_shares,
@@ -123,6 +123,33 @@ def main():
 
             if st.session_state.last_result is not None:
                 render_report(st.session_state.last_result)
+
+                # ==========================================
+                # AI 決策與真實帳房的「一鍵執行橋樑」
+                # ==========================================
+                decision = st.session_state.last_result.get("decision", {})
+                action = decision.get("action", "HOLD")
+
+                # 只有當 AI 建議 BUY 或 SELL 的時候，才顯示執行按鈕
+                if action in ["BUY", "SELL"]:
+                    st.markdown("---")
+
+                    # 動態改變按鈕顏色與文字
+                    btn_icon = "🛒" if action == "BUY" else "💸"
+                    btn_text = f"{btn_icon} 採納 AI 建議，立即執行 {action} 交易"
+
+                    if st.button(btn_text, type="primary", use_container_width=True, disabled=st.session_state.is_training):
+                        # 取得資料庫實例以供彈窗備用
+                        db_mgr = st.session_state.ctrl_live.engine.db if st.session_state.ctrl_live else None
+
+                        # 呼叫彈窗，並將 AI 的心血結晶 (動作、價格、股數) 直接灌進去
+                        trade_dialog(
+                            db_manager=db_mgr,
+                            prefill_ticker=st.session_state.current_ticker,
+                            prefill_action=action,
+                            prefill_price=decision.get("trade_price", 0.0),
+                            prefill_shares=decision.get("trade_shares", 0)
+                        )
 
         with tab2:
             st.markdown("<br>", unsafe_allow_html=True)

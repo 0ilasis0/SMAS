@@ -14,7 +14,7 @@ def get_cached_market_data(ticker: str):
 
 def render_chart():
     """渲染中央 K 線圖 (支援動態縮放、全中文月份、無縫接合斷點)"""
-    with st.expander("📉 近期走勢圖 (預設顯示近 1 年，可自由縮放檢視歷史)", expanded=True):
+    with st.expander("📉 近期走勢圖 (顯示近 3 年)", expanded=True):
         try:
             ctrl = st.session_state.ctrl_live
             if not ctrl: return
