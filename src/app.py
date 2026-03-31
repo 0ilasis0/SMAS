@@ -65,7 +65,7 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
         return persona_mapping[selected_persona_str], mode_mapping[selected_mode_str]
 
-@st.cache_data(ttl=3600) # 快取 1 小時，避免頻繁戳資料庫
+@st.cache_data(ttl=3600)
 def get_cached_market_data(ticker: str):
     # 這裡必須在函數內實例化或傳入 db，避免 thread 問題
     from data.manager import DataManager
@@ -164,6 +164,10 @@ def render_chart():
 
 def render_report(result: dict):
     """將戰報渲染邏輯獨立，保持主程式乾淨"""
+    if result.get("status") != "success":
+        st.error(f"❌ 發生錯誤: {result.get('message', '未知錯誤')}")
+        return
+
     st.success(f"決策生成完畢！(目標日期: {result.get('date', '未知')})")
 
     action = result["decision"]["action"]
@@ -222,7 +226,7 @@ def render_report(result: dict):
 def main():
     # 初始化狀態
     if 'watch_list' not in st.session_state:
-        st.session_state.watch_list = ["2330.TW", "2388.TW", "5469.TW", "2337.TW"]
+        st.session_state.watch_list = ["00631L.TW", "2330.TW", "2388.TW", "5469.TW", "2337.TW"]
     if 'current_ticker' not in st.session_state:
         st.session_state.current_ticker = st.session_state.watch_list[0]
     if 'controller' not in st.session_state:
