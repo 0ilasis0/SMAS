@@ -18,11 +18,15 @@ class IDSSController:
     IDSS 系統的 UI 介接控制器 (API Endpoint)。
     負責管理引擎生命週期、接收真實帳戶狀態、並回傳結構化的決策報告。
     """
-    def __init__(self, ticker: str):
+    def __init__(self, ticker: str, oos_days: int):
         self.ticker = ticker
         self.api_keys = KeyManager.get_gemini_keys()
         # 實例化底層 AI 引擎
-        self.engine: QuantAIEngine = QuantAIEngine(ticker=self.ticker, api_keys=self.api_keys)
+        self.engine: QuantAIEngine = QuantAIEngine(
+            ticker=self.ticker,
+            oos_days=oos_days,
+            api_keys=self.api_keys
+        )
         self.is_ready = False
 
     def load_system(self) -> bool:

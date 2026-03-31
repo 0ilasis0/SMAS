@@ -5,6 +5,7 @@ import streamlit as st
 from backtest import BacktestEngine
 from bt.const import DecisionAction
 from bt.strategy_config import PersonaFactory, TradingPersona
+from const import IDSSTrain
 from controller import IDSSController
 from data.const import StockCol
 from ml.model.llm_oracle import TradingMode
@@ -19,7 +20,8 @@ def reset_result():
 
 def on_ticker_change():
     st.session_state.current_ticker = st.session_state.new_ticker
-    st.session_state.controller = None
+    st.session_state.ctrl_live = None
+    st.session_state.ctrl_bt = None
     reset_result()
 
 # ==========================================
@@ -78,9 +80,7 @@ def render_chart():
     """渲染中央 K 線圖 (支援動態縮放、全中文月份、無縫接合斷點)"""
     with st.expander("📉 近期走勢圖 (預設顯示近 1 年，可自由縮放檢視歷史)", expanded=True):
         try:
-            ctrl = st.session_state.controller
-
-            # 抓取近 3 年的資料，讓年線算得出來，且有足夠歷史可回顧
+            ctrl = st.session_state.ctrl_live
             df_recent = ctrl.engine.db.get_aligned_market_data(st.session_state.current_ticker, []).tail(720)
 
             if not df_recent.empty:
@@ -173,7 +173,7 @@ def render_backtest_tab(selected_persona):
 
     col1, col2 = st.columns(2)
     with col1:
-        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=60, max_value=240, value=240, step=10)
+        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=IDSSTrain.MIX_TIME, max_value=IDSSTrain.MAX_TIME, value=IDSSTrain.MAX_TIME, step=IDSSTrain.STEP_TIME)
     with col2:
         asset_option = st.radio("💰 模擬資金來源", ["使用當前設定資金 (預設 200 萬)", "自訂暫時資金"])
         if asset_option == "自訂暫時資金":
@@ -185,26 +185,28 @@ def render_backtest_tab(selected_persona):
 
     if st.button("🚀 啟動 IDSS 歷史回測", type="primary", use_container_width=True):
         with st.spinner(f"正在擷取近 {test_days} 天 AI 預測勝率，並進行沙盤推演..."):
-            ctrl = st.session_state.controller
-            df_bt = ctrl.engine.generate_backtest_data()
+            if st.session_state.ctrl_bt is None:
+                st.toast(f"首次啟動回測，正在載入 OOS={IDSSTrain.MAX_TIME} 的盲測模型...", icon="⏳")
+                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=IDSSTrain.MAX_TIME)
+                if ctrl_bt.load_system():
+                    st.session_state.ctrl_bt = ctrl_bt
+                else:
+                    st.error(f"❌ 找不到 OOS={IDSSTrain.MAX_TIME} 的回測模型，請先在後台完成訓練！")
+                    st.stop()
+
+            df_bt = st.session_state.ctrl_bt.engine.generate_backtest_data()
 
             if not df_bt.empty:
                 df_test = df_bt.tail(test_days)
                 strategy_config = PersonaFactory.get_config(selected_persona)
-                strategy_config.enable_llm_oracle = False # 回測強制關閉 LLM 防爆流量
+                strategy_config.enable_llm_oracle = False
 
-                # 執行回測並接住數據！
                 bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=st.session_state.current_ticker, strategy=strategy_config)
-
-                # 🚀 接住從 backtest.py 吐出來的績效字典
                 stats = bt_engine.run(df_test)
 
                 if stats:
                     st.success(f"✅ {test_days} 天歷史回測推演完成！")
 
-                    # ==========================================
-                    # 🚀 升級：動態渲染 8 宮格 KPI 績效看板
-                    # ==========================================
                     st.markdown("### 🏆 IDSS 策略績效總覽")
 
                     # 第一排數據
@@ -300,7 +302,7 @@ def render_report(result: dict):
 def main():
     # 初始化狀態
     if 'watch_list' not in st.session_state:
-        st.session_state.watch_list = ["3481.TW", "2388.TW", "5469.TW", "2337.TW"]
+        st.session_state.watch_list = ["3481.TW", "00631L.TW", "2388.TW", "5469.TW", "2337.TW"]
     if 'current_ticker' not in st.session_state:
         st.session_state.current_ticker = st.session_state.watch_list[0]
     if 'controller' not in st.session_state:
@@ -308,16 +310,24 @@ def main():
     if 'last_result' not in st.session_state:
         st.session_state.last_result = None
 
+    if 'ctrl_live' not in st.session_state:
+        st.session_state.ctrl_live = None
+    if 'ctrl_bt' not in st.session_state:
+        st.session_state.ctrl_bt = None
+
+    if 'last_result' not in st.session_state:
+        st.session_state.last_result = None
+
     # 渲染側邊欄並取得設定
     selected_persona, selected_mode = render_sidebar()
 
     # 確保引擎載入
-    if st.session_state.controller is None:
-        with st.spinner(f"正在喚醒 {st.session_state.current_ticker} 的 AI 模型與神經網路權重..."):
-            ctrl = IDSSController(ticker=st.session_state.current_ticker)
+    if st.session_state.ctrl_live is None:
+        with st.spinner(f"正在喚醒 {st.session_state.current_ticker} 的最新實盤模型 (OOS=0)..."):
+            ctrl = IDSSController(ticker=st.session_state.current_ticker, oos_days=0)
             if ctrl.load_system():
-                st.session_state.controller = ctrl
-                st.toast(f"{st.session_state.current_ticker} 引擎上線就緒！", icon="🟢")
+                st.session_state.ctrl_live = ctrl
+                st.toast(f"{st.session_state.current_ticker} 實盤引擎就緒！", icon="🟢")
             else:
                 st.error("❌ 模型載入失敗，請確認該標的已經過訓練或資料完整。")
                 st.stop()
@@ -339,10 +349,9 @@ def main():
     # 執行按鈕
     with tab1:
         st.markdown("<br>", unsafe_allow_html=True)
-        # 執行按鈕
         if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True):
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
-                result = st.session_state.controller.execute_decision(
+                result = st.session_state.ctrl_live.execute_decision(
                     current_cash=2000000.0,
                     current_position=0,
                     avg_cost=0.0,

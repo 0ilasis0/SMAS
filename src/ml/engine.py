@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import torch
 
-from data.const import MacroTicker, StockCol, TimeUnit, YfInterval
+from data.const import MacroTicker, StockCol, TimeUnit
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
