@@ -6,7 +6,7 @@ class GlobalVar:
 
 
 @dataclass(frozen=True)
-class IDSSTrain:
-    MAX_TIME = 240
-    MIX_TIME = 60
-    STEP_TIME = 10
+class IDSSParams:
+    TEST_MAX_TIME = 240
+    TEST_MIX_TIME = 60
+    TEST_STEP_TIME = 10

@@ -5,7 +5,7 @@ import streamlit as st
 from backtest import BacktestEngine
 from bt.const import DecisionAction
 from bt.strategy_config import PersonaFactory, TradingPersona
-from const import IDSSTrain
+from const import IDSSParams
 from controller import IDSSController
 from data.const import StockCol
 from ml.model.llm_oracle import TradingMode
@@ -173,7 +173,7 @@ def render_backtest_tab(selected_persona):
 
     col1, col2 = st.columns(2)
     with col1:
-        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=IDSSTrain.MIX_TIME, max_value=IDSSTrain.MAX_TIME, value=IDSSTrain.MAX_TIME, step=IDSSTrain.STEP_TIME)
+        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=IDSSParams.TEST_MIX_TIME, max_value=IDSSParams.TEST_MAX_TIME, value=IDSSParams.TEST_MAX_TIME, step=IDSSParams.TEST_STEP_TIME)
     with col2:
         asset_option = st.radio("💰 模擬資金來源", ["使用當前設定資金 (預設 200 萬)", "自訂暫時資金"])
         if asset_option == "自訂暫時資金":
@@ -186,12 +186,12 @@ def render_backtest_tab(selected_persona):
     if st.button("🚀 啟動 IDSS 歷史回測", type="primary", use_container_width=True):
         with st.spinner(f"正在擷取近 {test_days} 天 AI 預測勝率，並進行沙盤推演..."):
             if st.session_state.ctrl_bt is None:
-                st.toast(f"首次啟動回測，正在載入 OOS={IDSSTrain.MAX_TIME} 的盲測模型...", icon="⏳")
-                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=IDSSTrain.MAX_TIME)
+                st.toast(f"首次啟動回測，正在載入 OOS={IDSSParams.TEST_MAX_TIME} 的盲測模型...", icon="⏳")
+                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=IDSSParams.TEST_MAX_TIME)
                 if ctrl_bt.load_system():
                     st.session_state.ctrl_bt = ctrl_bt
                 else:
-                    st.error(f"❌ 找不到 OOS={IDSSTrain.MAX_TIME} 的回測模型，請先在後台完成訓練！")
+                    st.error(f"❌ 找不到 OOS={IDSSParams.TEST_MAX_TIME} 的回測模型，請先在後台完成訓練！")
                     st.stop()
 
             df_bt = st.session_state.ctrl_bt.engine.generate_backtest_data()
