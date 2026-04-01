@@ -197,19 +197,13 @@ class IDSSController:
 
             bb.last_trade_price = trade_price
 
-        # AI 寫報告
-        original_pricing_text = getattr(bb, 'gemini_reasoning', '')
         if should_run_llm:
             dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
-            bb.oracle = self.engine.oracle # 綁定大腦
+            bb.oracle = self.engine.oracle
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
 
-            # 讓 AI 寫報告 (執行完這行，bb.gemini_reasoning 會被徹底覆寫成 AI 的戰報)
+            # 讓 AI 寫報告
             report_node.tick(bb)
-
-            # 把 AI 的戰報與原本的「智慧定價字串」疊合起來！
-            if original_pricing_text:
-                bb.gemini_reasoning = bb.gemini_reasoning + "\n\n" + original_pricing_text
 
         # 免責聲明
         bb.gemini_reasoning += "\n\n---\n⚠️ **【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
