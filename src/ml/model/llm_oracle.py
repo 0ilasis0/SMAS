@@ -5,6 +5,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from enum import StrEnum
 
 from google import genai
@@ -31,6 +32,8 @@ class GeminiOracle:
         'models/gemini-2.5-flash-lite',         # 🥉 (10 RPM / 20 RPD) - 伺服器波動時替補
         'models/gemini-2.5-flash',              # 🎖️ (5 RPM / 20 RPD) - 最後底線
     ]
+
+    today_str = datetime.now().strftime('%Y-%m-%d')
 
     def __init__(self, api_keys: list[str], mode: TradingMode = TradingMode.SWING):
         if not api_keys:
@@ -180,8 +183,15 @@ class GeminiOracle:
         dbg.log(f"[{ticker}] 未命中快取，啟動 LLM 多線程情緒分析管線...")
 
         prompt = f"""
+        【系統時間】：今天是 {self.today_str}。
+
         你是一個沒有任何主觀情緒、只依據事實進行量化標記的交易演算法元件。
         請閱讀以下關於 {ticker} 的近期新聞標題，並給出一個 1 到 10 分的情緒分數。
+
+        【時間校準防呆規則】：
+        在閱讀以下新聞時，請注意新聞的發布時間。如果新聞內容明顯是「過去數個月甚至去年」的舊新聞
+        （例如在 {self.today_str} 的當下，看到去年的除權息或舊財報）
+        ，請判定為「資訊過期失效」，強制給予中立分數 5 分，並在 reason 中註明「缺乏近期有效新聞」。
 
         【評分絕對基準】：
         1-3 分：重大利空 (如財報暴雷、高層舞弊、掉單、大環境崩盤)。
