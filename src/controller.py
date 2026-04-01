@@ -4,6 +4,7 @@ import pandas as pd
 
 from base import KeyManager
 from bt.account import Account
+from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
 from bt.const import DecisionAction, LLMCol
 from bt.strategy import build_trading_tree
@@ -64,10 +65,8 @@ class IDSSController:
 
         # 2. 設定投資性格與行為樹
         strategy_config = PersonaFactory.get_config(persona)
-        if not self.api_keys or mode == TradingMode.DAY_TRADE:
-            strategy_config.enable_llm_oracle = False
-        else:
-            strategy_config.enable_llm_oracle = True
+        should_run_llm = bool(self.api_keys and mode != TradingMode.DAY_TRADE)
+        strategy_config.enable_llm_oracle = False
 
         tree = build_trading_tree(strategy_config)
 
@@ -196,9 +195,23 @@ class IDSSController:
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"趨勢轉弱，建議掛「微幅高於預期開盤」等待反彈時調節 (建議賣價: {trade_price:.2f})。"
 
-        # ==========================================
-        # ⚠️ 附加：除權息防呆警告標語
-        # ==========================================
+            bb.last_trade_price = trade_price
+
+        # AI 寫報告
+        original_pricing_text = getattr(bb, 'gemini_reasoning', '')
+        if should_run_llm:
+            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+            bb.oracle = self.engine.oracle # 綁定大腦
+            report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
+
+            # 讓 AI 寫報告 (執行完這行，bb.gemini_reasoning 會被徹底覆寫成 AI 的戰報)
+            report_node.tick(bb)
+
+            # 把 AI 的戰報與原本的「智慧定價字串」疊合起來！
+            if original_pricing_text:
+                bb.gemini_reasoning = bb.gemini_reasoning + "\n\n" + original_pricing_text
+
+        # 免責聲明
         bb.gemini_reasoning += "\n\n---\n⚠️ **【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
         # 6. 打包結構化結果
