@@ -26,6 +26,7 @@ class Blackboard:
     cooldown_timer: int = 0        # 停損冷卻期倒數天數
 
     # AI 分析與決策結果
+    oracle:str = ""
     action_decision: str = DecisionAction.HOLD
     gemini_reasoning: str = ""    # Gemini 產出的分析報告
     sentiment_score: int = BtVar.DEFAULT_LLM_SCORE
@@ -44,6 +45,8 @@ class Blackboard:
     # 交易執行用的現實環境變數
     executable_price: float = 0.0
     daily_volume: float = 0.0
+    bias_20: float = 0.0
+    return_5d: float = 0.0
 
     # 波段交易記憶
     entry_count: int = 0                  # 紀錄這個波段總共「買進/加碼」了幾次

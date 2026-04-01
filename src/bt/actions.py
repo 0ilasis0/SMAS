@@ -182,6 +182,13 @@ class GenerateGeminiReportNode(BaseNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
 
+        active_oracle = getattr(blackboard, 'oracle', self.oracle)
+
+        if not active_oracle:
+            dbg.war("⚠️ [Debug 警告] 找不到 Gemini Oracle 實體！將強制降級為『模擬報告』。請確認 API Key 是否載入，且有綁定至 Blackboard。")
+        else:
+            dbg.log("✅ [Debug 確認] 成功偵測到 Gemini Oracle 實體，準備呼叫真實 AI 模型！")
+
         trade_info_str = ""
         if blackboard.action_decision == DecisionAction.BUY:
             trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}。"
@@ -193,6 +200,8 @@ class GenerateGeminiReportNode(BaseNode):
 
         score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
         reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
+
+        pricing_logic = getattr(blackboard, 'gemini_reasoning', '')
 
         prompt = f"""
         【最高指令】：你是一個只負責「事後覆盤」的量化分析助理。
@@ -211,25 +220,29 @@ class GenerateGeminiReportNode(BaseNode):
         - 第三腦 (Market Brain) 安全度：{getattr(blackboard, 'prob_market_safe', 1.0):.2%}
         - LLM 新聞情緒：{score} 分 (1-10分)。判讀理由：{reason}
 
+        【演算法智慧定價考量】
+        {pricing_logic}
+
         【報告撰寫指引】
         1. 破題直接說明系統今天執行了什麼動作 (買進/賣出/觀望)。
-        2. 綜合技術面勝率、大盤雷達與新聞情緒，簡述「為什麼系統會觸發這個動作」。
+        2. 綜合技術面勝率、大盤雷達、新聞情緒，以及「智慧定價的掛單考量」，簡述「為什麼系統會觸發這個動作與定價」。
         3. 語氣保持冷靜、客觀的法人機構風格，不使用強烈情緒化字眼。
         """
 
         try:
-            if self.oracle:
-                model = self.oracle.model
+            if active_oracle:
+                model = active_oracle.model
                 response = model.generate_content(prompt)
                 final_report = response.text.strip()
             else:
                 final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {blackboard.action_decision}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
 
+            # 覆寫原本的智慧定價字串，替換成完整豐富的 AI 報告
             blackboard.gemini_reasoning = final_report
             dbg.log(f"📝 報告生成完畢：\n{final_report}")
             return NodeState.SUCCESS
 
         except Exception as e:
             dbg.error(f"Gemini 報告生成失敗: {e}")
-            blackboard.gemini_reasoning = "API 呼叫失敗，無法生成報告。"
+            blackboard.gemini_reasoning = "API 呼叫失敗，無法生成真實報告。"
             return NodeState.FAILURE
