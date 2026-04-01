@@ -6,6 +6,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from enum import StrEnum
 
 from google import genai
@@ -32,8 +33,6 @@ class GeminiOracle:
         'models/gemini-2.5-flash-lite',         # 🥉 (10 RPM / 20 RPD) - 伺服器波動時替補
         'models/gemini-2.5-flash',              # 🎖️ (5 RPM / 20 RPD) - 最後底線
     ]
-
-    today_str = datetime.now().strftime('%Y-%m-%d')
 
     def __init__(self, api_keys: list[str], mode: TradingMode = TradingMode.SWING):
         if not api_keys:
@@ -70,7 +69,7 @@ class GeminiOracle:
         """
         try:
             # 確保關鍵字精準：例如把 "2330.TW" 變成 "2330 股票"
-            search_keyword = ticker.replace('.TW', '').replace('.TWO', '') + " 股票"
+            search_keyword = ticker.replace('.TW', '').replace('.TWO', '') + " 股票 when:14d"
 
             # 將中文與符號進行 URL 編碼
             query = urllib.parse.quote(search_keyword)
@@ -95,9 +94,18 @@ class GeminiOracle:
             summaries = []
             for item in items[:5]:
                 title = item.find('title').text if item.find('title') is not None else ""
-                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else "未知時間"
+                pub_date_str = item.find('pubDate').text if item.find('pubDate') is not None else ""
 
-                summaries.append(f"[{pub_date}] 【新聞】{title}")
+                clean_date = "未知時間"
+                if pub_date_str:
+                    try:
+                        dt = parsedate_to_datetime(pub_date_str)
+                        clean_date = dt.strftime('%Y-%m-%d')
+                    except Exception:
+                        clean_date = pub_date_str
+
+                # 將發布日期附加在新聞標題前方，讓 LLM 進行時空對齊
+                summaries.append(f"[{clean_date}] 【新聞】{title}")
 
             return "\n".join(summaries)
 
@@ -112,6 +120,7 @@ class GeminiOracle:
             for key_idx, current_key in enumerate(self.api_keys):
                 dbg.log(f"嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
 
+                raw_text = ""
                 try:
                     client = genai.Client(api_key=current_key)
 
@@ -150,7 +159,7 @@ class GeminiOracle:
                     break
 
                 except json.JSONDecodeError:
-                    dbg.error(f"[{model_name}] API Key #{key_idx + 1} 輸出非合法 JSON 格式。")
+                    dbg.error(f"[{model_name}] API Key #{key_idx + 1} 輸出非合法 JSON 格式。\nLLM 原始輸出為: {raw_text}")
                     break
 
                 except Exception as e:
@@ -182,15 +191,17 @@ class GeminiOracle:
 
         dbg.log(f"[{ticker}] 未命中快取，啟動 LLM 多線程情緒分析管線...")
 
+        # 抓取當天時間
+        current_today_str = datetime.now().strftime('%Y-%m-%d')
         prompt = f"""
-        【系統時間】：今天是 {self.today_str}。
+        【系統時間】：今天是 {current_today_str}。
 
         你是一個沒有任何主觀情緒、只依據事實進行量化標記的交易演算法元件。
         請閱讀以下關於 {ticker} 的近期新聞標題，並給出一個 1 到 10 分的情緒分數。
 
         【時間校準防呆規則】：
         在閱讀以下新聞時，請注意新聞的發布時間。如果新聞內容明顯是「過去數個月甚至去年」的舊新聞
-        （例如在 {self.today_str} 的當下，看到去年的除權息或舊財報）
+        （例如在 {current_today_str} 的當下，看到去年的除權息或舊財報）
         ，請判定為「資訊過期失效」，強制給予中立分數 5 分，並在 reason 中註明「缺乏近期有效新聞」。
 
         【評分絕對基準】：
@@ -202,9 +213,9 @@ class GeminiOracle:
         {news_text}
 
         【嚴格輸出限制】：
-        你被禁止輸出任何解釋性文字、Markdown 符號或警告語語。你只能輸出純 JSON。
+        你被禁止輸出任何解釋性文字、Markdown 符號或警告語氣。你只能輸出純 JSON。
         格式必須完全符合：
-        {{"score": 整數, "reason": "15字以內客觀事實陳述"}}
+        {{"score": 整數, "reason": "以一句話精煉總結新聞利多/利空重點(50字內)"}}
         """
 
         result = self._call_gemini_with_fallback(prompt)
