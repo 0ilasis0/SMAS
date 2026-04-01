@@ -374,8 +374,6 @@ def render_portfolio_page(db_manager=None):
 
         rc1.markdown(f"**{ticker}** <br> <span style='font-size:0.85em; color:gray;'>{ch_name}</span>", unsafe_allow_html=True)
         rc2.markdown(f"{shares:,}")
-        rc1.markdown(f"**{ticker}**")
-        rc2.markdown(f"{shares:,}")
         rc3.markdown(f"${avg_cost:,.2f}")
         rc4.markdown(f"${market_val:,.0f}")
         rc5.markdown(pnl_text, unsafe_allow_html=True)
