@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 import pandas as pd
 
 from bt.blackboard import Blackboard
@@ -5,6 +7,9 @@ from bt.const import BtVar, DecisionAction, ExecuteCol, LLMCol
 from bt.core import BaseNode, NodeState
 from bt.params import TaxRate
 from debug import dbg
+
+if TYPE_CHECKING:
+    from ml.model.llm_oracle import GeminiOracle
 
 
 # 交易動作節點 (虛擬交易執行)
@@ -182,7 +187,7 @@ class GenerateGeminiReportNode(BaseNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
 
-        active_oracle = getattr(blackboard, 'oracle', self.oracle)
+        active_oracle: "GeminiOracle" | None = getattr(blackboard, 'oracle', self.oracle)
 
         if not active_oracle:
             dbg.war("⚠️ [Debug 警告] 找不到 Gemini Oracle 實體！將強制降級為『模擬報告』。請確認 API Key 是否載入，且有綁定至 Blackboard。")
@@ -231,9 +236,7 @@ class GenerateGeminiReportNode(BaseNode):
 
         try:
             if active_oracle:
-                model = active_oracle.model
-                response = model.generate_content(prompt)
-                final_report = response.text.strip()
+                final_report = active_oracle.generate_report(prompt)
             else:
                 final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {blackboard.action_decision}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
 
@@ -243,6 +246,6 @@ class GenerateGeminiReportNode(BaseNode):
             return NodeState.SUCCESS
 
         except Exception as e:
-            dbg.error(f"Gemini 報告生成失敗: {e}")
-            blackboard.gemini_reasoning = "API 呼叫失敗，無法生成真實報告。"
+            dbg.error(f"Gemini 報告生成節點發生例外: {e}")
+            blackboard.gemini_reasoning = "模組發生例外，無法生成真實報告。"
             return NodeState.FAILURE

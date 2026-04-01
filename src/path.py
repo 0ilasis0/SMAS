@@ -27,7 +27,7 @@ class PathBase:
     processed = resource_path("data", "processed")
     model = resource_path("data", "processed", "model")
     raw = resource_path("data", "raw")
-Path(PathConfig.IDSS_DATA).parent / "update_cache.json"
+
 @dataclass(frozen = True)
 class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"

@@ -236,3 +236,47 @@ class GeminiOracle:
 
         dbg.log(f"[{ticker}] Gemini 情緒分析完成！分數: {score}, 理由: {reason}")
         return score, reason
+
+    def generate_report(self, prompt: str) -> str:
+        """
+        接收來自行為樹的 Prompt，並回傳 Gemini 生成的文字報告。
+        具備與情緒分析相同的多模型/多金鑰瀑布備援機制，並專為純文字輸出設計。
+        """
+        for model_name in self.FALLBACK_MODELS:
+            for key_idx, current_key in enumerate(self.api_keys):
+                dbg.log(f"📝 報告生成 - 嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
+
+                try:
+                    # 使用新版 SDK 初始化 Client
+                    client = genai.Client(api_key=current_key)
+
+                    # 生成一般文字，不需要 response_mime_type="application/json"
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            temperature=0.3, # 稍微給一點溫度，讓戰報文筆更生動自然
+                        )
+                    )
+
+                    if response.text:
+                        return response.text.strip()
+                    else:
+                        dbg.war(f"[{model_name}] 回傳了空字串，嘗試下一把 Key...")
+                        continue
+
+                except APIError as api_err:
+                    if api_err.code == 429:
+                        dbg.war(f"[{model_name}] API Key #{key_idx + 1} 額度耗盡 (429)，切換下一把 Key...")
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生 API 錯誤 (Code: {api_err.code}): {api_err.message}")
+                        break # 此模型可能有其他問題，直接跳出換下一個模型
+
+                except Exception as e:
+                    dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生未預期錯誤: {e}")
+                    continue
+
+        dbg.error("🚨 報告生成失敗：所有模型與 API Key 皆已耗盡配額或發生崩潰！")
+        return "API 呼叫失敗，無法生成真實報告。"
