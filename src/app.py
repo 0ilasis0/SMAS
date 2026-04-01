@@ -1,3 +1,5 @@
+import time
+
 import streamlit as st
 
 from controller import IDSSController
@@ -57,23 +59,36 @@ def main():
     if not st.session_state.get('has_auto_updated', False):
         st.toast("🔄 系統首次啟動：正在檢查並同步最新市場收盤資料...", icon="⏳")
 
-        # 使用 st.status 提供良好的載入體驗
-        with st.status("🔄 系統首次啟動：同步所有追蹤標的...", expanded=True) as status:
-            from ml.engine import QuantAIEngine
+        # 1. 建立一個佔位符容器、變數來追蹤是否發生過錯誤
+        status_placeholder = st.empty()
+        has_error = False
+        with status_placeholder.container():
+            with st.status("🔄 系統首次啟動：同步所有追蹤標的...", expanded=True) as status:
 
-            # 走訪目前追蹤清單中的所有股票
-            for t in st.session_state.watch_list:
-                st.write(f"📥 正在檢查/同步 {t} 的最新 K 線與大盤資料...")
-                try:
-                    # 實例化引擎，只觸發 update_market_data，不觸發耗時的模型訓練
-                    temp_engine = QuantAIEngine(ticker=t, oos_days=0)
-                    temp_engine.update_market_data()
-                except Exception as e:
-                    st.write(f"⚠️ {t} 同步失敗: {e}")
+                # 走訪目前追蹤清單中的所有股票
+                for t in st.session_state.watch_list:
+                    st.write(f"📥 正在檢查/同步 {t} 的最新 K 線與大盤資料...")
+                    try:
+                        temp_engine = QuantAIEngine(ticker=t, oos_days=0)
+                        temp_engine.update_market_data()
+                    except Exception as e:
+                        st.write(f"⚠️ {t} 同步失敗: {e}")
+                        has_error = True
 
-            # 標記為已更新，這次瀏覽器開啟期間都不會再觸發
-            st.session_state.has_auto_updated = True
-            status.update(label="✅ 所有市場資料已校準至最新交易日！", state="complete", expanded=False)
+                if not has_error:
+                    status.update(label="✅ 所有市場資料已校準！", state="complete", expanded=False)
+                    st.session_state.has_auto_updated = True
+                else:
+                    status.update(label="❌ 部分資料同步失敗，請檢查下方訊息", state="error", expanded=True)
+
+                # 標記為已更新，這次瀏覽器開啟期間都不會再觸發
+                st.session_state.has_auto_updated = True
+                status.update(label="✅ 所有市場資料已校準至最新交易日！", state="complete", expanded=False)
+
+        if not has_error:
+            # 稍微停頓 1 秒讓使用者看到「已校準」的狀態
+            time.sleep(1)
+            status_placeholder.empty()
 
     if st.session_state.current_ticker is None:
         st.warning("👈 請先從左側邊欄新增並選擇一檔股票！")
