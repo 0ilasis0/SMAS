@@ -19,12 +19,12 @@ class MarketFeatureEngine:
 
         dbg.log("開始計算 LightGBM 大盤防禦特徵...")
         data = df_market.copy()
-        close_col = str(StockCol.CLOSE)
+        ai_vision_col = str(StockCol.ADJ_CLOSE)
 
         # ==========================================
         # 1. 基礎台股大盤漲跌幅 (供後續相對強弱計算)
         # ==========================================
-        twii_ret_1d = data[close_col].pct_change()
+        twii_ret_1d = data[ai_vision_col].pct_change()
 
         # ==========================================
         # 2. 美股衍生特徵 (無未來函數對齊版)
@@ -43,30 +43,30 @@ class MarketFeatureEngine:
         # ==========================================
         # 3. 台股大盤自身特徵 (Trend, Momentum & Volatility)
         # ==========================================
-        ma_20 = data[close_col].rolling(window=20).mean()
-        ma_60 = data[close_col].rolling(window=60).mean()
+        ma_20 = data[ai_vision_col].rolling(window=20).mean()
+        ma_60 = data[ai_vision_col].rolling(window=60).mean()
 
-        data[MarketFeatureCol.TWII_BIAS_20] = (data[close_col] - ma_20) / ma_20
-        data[MarketFeatureCol.TWII_BIAS_60] = (data[close_col] - ma_60) / ma_60
+        data[MarketFeatureCol.TWII_BIAS_20] = (data[ai_vision_col] - ma_20) / ma_20
+        data[MarketFeatureCol.TWII_BIAS_60] = (data[ai_vision_col] - ma_60) / ma_60
 
         # RSI
-        delta = data[close_col].diff()
+        delta = data[ai_vision_col].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
         rs = gain / (loss + 1e-9)
         data[MarketFeatureCol.TWII_RSI] = 100 - (100 / (1 + rs))
 
         # MACD (PPO)
-        ema_12 = data[close_col].ewm(span=12, adjust=False).mean()
-        ema_26 = data[close_col].ewm(span=26, adjust=False).mean()
-        data[MarketFeatureCol.TWII_MACD] = (ema_12 - ema_26) / data[close_col] * 100
+        ema_12 = data[ai_vision_col].ewm(span=12, adjust=False).mean()
+        ema_26 = data[ai_vision_col].ewm(span=26, adjust=False).mean()
+        data[MarketFeatureCol.TWII_MACD] = (ema_12 - ema_26) / data[ai_vision_col] * 100
 
         # 成交量取 Log 差分，消除極端節日效應
         vol_col = str(StockCol.VOLUME)
         data[MarketFeatureCol.TWII_VOL_CHG] = np.log1p(data[vol_col]) - np.log1p(data[vol_col].shift(1))
 
         # 使用 True Range (真實區間) 取代單純的高低價差，完美捕捉跳空恐慌
-        prev_close = data[close_col].shift(1)
+        prev_close = data[ai_vision_col].shift(1)
         tr1 = data[StockCol.HIGH] - data[StockCol.LOW]
         tr2 = (data[StockCol.HIGH] - prev_close).abs()
         tr3 = (data[StockCol.LOW] - prev_close).abs()
@@ -81,11 +81,12 @@ class MarketFeatureEngine:
         # 4. 標籤：預測未來是否會有「大跌」 (Danger = 1)
         # ==========================================
         if is_training:
+            adj_factor = data[ai_vision_col] / (data[StockCol.CLOSE] + 1e-9)
+            adj_low = data[StockCol.LOW] * adj_factor
             # 未來 5 天內的最低點
-            future_low_min = data[StockCol.LOW].rolling(window=self.lookahead, min_periods=1).min().shift(-self.lookahead)
-            # 如果未來 5 天內會跌破現在收盤價的 2.5%，標記為危險 (1)
-            # (大盤跌 2.5% 等同於個股跌 5%~10%，這是一個非常嚴重的崩盤警訊)
-            danger_condition = future_low_min < (data[close_col] * 0.975)
+            future_low_min = adj_low.rolling(window=self.lookahead, min_periods=1).min().shift(-self.lookahead)
+            # 如果未來 5 天內會跌破現在收盤價的 2.5%，標記為危險(大盤跌 2.5% 等同於個股跌 5%~10%，這是一個非常嚴重的崩盤警訊)
+            danger_condition = future_low_min < (data[ai_vision_col] * 0.975)
 
             data[MarketFeatureCol.TARGET_DANGER] = danger_condition.astype('Int64')
             data.loc[future_low_min.isna(), MarketFeatureCol.TARGET_DANGER] = pd.NA

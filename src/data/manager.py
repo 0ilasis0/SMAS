@@ -37,10 +37,12 @@ class DataManager:
                     low REAL,
                     close REAL,
                     volume INTEGER,
+                    adj_close REAL,
                     PRIMARY KEY (ticker, date)
                 )
             ''')
 
+            # 2. 建立分時 K 線表 (包含 adj_close)
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS intraday_k_lines (
                     ticker TEXT,
@@ -50,16 +52,19 @@ class DataManager:
                     low REAL,
                     close REAL,
                     volume INTEGER,
+                    adj_close REAL,
                     PRIMARY KEY (ticker, datetime)
                 )
             ''')
 
+            # 3. 建立自選股表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_watchlist (
                     ticker TEXT PRIMARY KEY,
                     added_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+
             conn.commit()
 
     def clear_ticker_data(self, ticker: str):
@@ -79,19 +84,25 @@ class DataManager:
         df_save = df_save.dropna(subset=[StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE])
         if df_save.empty: return
 
-        # 確保順序與 Schema 一致，並處理 Volume 的 NaN
+        if StockCol.ADJ_CLOSE not in df_save.columns:
+            df_save[StockCol.ADJ_CLOSE] = df_save[StockCol.CLOSE]
+
         records = []
         for index, row in df_save.iterrows():
             date_str = str(index).split(' ')[0]
             vol = int(row[StockCol.VOLUME]) if pd.notna(row[StockCol.VOLUME]) else 0
-            records.append((ticker, date_str, row[StockCol.OPEN], row[StockCol.HIGH], row[StockCol.LOW], row[StockCol.CLOSE], vol))
+            records.append((
+                ticker, date_str,
+                row[StockCol.OPEN], row[StockCol.HIGH], row[StockCol.LOW],
+                row[StockCol.CLOSE], vol, row[StockCol.ADJ_CLOSE]
+            ))
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.executemany('''
                 INSERT OR REPLACE INTO daily_k_lines
-                (ticker, date, open, high, low, close, volume)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (ticker, date, open, high, low, close, volume, adj_close)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', records)
             conn.commit()
             dbg.log(f"成功儲存 {ticker} 日 K 線資料，共 {len(records)} 筆。")

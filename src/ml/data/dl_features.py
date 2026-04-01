@@ -39,24 +39,36 @@ class DLFeatureEngine:
 
         data = df.copy().ffill()
 
+        adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
+        target_cols = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.VOLUME, StockCol.ADJ_CLOSE]
+
         new_features = {}
         dl_features = []
 
         # 基礎 K 線變化 (對數報酬率)
-        for col in StockCol.get_ohlcv():
+        for col in target_cols:
             feat_name = f"{col}_log_chg"
+
             if col == StockCol.VOLUME:
+                # 成交量不需要還原
                 new_features[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
+
             else:
-                new_features[feat_name] = np.log(data[col] / (data[col].shift(1) + 1e-9))
+                adj_price = data[col] * adj_factor if col != StockCol.ADJ_CLOSE else data[col]
+                prev_adj_price = data[col].shift(1) * adj_factor.shift(1) if col != StockCol.ADJ_CLOSE else data[col].shift(1)
+
+                new_features[feat_name] = np.log(adj_price / (prev_adj_price + 1e-9))
+
             dl_features.append(feat_name)
 
-        ma_w = data[StockCol.CLOSE].rolling(window=5).mean()
-        ma_m = data[StockCol.CLOSE].rolling(window=20).mean()
-        rolling_std = data[StockCol.CLOSE].rolling(window=20).std()
+        ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        new_features[FeatureCol.BIAS_WEEK] = (data[StockCol.CLOSE] - ma_w) / (ma_w + 1e-9)
-        new_features[FeatureCol.BIAS_MONTH] = (data[StockCol.CLOSE] - ma_m) / (ma_m + 1e-9)
+        ma_w = data[ai_vision_col].rolling(window=5).mean()
+        ma_m = data[ai_vision_col].rolling(window=20).mean()
+        rolling_std = data[ai_vision_col].rolling(window=20).std()
+
+        new_features[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / (ma_w + 1e-9)
+        new_features[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
         new_features[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
         dl_features.extend([FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH])
@@ -81,8 +93,9 @@ class DLFeatureEngine:
         aligned_index = data.index[self.time_steps - 1:]
 
         if is_training:
-            future_high_max = data[StockCol.HIGH].rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
-            target_condition = future_high_max > (data[StockCol.CLOSE] * 1.025)
+            adj_high = data[StockCol.HIGH] * adj_factor
+            future_high_max = adj_high.rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
+            target_condition = future_high_max > (data[ai_vision_col] * 1.025)
 
             y_all = target_condition.astype(int).values
             y = y_all[self.time_steps - 1:]

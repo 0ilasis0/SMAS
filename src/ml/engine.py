@@ -57,9 +57,14 @@ class QuantAIEngine:
     # ==========================================
     # 模組 1：資料更新
     # ==========================================
-    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR) -> bool:
+    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False) -> bool:
         """供 UI 觸發：從網路抓取最新歷史資料並寫入資料庫"""
+        if force_wipe:
+            dbg.log(f"🧹 [資料清洗] 正在清空 {self.config.ticker} 舊版歷史資料庫...")
+            self.db.clear_ticker_data(self.config.ticker)
+
         dbg.log(f"[{self.config.ticker}] 正在從網路更新個股歷史資料...")
+
         daily_df = self.fetcher.fetch_daily_data(self.config.ticker, period=period, unit=unit)
         success = False
 
@@ -87,7 +92,7 @@ class QuantAIEngine:
         """
         供 UI 或開發者觸發：執行完整的 Stacking 訓練管線。
         """
-        dbg.log(f"🚀 開始執行 {self.config.ticker} 訓練管線 (保留 {self.oos_days} 天做為純淨測試集)")
+        dbg.log(f"開始執行 {self.config.ticker} 訓練管線 (保留 {self.oos_days} 天做為純淨測試集)")
 
         self.run_data_watchdog(self.config.ticker)
 
@@ -415,7 +420,36 @@ class QuantAIEngine:
     def run_data_watchdog(self, ticker: str):
         """ 撈出資料並檢查是否有除權息斷層，有則啟動修復 """
         df_raw = self.db.get_daily_data(ticker)
-        self._auto_heal_corporate_actions(ticker, df_raw)
+        self._check_data_integrity(ticker, df_raw)
+
+    def _check_data_integrity(self, ticker: str, df: pd.DataFrame):
+        """
+        不再隨意篡改歷史資料。
+        只負責監控「雙軌制」是否健康運作。
+        """
+        if len(df) < 2: return
+
+        col_close = str(StockCol.CLOSE.value)
+        col_adj = str(StockCol.ADJ_CLOSE.value)
+
+        if col_adj not in df.columns:
+            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 資料庫缺少 {col_adj} 欄位，請執行「強制深度重訓」以更新 Schema。")
+            return
+
+        # 檢查原始價格 (會有真實跳空) 與 還原價格 (必須平滑)
+        raw_returns = df[col_close].pct_change().dropna()
+        adj_returns = df[col_adj].pct_change().dropna()
+
+        raw_anomaly = raw_returns.abs() > 0.4
+        adj_anomaly = adj_returns.abs() > 0.4
+
+        # 情境 A：雙軌制完美發揮作用 (原始有斷層，但還原很平滑)
+        if raw_anomaly.any() and not adj_anomaly.any():
+            dbg.log(f"✨ [Watchdog] 完美！偵測到 {ticker} 曾發生除權息/分割，雙軌平滑機制運作正常，特徵不會受干擾。")
+
+        # 情境 B：Yahoo 源頭的還原資料壞了
+        elif adj_anomaly.any():
+            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 的「還原股價」出現異常斷層 (>40%)，這會干擾 AI 預測！建議重新抓取資料。")
 
     def _auto_heal_corporate_actions(self, ticker: str, df: pd.DataFrame) -> pd.DataFrame:
         """

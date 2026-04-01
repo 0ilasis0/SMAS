@@ -46,40 +46,40 @@ class XGBFeatureEngine:
         if df.empty: return df
 
         data = df.copy()
-        close_col = str(StockCol.CLOSE)
+        ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        ma_w = data[close_col].rolling(window=self.params.MA_WEEK).mean()
-        ma_m = data[close_col].rolling(window=self.params.MA_MONTH).mean()
-        ma_q = data[close_col].rolling(window=self.params.MA_QUARTER).mean()
-        ma_y = data[close_col].rolling(window=self.params.MA_YEAR).mean()
+        ma_w = data[ai_vision_col].rolling(window=self.params.MA_WEEK).mean()
+        ma_m = data[ai_vision_col].rolling(window=self.params.MA_MONTH).mean()
+        ma_q = data[ai_vision_col].rolling(window=self.params.MA_QUARTER).mean()
+        ma_y = data[ai_vision_col].rolling(window=self.params.MA_YEAR).mean()
 
-        #  移動平均線
-        data[FeatureCol.BIAS_WEEK] = (data[close_col] - ma_w) / ma_w
-        data[FeatureCol.BIAS_MONTH] = (data[close_col] - ma_m) / ma_m
-        data[FeatureCol.BIAS_QUARTER] = (data[close_col] - ma_q) / ma_q
-        data[FeatureCol.BIAS_YEAR] = (data[close_col] - ma_y) / ma_y
+        # 移動平均線乖離率
+        data[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / ma_w
+        data[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / ma_m
+        data[FeatureCol.BIAS_QUARTER] = (data[ai_vision_col] - ma_q) / ma_q
+        data[FeatureCol.BIAS_YEAR] = (data[ai_vision_col] - ma_y) / ma_y
 
         # RSI (相對強弱指標)
-        delta = data[StockCol.CLOSE].diff()
+        delta = data[ai_vision_col].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=self.params.RSI_PERIOD).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=self.params.RSI_PERIOD).mean()
         rs = gain / (loss + 1e-9)
         data[FeatureCol.RSI] = 100 - (100 / (1 + rs))
 
         # MACD (轉化為百分比 PPO)
-        ema_fast = data[StockCol.CLOSE].ewm(span=self.params.MACD_FAST, adjust=False).mean()
-        ema_slow = data[StockCol.CLOSE].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
-        data[FeatureCol.MACD] = (ema_fast - ema_slow) / data[StockCol.CLOSE] * 100
+        ema_fast = data[ai_vision_col].ewm(span=self.params.MACD_FAST, adjust=False).mean()
+        ema_slow = data[ai_vision_col].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
+        data[FeatureCol.MACD] = (ema_fast - ema_slow) / data[ai_vision_col] * 100
         data[FeatureCol.MACD_SIGNAL] = data[FeatureCol.MACD].ewm(span=self.params.MACD_SIGNAL, adjust=False).mean()
 
         # 布林通道寬度 (BB Width) - 抓波動率壓縮
-        rolling_std = data[close_col].rolling(window=self.params.MA_MONTH).std()
+        rolling_std = data[ai_vision_col].rolling(window=self.params.MA_MONTH).std()
         data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / ma_m
 
         # 價格與成交量動能
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
-        data[FeatureCol.CLOSE_CHANGE] = data[StockCol.CLOSE].pct_change()
-        data[FeatureCol.RETURN_5D] = data[StockCol.CLOSE].pct_change(periods=5)
+        data[FeatureCol.CLOSE_CHANGE] = data[ai_vision_col].pct_change()
+        data[FeatureCol.RETURN_5D] = data[ai_vision_col].pct_change(periods=5)
 
         return data
 
@@ -92,10 +92,13 @@ class XGBFeatureEngine:
         if df.empty: return df
 
         data = df.copy()
+        ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        future_high_max = data[StockCol.HIGH].rolling(window=lookahead, min_periods=1).max().shift(-lookahead)
+        adj_factor = data[ai_vision_col] / (data[StockCol.CLOSE] + 1e-9)
+        adj_high = data[StockCol.HIGH] * adj_factor
 
-        target_condition = future_high_max > (data[StockCol.CLOSE] * 1.025)
+        future_high_max = adj_high.rolling(window=lookahead, min_periods=1).max().shift(-lookahead)
+        target_condition = future_high_max > (data[ai_vision_col] * 1.025)
 
         data[FeatureCol.TARGET] = target_condition.astype('Int64')
         data.loc[future_high_max.isna(), FeatureCol.TARGET] = pd.NA

@@ -18,9 +18,9 @@ def run_mlops_pipeline(ticker: str):
     with st.status(f"🚀 MLOps 執行中: {ticker}", expanded=True) as status:
         try:
             # 階段 1：更新資料
-            st.write("📥 正在從 Yahoo Finance 下載最新歷史與大盤資料...")
+            st.write("📥 正在從 Yahoo Finance 重新下載最新歷史與大盤雙軌資料...")
             engine_bt = QuantAIEngine(ticker=ticker, oos_days=BacktestParams.MAX_DAYS)
-            engine_bt.update_market_data()
+            engine_bt.update_market_data(force_wipe=True)
 
             # 階段 2：訓練回測大腦
             st.write(f"🧠 正在訓練回測大腦 (OOS={BacktestParams.MAX_DAYS})... 這將花費數分鐘")

@@ -36,7 +36,7 @@ class Fetcher:
             ticker,
             period=f"{valid_period}{unit}",
             interval=f"{YfInterval.DAILY}",
-            auto_adjust=True,
+            auto_adjust=False,
             actions=False
         )
 
@@ -45,8 +45,8 @@ class Fetcher:
             return pd.DataFrame()
 
         df.columns = df.columns.str.lower()
+        df.rename(columns={'adj close': StockCol.ADJ_CLOSE}, inplace=True)
 
-        # 容錯提取：只抓取存在的欄位，缺失的補 NaN 後轉 0
         expected_cols = StockCol.get_ohlcv()
         df = df.reindex(columns=expected_cols).fillna(0)
 
@@ -70,7 +70,7 @@ class Fetcher:
             ticker,
             period=f"{valid_days}{TimeUnit.DAY}",
             interval=f"{YfInterval.INTRADAY_5M}",
-            auto_adjust=True,
+            auto_adjust=False,
             actions=False
         )
 
@@ -79,6 +79,10 @@ class Fetcher:
             return pd.DataFrame()
 
         df.columns = df.columns.str.lower()
+
+        df.rename(columns={'adj close': StockCol.ADJ_CLOSE}, inplace=True)
+        if StockCol.ADJ_CLOSE not in df.columns:
+            df[StockCol.ADJ_CLOSE] = df[StockCol.CLOSE]
 
         expected_cols = StockCol.get_ohlcv()
         df = df.reindex(columns=expected_cols).fillna(0)
