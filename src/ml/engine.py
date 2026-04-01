@@ -1,4 +1,7 @@
 import gc
+import json
+from datetime import datetime
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -54,34 +57,78 @@ class QuantAIEngine:
             ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
         }
 
+        self.cache_file = Path(PathConfig.CACHE_FILE)
+
     # ==========================================
     # 模組 1：資料更新
     # ==========================================
+    def _needs_update(self, ticker: str) -> bool:
+        """檢查今天是否已經更新過該標的"""
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        if not self.cache_file.exists():
+            return True
+        try:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            # 如果紀錄的日期不是今天，就代表需要更新
+            return cache.get(ticker) != today_str
+        except Exception:
+            return True
+
+    def _mark_updated(self, ticker: str):
+        """標記該標的今天已經成功更新"""
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        cache = {}
+        if self.cache_file.exists():
+            try:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+            except Exception:
+                pass
+
+        cache[ticker] = today_str
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            dbg.war(f"無法寫入更新快取檔: {e}")
+
     def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False) -> bool:
         """供 UI 觸發：從網路抓取最新歷史資料並寫入資料庫"""
         if force_wipe:
             dbg.log(f"🧹 [資料清洗] 正在清空 {self.config.ticker} 舊版歷史資料庫...")
             self.db.clear_ticker_data(self.config.ticker)
 
-        dbg.log(f"[{self.config.ticker}] 正在從網路更新個股歷史資料...")
+        success = True
 
-        daily_df = self.fetcher.fetch_daily_data(self.config.ticker, period=period, unit=unit)
-        success = False
+        # 個股更新邏輯
+        if force_wipe or self._needs_update(self.config.ticker):
+            dbg.log(f"[{self.config.ticker}] 正在從網路更新個股歷史資料...")
+            daily_df = self.fetcher.fetch_daily_data(self.config.ticker, period=period, unit=unit)
 
-        if not daily_df.empty:
-            self.db.save_daily_data(self.config.ticker, daily_df)
-            dbg.log(f"[{self.config.ticker}] 資料庫更新成功！")
-            success = True
-        else:
-            dbg.error(f"[{self.config.ticker}] 抓取資料失敗，請檢查網路。")
-
-        for macro_ticker in MacroTicker:
-            dbg.log(f"[{macro_ticker.value}] 正在同步更新大盤/總經資料...")
-            df_macro = self.fetcher.fetch_daily_data(macro_ticker.value, period=period, unit=unit)
-            if not df_macro.empty:
-                self.db.save_daily_data(macro_ticker.value, df_macro)
+            if not daily_df.empty:
+                self.db.save_daily_data(self.config.ticker, daily_df)
+                self._mark_updated(self.config.ticker) # 成功才標記
+                dbg.log(f"[{self.config.ticker}] 資料庫更新成功！")
             else:
-                dbg.war(f"[{macro_ticker.value}] 總經資料更新失敗，可能被 Yahoo 阻擋或無數據。")
+                dbg.error(f"[{self.config.ticker}] 抓取資料失敗，請檢查網路。")
+                success = False
+        else:
+            dbg.log(f"⚡ [{self.config.ticker}] 今日已同步過最新資料，跳過網路抓取。")
+
+        # 大盤/總經更新邏輯
+        for macro_ticker in MacroTicker:
+            if force_wipe or self._needs_update(macro_ticker.value):
+                dbg.log(f"[{macro_ticker.value}] 正在同步更新大盤/總經資料...")
+                df_macro = self.fetcher.fetch_daily_data(macro_ticker.value, period=period, unit=unit)
+
+                if not df_macro.empty:
+                    self.db.save_daily_data(macro_ticker.value, df_macro)
+                    self._mark_updated(macro_ticker.value)
+                else:
+                    dbg.war(f"[{macro_ticker.value}] 總經資料更新失敗，可能被 Yahoo 阻擋或無數據。")
+            else:
+                pass # 為了保持 Terminal 乾淨，大盤若已更新就不特別印出
 
         return success
 

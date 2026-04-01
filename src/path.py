@@ -27,7 +27,7 @@ class PathBase:
     processed = resource_path("data", "processed")
     model = resource_path("data", "processed", "model")
     raw = resource_path("data", "raw")
-
+Path(PathConfig.IDSS_DATA).parent / "update_cache.json"
 @dataclass(frozen = True)
 class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
@@ -36,6 +36,7 @@ class PathConfig:
     PORTFOLIO = PathBase.processed / "portfolio.json"
     IDSS_DATA = PathBase.processed / "idss_data.db"
     LLM_CACHE = PathBase.processed / "llm_cache.db"
+    CACHE_FILE = PathBase.processed / "update_cache.json"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
 
