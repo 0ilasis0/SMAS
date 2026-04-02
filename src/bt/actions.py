@@ -194,27 +194,32 @@ class GenerateGeminiReportNode(BaseNode):
         else:
             dbg.log("✅ [Debug 確認] 成功偵測到 Gemini Oracle 實體，準備呼叫真實 AI 模型！")
 
+        action_val = blackboard.action_decision
+
         trade_info_str = ""
-        if blackboard.action_decision == DecisionAction.BUY:
-            trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}。"
-        elif blackboard.action_decision == DecisionAction.SELL:
+        if action_val == DecisionAction.BUY:
+            trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
+        elif action_val == DecisionAction.SELL:
             action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
-            trade_info_str = f"- 實際執行動作：系統已成功【{action_type}】 {blackboard.last_trade_shares} 股，成交價 {blackboard.last_trade_price:.2f}，淨損益 {blackboard.last_trade_profit:.2f} 元。"
-        else:
+            trade_info_str = f"- 實際執行動作：系統已成功【{action_type}】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
+        elif action_val == DecisionAction.HOLD:
             trade_info_str = "- 實際執行動作：系統判定維持現狀【觀望 (HOLD)】。"
+        else:
+            trade_info_str = f"- 實際執行動作：未知狀態 ({action_val})。"
 
         score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
         reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
 
         pricing_logic = getattr(blackboard, 'gemini_reasoning', '')
 
+        action_upper = str(action_val).upper()
         prompt = f"""
         【最高指令】：你是一個只負責「事後覆盤」的量化分析助理。
         系統【已經】做出了最終交易決策，你絕對不可以質疑、修改或建議更改該決策。你的唯一任務是根據以下數據，寫出一份 100 字左右的專業、客觀的繁體中文盤後報告。
 
         【當前決策事實 (不可竄改)】
         - 股票代號：{blackboard.ticker}
-        - 系統最終決策：{blackboard.action_decision}
+        - 系統最終決策：{action_upper}
         {trade_info_str}
         - 目前總持股：{blackboard.position} 股 (剩餘現金：{blackboard.cash:.2f} 元)
 
@@ -229,7 +234,7 @@ class GenerateGeminiReportNode(BaseNode):
         {pricing_logic}
 
         【報告撰寫指引】
-        1. 破題直接說明系統今天執行了什麼動作 (買進/賣出/觀望)。
+        1. 破題直接說明系統今天執行了什麼動作 ({action_upper})。
         2. 綜合技術面勝率、大盤雷達、新聞情緒，以及「智慧定價的掛單考量」，簡述「為什麼系統會觸發這個動作與定價」。
         3. 語氣保持冷靜、客觀的法人機構風格，不使用強烈情緒化字眼。
         """
@@ -238,10 +243,10 @@ class GenerateGeminiReportNode(BaseNode):
             if active_oracle:
                 final_report = active_oracle.generate_report(prompt)
             else:
-                final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {blackboard.action_decision}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
+                final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {action_upper}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
 
             # 覆寫原本的智慧定價字串，替換成完整豐富的 AI 報告
-            blackboard.gemini_reasoning = final_report
+            blackboard.gemini_reasoning += final_report
             dbg.log(f"📝 報告生成完畢：\n{final_report}")
             return NodeState.SUCCESS
 
@@ -249,3 +254,4 @@ class GenerateGeminiReportNode(BaseNode):
             dbg.error(f"Gemini 報告生成節點發生例外: {e}")
             blackboard.gemini_reasoning = "模組發生例外，無法生成真實報告。"
             return NodeState.FAILURE
+

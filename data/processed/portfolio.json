@@ -1,4 +1,29 @@
 {
-    "global_cash": 0.0,
-    "positions": {}
+    "global_cash": 7713.0,
+    "positions": {
+        "2344.TW": {
+            "shares": 2000,
+            "avg_cost": 101.1435,
+            "history": [
+                {
+                    "date": "2026-04-02 10:11:23",
+                    "action": "BUY",
+                    "price": 114.0,
+                    "shares": 1000,
+                    "fee": 162,
+                    "tax": 0,
+                    "total": 114162.0
+                },
+                {
+                    "date": "2026-04-02 10:11:34",
+                    "action": "BUY",
+                    "price": 88.0,
+                    "shares": 1000,
+                    "fee": 125,
+                    "tax": 0,
+                    "total": 88125.0
+                }
+            ]
+        }
+    }
 }

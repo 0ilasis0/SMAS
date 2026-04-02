@@ -97,7 +97,7 @@ class IDSSController:
 
         # 5. 取得決策動作
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
-        trade_price = current_price
+        trade_price = 0.0
 
         # ==========================================
         # 整合美股跳空校正的智慧定價引擎
@@ -105,7 +105,6 @@ class IDSSController:
         if action_str in [DecisionAction.BUY, DecisionAction.SELL] and current_price > 0:
             df_recent = self.engine.db.get_daily_data(self.ticker).tail(20)
 
-            # 1. 計算近期真實波動幅度 (ATR)
             atr = current_price * 0.02
             if not df_recent.empty and len(df_recent) > 1:
                 prev_close = df_recent[StockCol.CLOSE].shift(1)
@@ -115,7 +114,6 @@ class IDSSController:
                 true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
                 atr = true_range.tail(14).mean()
 
-            # 2. 計算費半 (^SOX) 隔夜跳空連動
             sox_return = 0.0
             df_sox = self.engine.db.get_daily_data('^SOX').tail(2)
             if not df_sox.empty and len(df_sox) >= 2:
@@ -123,81 +121,55 @@ class IDSSController:
                 sox_close_prev = df_sox[StockCol.CLOSE].iloc[-2]
                 sox_return = (sox_close_last - sox_close_prev) / sox_close_prev
 
-            # 判斷是否為電子/科技類股 (簡易防呆：非電子股降低 Beta 影響)
-            # 這裡可用更複雜的 mapping，目前先預設 23, 24, 3 字頭為電子股
+            # 判斷是否為電子/科技類股 (簡易防呆)
             is_tech_stock = self.ticker.startswith(('23', '24', '3', '5', '6', '8'))
             beta = 0.4 if is_tech_stock else 0.1
-
             expected_open_price = current_price * (1 + (sox_return * beta))
 
-            # 3. 獲取指標與台股漲跌停限制
             market_safe = bb.prob_market_safe
             bias_20 = bb.bias_20
             limit_up = self._get_tw_tick_price(current_price * 1.099)
             limit_down = self._get_tw_tick_price(current_price * 0.901)
-
-            # 確保預期開盤價沒有超過漲跌停
             expected_open_price = min(limit_up, max(limit_down, expected_open_price))
 
             pricing_prefix = f"\n\n💡 **[智慧定價]** "
             if abs(sox_return) > 0.015:
                 gap_dir = "大漲" if sox_return > 0 else "重挫"
-                pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預估今日合理開盤價位移至 {expected_open_price:.2f}。 "
+                pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預期今日開盤價位移至 {expected_open_price:.2f}。 "
 
-            if should_run_llm:
-                dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
-                bb.oracle = self.engine.oracle
-                report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
-
-                # 讓 AI 寫報告
-                report_node.tick(bb)
-
-            # 4. 決策定價樹
+            # 決策定價樹 (BUY)
             if action_str == DecisionAction.BUY:
-                # 優先權 1：大盤極度危險 (防禦優先)
                 if market_safe < 0.35:
                     raw_price = expected_open_price - (1.2 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"大盤系統性風險高 (安全度 {market_safe:.0%})，即便個股有買進訊號，仍強烈建議掛「大幅拉回之恐慌價」防禦性低接 (建議買價: {trade_price:.2f})。"
-
-                # 優先權 2：如果勝率大於 75%，「或者」勝率65%且新聞情緒極佳(>=8分)，就勇敢追價！
                 elif bb.prob_final >= 0.75 or (bb.prob_final >= 0.65 and bb.sentiment_score >= 8):
-                    raw_price = expected_open_price - (0.2 * atr)  # 捨棄溢價追擊，改為開盤價微幅低接
+                    raw_price = expected_open_price - (0.2 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股勝率極高 ({bb.prob_final:.0%})。建議掛「預期開盤價之微幅拉回處」積極承接，避免錯失行情 (建議買價: {trade_price:.2f})。"
-
-                # 優先權 3：乖離修復 (跌深摸底)
                 elif bias_20 < -0.06:
                     raw_price = expected_open_price - (0.6 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"具備跌深反彈契機 (月乖離 {bias_20:.1%})，建議掛「合理拉回價」等待盤中洗盤安全摸底 (建議買價: {trade_price:.2f})。"
-
-                # 常規狀態
                 else:
                     raw_price = expected_open_price - (0.8 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"屬常規震盪格局，建議耐心掛「偏低價」等待盤中自然拉回成交 (建議買價: {trade_price:.2f})。"
 
+            # 決策定價樹 (SELL)
             elif action_str == DecisionAction.SELL:
-                # 優先權 1：絕對弱勢逃命
                 if bb.prob_final <= 0.20 or market_safe < 0.3:
-                    raw_price = expected_open_price - (0.5 * atr) # 收斂折價幅度，避免賣在最低點
+                    raw_price = expected_open_price - (0.5 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"空頭動能強或大盤有崩跌風險，建議掛「低於預期開盤價 (折價 0.5ATR)」果斷出脫求現 (建議賣價: {trade_price:.2f})。"
-
-                # 優先權 2：超漲停利
                 elif bias_20 > 0.08:
-                    raw_price = expected_open_price + (1.2 * atr)
-                    trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
-                    bb.gemini_reasoning += pricing_prefix + f"短線已嚴重超漲 (月乖離 {bias_20:.1%})，建議掛「極端偏高價」等待主力拉抬時停利給追價散戶 (建議賣價: {trade_price:.2f})。"
-
-                # 優先權 3：強勢股逢高調節
-                elif bb.prob_final >= 0.7:
                     raw_price = expected_open_price + (0.8 * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
+                    bb.gemini_reasoning += pricing_prefix + f"短線已嚴重超漲 (月乖離 {bias_20:.1%})，建議掛「偏高價」等待主力拉抬時停利給追價散戶 (建議賣價: {trade_price:.2f})。"
+                elif bb.prob_final >= 0.7:
+                    raw_price = expected_open_price + (0.6 * atr)
+                    trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股依然強勢，建議掛「偏高價」等待盤中衝高時優雅出脫 (建議賣價: {trade_price:.2f})。"
-
-                # 常規狀態
                 else:
                     raw_price = expected_open_price + (0.4 * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
@@ -205,8 +177,36 @@ class IDSSController:
 
             bb.last_trade_price = trade_price
 
+        # ⚪ 觀望情境：拉出來與 BUY/SELL 同層級，直接判定，不耗費資源查 DB
+        elif action_str == DecisionAction.HOLD:
+            hold_reason = f"\n\n**[觀望判定]** "
+
+            if bb.prob_market_safe < 0.4:
+                if current_position > 0:
+                    hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
+                else:
+                    hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
+            elif bb.prob_final <= 0.3 and current_position == 0:
+                hold_reason += f"綜合技術面偏空 (勝率 {bb.prob_final:.0%})，具備下跌風險。因帳上無庫存，維持空手觀望。"
+            elif bb.prob_final < 0.6 and current_position == 0:
+                hold_reason += f"個股動能不足 (勝率 {bb.prob_final:.0%})，處於盤整期，不具建倉優勢，建議保留現金實力。"
+            elif bb.prob_final >= 0.4 and current_position > 0:
+                hold_reason += f"個股勝率適中 ({bb.prob_final:.0%})，趨勢未明，建議既有部位續抱觀察，靜待表態。"
+            else:
+                hold_reason += f"動能訊號未達閥值 (勝率 {bb.prob_final:.0%})，建議維持現狀，避免耗損交易成本。"
+
+            bb.gemini_reasoning += hold_reason
+            bb.last_trade_price = 0.0
+
+        # 改回 should_run_llm，確保能正常觸發 AI 寫報告！
+        if should_run_llm:
+            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+            bb.oracle = self.engine.oracle
+            report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
+            report_node.tick(bb)
+
         # 免責聲明
-        bb.gemini_reasoning += "\n\n---\n⚠️ **【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
+        bb.gemini_reasoning += "\n\n---\n**【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
         # 6. 打包結構化結果
         final_date = prediction_result.get("date", datetime.now().strftime('%Y-%m-%d'))
