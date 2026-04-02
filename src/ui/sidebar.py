@@ -34,12 +34,10 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 st.session_state.current_page = Page.PORTFOLIO
                 st.rerun()
 
-        st.markdown("---")
-
-        st.markdown("### 📌 自選股專案區")
-
-
         if st.session_state.current_page == Page.DASHBOARD:
+            st.markdown("---")
+            st.markdown("### 📌 自選股專案區")
+
             with st.form("add_ticker_form", clear_on_submit=True):
                 cols = st.columns([3, 1])
                 new_ticker = cols[0].text_input("輸入代號", label_visibility="collapsed", placeholder="輸入代號...", disabled=is_locked)

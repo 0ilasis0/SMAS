@@ -8,7 +8,8 @@ from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
 from ui.const import Page, PortfolioCol
 from ui.params import BacktestParams
-from ui.portfolio import render_portfolio_page, trade_dialog
+from ui.portfolio import (get_default_portfolio, render_portfolio_page,
+                          save_portfolio, trade_dialog)
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
@@ -125,8 +126,21 @@ def main():
     # ==========================================
     st.markdown("---")
 
-    if st.session_state.current_page == Page.PORTFOLIO: # ✨ 使用 Enum
-        # 進入資產管理頁面
+    if st.session_state.current_page == Page.PORTFOLIO:
+        col1, col2 = st.columns([8, 1])
+        with col2:
+            with st.popover("⚙️ 設定"):
+                if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
+                    clean_portfolio = get_default_portfolio()
+                    st.session_state.portfolio = clean_portfolio
+                    save_portfolio(clean_portfolio)
+
+                    st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
+                    time.sleep(0.5)
+                    st.rerun()
+                st.caption("注意：此操作將會清空所有的「可用現金」與「持股紀錄」。")
+
+        # 渲染下方的既有資產報表
         db_manager = st.session_state.ctrl_live.engine.db if st.session_state.ctrl_live else None
         render_portfolio_page(db_manager)
 

@@ -17,7 +17,7 @@ from ui.stock_names import get_tw_stock_mapping
 # ==========================================
 def get_default_portfolio() -> dict:
     return {
-        PortfolioCol.GLOBAL_CASH: 2000000.0,
+        PortfolioCol.GLOBAL_CASH: 0.0,
         PortfolioCol.POSITIONS: {}
     }
 def load_portfolio() -> dict:

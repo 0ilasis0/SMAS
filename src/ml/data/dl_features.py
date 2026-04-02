@@ -93,7 +93,9 @@ class DLFeatureEngine:
         aligned_index = data.index[self.time_steps - 1:]
 
         if is_training:
-            adj_high = data[StockCol.HIGH] * adj_factor
+            current_adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
+            adj_high = data[StockCol.HIGH] * current_adj_factor
+
             future_high_max = adj_high.rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
             target_condition = future_high_max > (data[ai_vision_col] * 1.025)
 
