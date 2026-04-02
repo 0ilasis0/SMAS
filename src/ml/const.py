@@ -11,6 +11,11 @@ class RNNType(StrEnum):
     LSTM = "LSTM"
     GRU = "GRU"
 
+class DLModelType(StrEnum):
+    HYBRID = "HYBRID"      # 你的原版 CNN+RNN
+    PURE_CNN = "PURE_CNN"  # 全新輕量級純 1D-CNN
+    PURE_LSTM = "PURE_LSTM" # 純 LSTM (備用)
+
 
 class FeatureCol(StrEnum):
     # 均線特徵

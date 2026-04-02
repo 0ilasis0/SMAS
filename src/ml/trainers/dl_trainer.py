@@ -13,87 +13,19 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool, MLTool
 from debug import dbg
-from ml.const import RNNType
+from ml.const import DLModelType
 from ml.params import DLHyperParams, TrainConfig
+from ml.trainers.dl_net import DLModelFactory
 
 
-# -----------------------------------------
-# 混合神經網路架構：1D-CNN 特徵萃取 + LSTM 趨勢記憶
-# -----------------------------------------
-class CNN_RNN(nn.Module):
-    def __init__(
-            self,
-            num_features: int,
-            rnn_type: RNNType,
-            cnn_out_channels: int = DLHyperParams.CNN_OUT_CHANNELS,
-            rnn_hidden: int = DLHyperParams.LSTM_HIDDEN
-        ):
-        super().__init__()
-        self.rnn_type = rnn_type
-
-        # --- CNN 區塊 (特徵降維去噪) ---
-        # 輸入形狀預期: (Batch, num_features, Time_Steps)
-        self.conv1 = nn.Conv1d(
-            in_channels=num_features,
-            out_channels=cnn_out_channels,
-            kernel_size=3,
-            padding=1
-        )
-        # 批次正規化 (穩定特徵分佈)
-        self.bn1 = nn.BatchNorm1d(cnn_out_channels)
-        self.relu = nn.ReLU()
-        # MaxPool 負責將時間軸長度減半
-        self.pool = nn.MaxPool1d(kernel_size=DLHyperParams.KERNEL_SIZE)
-
-        # --- RNN 區塊 (動態生成) ---
-        # 輸入形狀預期: (Batch, 縮短後的Time_Steps, cnn_out_channels)
-        if self.rnn_type == RNNType.LSTM:
-            self.rnn = nn.LSTM(cnn_out_channels, rnn_hidden, num_layers=DLHyperParams.NUM_LAYERS, batch_first=True)
-        else:
-            self.rnn = nn.GRU(cnn_out_channels, rnn_hidden, num_layers=DLHyperParams.NUM_LAYERS, batch_first=True)
-
-        # 手動加入 Dropout 防止全連接層死背數據
-        self.dropout = nn.Dropout(p=DLHyperParams.DROPOUT)
-
-        # --- 輸出層 ---
-        self.fc = nn.Linear(rnn_hidden, 1)
-
-    def forward(self, x):
-        # 原始輸入 x: (Batch, Time_Steps, Features)
-        # 轉換為 CNN 需要的形狀: (Batch, Features, Time_Steps)
-        x = x.transpose(1, 2)
-
-        x = self.conv1(x)     # -> (Batch, 32, Time_Steps)
-        x = self.bn1(x)
-        x = self.relu(x)
-        x = self.pool(x)      # -> (Batch, 32, Time_Steps // 2)
-
-        # 轉換為 LSTM 需要的形狀: (Batch, Time_Steps // 2, 32)
-        x = x.transpose(1, 2)
-
-        # LSTM 回傳 out, (hn, cn)；GRU 回傳 out, hn。所以用 out, _ 通吃！
-        out, _ = self.rnn(x)
-
-        # 取出最後一個時間步長的隱藏狀態 (代表吸收了所有歷史資訊的總結)
-        last_time_step_out = out[:, -1, :] # -> (Batch, 64)
-        last_time_step_out = self.dropout(last_time_step_out)
-
-        # 輸出勝率
-        logits = self.fc(last_time_step_out)
-        return logits.squeeze(-1)
-
-
-# -----------------------------------------
-# DL 離線訓練器 (與 XGBTrainer API 對齊)
-# -----------------------------------------
 class DLTrainer:
-    def __init__(self, ticker: str, rnn_type: RNNType):
-        self.rnn_type = rnn_type
+    ''' DL 離線訓練器 (與 XGBTrainer API 對齊) '''
+    def __init__(self, ticker: str, dl_model_type: DLModelType):
+        self.dl_model_type = dl_model_type
         self.ticker = ticker
-
         self.device = self._detect_device()
 
-        dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.rnn_type.name}]")
+        dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.dl_model_type}]")
 
         self.batch_size = DLHyperParams.BATCH_SIZE
         self.epochs = DLHyperParams.EPOCHS
@@ -152,7 +84,11 @@ class DLTrainer:
             pos_weight_val = MLTool.calculate_scale_weight(y_train)
             pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
 
-            model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
+            model = DLModelFactory.create(
+                model_type=self.dl_model_type,
+                num_features=num_features,
+                time_steps=DLHyperParams.TIME_STEPS
+            ).to(self.device)
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -248,7 +184,11 @@ class DLTrainer:
         pos_weight_val = MLTool.calculate_scale_weight(y)
         pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
 
-        model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
+        model = DLModelFactory.create(
+            model_type=self.dl_model_type,
+            num_features=num_features,
+            time_steps=DLHyperParams.TIME_STEPS
+        ).to(self.device)
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
 
@@ -287,7 +227,11 @@ class DLTrainer:
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """【供 UI 推論端使用】載入訓練好的模型權重"""
         try:
-            model = CNN_RNN(num_features=num_features, rnn_type=self.rnn_type).to(self.device)
+            model = DLModelFactory.create(
+                model_type=self.dl_model_type,
+                num_features=num_features,
+                time_steps=DLHyperParams.TIME_STEPS
+            ).to(self.device)
             model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
             model.eval()
             dbg.log(f"成功載入 DL 模型: {model_path}")
