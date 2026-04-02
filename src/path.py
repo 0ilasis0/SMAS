@@ -55,11 +55,15 @@ class PathConfig:
 
     @classmethod
     def get_dl_model_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_type.name}_{rnn_type.name}_model", ".pth", oos_days)
+        dl_name = dl_type.name if dl_type else "DL"
+        rnn_name = rnn_type.name if rnn_type else ""
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_name}_{rnn_name}_model", ".pth", oos_days)
 
     @classmethod
-    def get_dl_scalar_path(cls, ticker: str, rnn_type: "RNNType", oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_dl_scaler", ".joblib", oos_days)
+    def get_dl_scalar_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
+        dl_name = dl_type.name if dl_type else "DL"
+        rnn_name = rnn_type.name if rnn_type else ""
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_name}_{rnn_name}_scaler", ".joblib", oos_days)
 
     @classmethod
     def get_meta_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
