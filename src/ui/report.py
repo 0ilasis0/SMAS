@@ -10,7 +10,7 @@ def render_report(result: dict):
         st.error(f"❌ 發生錯誤: {result.get('message', '未知錯誤')}")
         return
 
-    st.success(f"決策生成完畢！(目標日期: {result.get('date', '未知')})")
+    st.success(f"決策生成完畢！(依據最新收盤數據: {result.get('date', '未知')})")
 
     action = result["decision"]["action"]
 

@@ -144,6 +144,14 @@ class IDSSController:
                 gap_dir = "大漲" if sox_return > 0 else "重挫"
                 pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預估今日合理開盤價位移至 {expected_open_price:.2f}。 "
 
+            if should_run_llm:
+                dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+                bb.oracle = self.engine.oracle
+                report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
+
+                # 讓 AI 寫報告
+                report_node.tick(bb)
+
             # 4. 決策定價樹
             if action_str == DecisionAction.BUY:
                 # 優先權 1：大盤極度危險 (防禦優先)
@@ -152,8 +160,8 @@ class IDSSController:
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"大盤系統性風險高 (安全度 {market_safe:.0%})，即便個股有買進訊號，仍強烈建議掛「大幅拉回之恐慌價」防禦性低接 (建議買價: {trade_price:.2f})。"
 
-                # 優先權 2：個股勝率極高 (積極買進)
-                elif bb.prob_final >= 0.80:
+                # 優先權 2：如果勝率大於 75%，「或者」勝率65%且新聞情緒極佳(>=8分)，就勇敢追價！
+                elif bb.prob_final >= 0.75 or (bb.prob_final >= 0.65 and bb.sentiment_score >= 8):
                     raw_price = expected_open_price - (0.2 * atr)  # 捨棄溢價追擊，改為開盤價微幅低接
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股勝率極高 ({bb.prob_final:.0%})。建議掛「預期開盤價之微幅拉回處」積極承接，避免錯失行情 (建議買價: {trade_price:.2f})。"
@@ -196,14 +204,6 @@ class IDSSController:
                     bb.gemini_reasoning += pricing_prefix + f"趨勢轉弱，建議掛「微幅高於預期開盤」等待反彈時調節 (建議賣價: {trade_price:.2f})。"
 
             bb.last_trade_price = trade_price
-
-        if should_run_llm:
-            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
-            bb.oracle = self.engine.oracle
-            report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
-
-            # 讓 AI 寫報告
-            report_node.tick(bb)
 
         # 免責聲明
         bb.gemini_reasoning += "\n\n---\n⚠️ **【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
