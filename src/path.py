@@ -31,7 +31,8 @@ class PathBase:
 @dataclass(frozen = True)
 class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
-    EXPERIMENT_RESULTS = PathBase.processed / "report" / "experiment_results.csv"
+    EXPERIMENT_DETAILS = PathBase.processed / "report" / "experiment_detail.csv"
+    EXPERIMENT_SUMMARY = PathBase.processed / "report" / "experiment_summary.csv"
     WATCHLIST = PathBase.processed / "watchlist.json"
     SETTINGS = PathBase.processed / "settings.json"
     PORTFOLIO = PathBase.processed / "portfolio.json"

@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
-from ml.const import MLCol
+
 from base import MLTool
 from debug import dbg
+from ml.const import MLCol
 from ml.data.market_features import MarketFeatureCol
 from ml.params import MarketLGBMConfig, TrainConfig
 
@@ -104,7 +105,7 @@ class MarketTrainer:
         y = df_clean[MarketFeatureCol.TARGET_DANGER].astype(int)
 
         scale_weight = MLTool.calculate_scale_weight(y)
-        
+
         lgbm_params = self.config.to_dict()
         lgbm_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 

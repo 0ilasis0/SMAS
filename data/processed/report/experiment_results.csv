@@ -1,7 +1,0 @@
-﻿Ticker,Model_Arch,Test_Days,OOS_AUC,Total_Return(%),CAGR(%),MDD(%),Sharpe,Buy_Count,Sell_Count,Execution_Time(s)
-2330.TW,Pure_1D_CNN,240,N/A,10.94,11.52,-4.01,1.37,2,2,134.7
-2330.TW,Hybrid_LSTM,240,N/A,10.54,11.1,-4.41,1.33,2,2,133.1
-2330.TW,Hybrid_GRU,240,N/A,10.54,11.1,-4.41,1.33,2,2,197.7
-2603.TW,Pure_1D_CNN,240,N/A,12.84,13.52,-6.4,1.05,6,2,142.9
-2603.TW,Hybrid_LSTM,240,N/A,6.39,6.72,-6.77,0.53,6,2,145.3
-2603.TW,Hybrid_GRU,240,N/A,12.74,13.41,-6.41,1.04,6,2,2949.6

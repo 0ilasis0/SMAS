@@ -1,44 +1,58 @@
+import gc
+import random
 import time
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+import torch
+from sklearn.metrics import accuracy_score, roc_auc_score
 
 from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
+from data.const import MacroTicker, StockCol
 from debug import dbg
 from ml.const import DLModelType, FeatureCol, MetaCol, RNNType
+from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
 from path import PathConfig
 
 
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 def run_model_comparison():
-    # ==========================================
-    # 1. 實驗參數設定
-    # ==========================================
+    set_seed(42)
+
     tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
 
-    # 定義要 PK 的三種兵工廠架構
     model_configs = [
         {"name": "Pure_1D_CNN", "dl_type": DLModelType.PURE_CNN, "rnn": None},
         {"name": "Hybrid_LSTM", "dl_type": DLModelType.HYBRID, "rnn": RNNType.LSTM},
         {"name": "Hybrid_GRU",  "dl_type": DLModelType.HYBRID, "rnn": RNNType.GRU}
     ]
 
-    test_days = 240  # 回測過去一整年 (240個交易日) 的純淨未參與訓練資料
+    test_days = 240
     user_cash = 2000000
-    strategy = PersonaFactory.get_config(TradingPersona.MODERATE) # 統一用穩健型人格測試
+    strategy = PersonaFactory.get_config(TradingPersona.MODERATE)
 
     experiment_results = []
-    output_path = Path(PathConfig.EXPERIMENT_RESULTS)
+
+    # 分成兩個輸出檔案更清晰
+    details_path = Path(PathConfig.EXPERIMENT_DETAILS)
+    summary_path = Path(PathConfig.EXPERIMENT_SUMMARY)
 
     dbg.log("\n" + "="*60)
-    dbg.log("🚀 IDSS 深度學習架構 A/B 測試啟動")
+    dbg.log("🚀 IDSS 深度學習架構 A/B 測試啟動 (含 ML 核心指標)")
     dbg.log("="*60)
 
-    # ==========================================
-    # 2. 自動化實驗迴圈
-    # ==========================================
     for ticker in tickers:
         dbg.log(f"\n\n{'='*50}\n📊 開始處理標的: {ticker}\n{'='*50}")
 
@@ -49,82 +63,107 @@ def run_model_comparison():
 
             dbg.log(f"\n🧪 正在測試架構: 【{model_name}】")
 
-            start_time = time.time()
+            try:
+                ai_engine = QuantAIEngine(
+                    ticker=ticker,
+                    oos_days=test_days,
+                    api_keys=None,
+                    dl_model_type=dl_type,
+                    rnn_type=rnn_type
+                )
 
-            # 實例化 AI 引擎，動態注入模型架構
-            ai_engine = QuantAIEngine(
-                ticker=ticker,
-                oos_days=test_days,
-                api_keys=None, # 回測不需要消耗 Gemini API 寫戰報
-                dl_model_type=dl_type,
-                rnn_type=rnn_type
-            )
+                ai_engine.update_market_data()
+                start_time = time.time()
+                ai_engine.train_all_models(save_models=True)
 
-            # 更新資料與強制重新訓練模型 (確保不同架構能獨立學習)
-            ai_engine.update_market_data()
-            ai_engine.train_all_models(save_models=True)
+                if not ai_engine.load_inference_models():
+                    dbg.error(f"❌ {model_name} 載入失敗，跳過...")
+                    continue
 
-            if not ai_engine.load_inference_models():
-                dbg.error(f"❌ {model_name} 載入失敗，跳過此架構...")
-                continue
+                df_real_data = ai_engine.generate_backtest_data()
+                if df_real_data.empty:
+                    continue
+                df_test = df_real_data.tail(test_days).copy()
 
-            # 產生包含機率的回測資料
-            df_real_data = ai_engine.generate_backtest_data()
-            if df_real_data.empty:
-                dbg.war(f"⚠️ {ticker} - {model_name} 產生的回測資料為空，跳過...")
-                continue
+                macro_tickers = [e.value for e in MacroTicker]
+                df_raw = ai_engine.db.get_aligned_market_data(ticker, macro_tickers)
 
-            # 切割出最後 test_days 天作為 OOS 測試區間
-            df_test = df_real_data.tail(test_days).copy()
+                xgb_engine = XGBFeatureEngine()
+                df_with_target = xgb_engine.process_pipeline(df_raw, lookahead=ai_engine.config.lookahead, is_training=True)
+                df_test = df_test.join(df_with_target[[FeatureCol.TARGET]], how='left')
+                df_eval = df_test.dropna(subset=[FeatureCol.TARGET, MetaCol.PROB_DL, MetaCol.PROB_FINAL])
 
-            # 嘗試計算 OOS 區間的 AUC (如果資料表中有包含 TARGET 欄位)
-            oos_auc = "N/A"
-            if FeatureCol.TARGET in df_test.columns and df_test[FeatureCol.TARGET].nunique() > 1:
-                try:
-                    oos_auc = roc_auc_score(df_test[FeatureCol.TARGET], df_test[MetaCol.PROB_FINAL])
-                    oos_auc = round(oos_auc, 4)
-                except Exception:
-                    pass
+                dl_auc, dl_acc, final_auc, final_acc = 0.0, 0.0, 0.0, 0.0
 
-            # 執行資金部位與行為樹回測
-            bt_engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy)
-            stats = bt_engine.run(df_test)
+                if not df_eval.empty and df_eval[FeatureCol.TARGET].nunique() > 1:
+                    y_true = df_eval[FeatureCol.TARGET]
 
-            train_time = time.time() - start_time
+                    y_dl_prob = df_eval[MetaCol.PROB_DL]
+                    dl_auc = roc_auc_score(y_true, y_dl_prob)
+                    dl_acc = accuracy_score(y_true, (y_dl_prob > 0.5).astype(int))
 
-            # ==========================================
-            # 3. 收集數據
-            # ==========================================
-            record = {
-                "Ticker": ticker,
-                "Model_Arch": model_name,
-                "Test_Days": len(df_test),
-                "OOS_AUC": oos_auc, # 樣本外預測準確度指標
-                "Total_Return(%)": round(stats.get("total_return", 0) * 100, 2),
-                "CAGR(%)": round(stats.get("cagr", 0) * 100, 2),
-                "MDD(%)": round(stats.get("mdd", 0) * 100, 2), # 最大回撤 (風險指標)
-                "Sharpe": round(stats.get("sharpe", 0), 2),    # 夏普值 (CP值指標)
-                "Buy_Count": stats.get("buy_count", 0),
-                "Sell_Count": stats.get("sell_count", 0),
-                "Execution_Time(s)": round(train_time, 1) # 觀察 CNN 是不是比 LSTM 快很多
-            }
-            experiment_results.append(record)
+                    y_final_prob = df_eval[MetaCol.PROB_FINAL]
+                    final_auc = roc_auc_score(y_true, y_final_prob)
+                    final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 
-            dbg.log(f"✅ {model_name} 測試完成 | 報酬率: {record['Total_Return(%)']}% | MDD: {record['MDD(%)']}% | 耗時: {record['Execution_Time(s)']}秒")
+                bt_engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy)
+                stats = bt_engine.run(df_test)
+                train_time = time.time() - start_time
 
-            # 即時存檔，避免跑到一半當機資料遺失
-            df_results = pd.DataFrame(experiment_results)
-            df_results.to_csv(output_path, index=False, encoding="utf-8-sig")
+                first_close = df_test[StockCol.CLOSE].iloc[0]
+                last_close = df_test[StockCol.CLOSE].iloc[-1]
+                bnh_return = (last_close - first_close) / first_close
 
-    # ==========================================
-    # 4. 輸出最終實驗結果
-    # ==========================================
-    dbg.log(f"\n🎉 所有實驗完成！比較報表已輸出至: {output_path}")
-    print("\n" + "="*80)
-    print("📈 模型架構深度比較結果 (Experiment Results)")
-    print("="*80)
-    print(df_results.to_markdown(index=False))
+                record = {
+                    "Ticker": ticker,
+                    "Model": model_name,
+                    "DL_AUC": round(dl_auc, 4),
+                    "DL_Acc(%)": round(dl_acc * 100, 2),
+                    "Meta_AUC": round(final_auc, 4),
+                    "Meta_Acc(%)": round(final_acc * 100, 2),
+                    "B&H_Return(%)": round(bnh_return * 100, 2),
+                    "Return(%)": round(stats.get("total_return", 0) * 100, 2) if stats else 0.0,
+                    "MDD(%)": round(stats.get("mdd", 0) * 100, 2) if stats else 0.0,
+                    "Sharpe": round(stats.get("sharpe", 0), 2) if stats else 0.0,
+                    "Time(s)": round(train_time, 1)
+                }
+                experiment_results.append(record)
 
+                dbg.log(f"✅ {model_name} | DL_AUC: {record['DL_AUC']} | 報酬率: {record['Return(%)']}% | MDD: {record['MDD(%)']}%")
+
+                # 即時寫入詳細報告，避免中斷時資料遺失
+                df_results = pd.DataFrame(experiment_results)
+                df_results.to_csv(details_path, index=False, encoding="utf-8-sig")
+
+            except Exception as e:
+                dbg.error(f"❌ 處理 {ticker} - {model_name} 時發生嚴重錯誤: {e}")
+
+            finally:
+                if 'ai_engine' in locals(): del ai_engine
+                if 'bt_engine' in locals(): del bt_engine
+                if 'df_raw' in locals(): del df_raw
+                if 'df_with_target' in locals(): del df_with_target
+
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+
+    if not experiment_results:
+        dbg.error("沒有收集到任何結果！")
+        return
+
+    df_results = pd.DataFrame(experiment_results)
+
+    numeric_cols = ['DL_AUC', 'Meta_AUC', 'B&H_Return(%)', 'Return(%)', 'MDD(%)', 'Sharpe', 'Time(s)']
+    df_summary = df_results.groupby('Model')[numeric_cols].mean().round(3).reset_index()
+
+    df_summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
+
+    dbg.log(f"\n🎉 實驗完成！")
+    dbg.log(f"📄 各標的詳細報表已輸出至: {details_path}")
+    dbg.log(f"🏆 模型綜合戰力總結已輸出至: {summary_path}")
 
 if __name__ == "__main__":
     run_model_comparison()
