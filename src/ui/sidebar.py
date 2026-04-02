@@ -127,28 +127,37 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
         st.divider()
 
-        # 全域系統總設定 (Global Settings)
-        with st.popover("⚙️ 系統設定", use_container_width=True):
-            st.markdown("#### 🤖 AI 引擎維運 (MLOps)")
-            st.caption("定期讓所有模型吸收最新市場 K 線與趨勢。建議於**每週末**執行一次。過程可能需要數分鐘。")
-
-            if st.button("🔄 執行全域深度重訓", type="primary", use_container_width=True):
-                st.session_state.is_global_training = True
-                st.rerun()
-
-            st.divider()
-
-            st.markdown("#### ⚠️ 危險操作區")
-            st.caption("注意：此操作將清空所有的「持股紀錄」，並將資金重置為初始狀態。")
-            if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
-                clean_portfolio = get_default_portfolio()
-                st.session_state.portfolio = clean_portfolio
-                save_portfolio(clean_portfolio) # 同步抹除 JSON 檔案
-                st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
-                time.sleep(0.5)
-                st.rerun()
+        # 全域系統總設定
+        if st.button("⚙️ 系統總設定", use_container_width=True):
+            system_settings_dialog()
 
         if st.session_state.current_page == Page.DASHBOARD:
             return persona_mapping[selected_persona_str], mode_mapping[selected_mode_str]
         else:
             return TradingPersona.MODERATE, TradingMode.SWING
+
+
+@st.dialog("⚙️ 系統總設定", width="small")
+def system_settings_dialog():
+    st.markdown("#### 🤖 AI 引擎維運 (MLOps)")
+    st.caption("定期讓所有模型吸收最新市場 K 線與趨勢。建議於**每週末**執行一次。過程可能需要數分鐘。")
+
+    if st.button("🔄 執行全域深度重訓", type="primary", use_container_width=True):
+        st.session_state.is_global_training = True
+        st.rerun()
+
+    st.divider()
+
+    st.markdown("#### ⚠️ 危險操作區")
+    st.caption("注意：此操作將清空所有的「持股紀錄」，並將資金重置為初始狀態。")
+    if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
+        # 確保這裡有 import get_default_portfolio 和 save_portfolio
+        from ui.portfolio import get_default_portfolio, save_portfolio
+
+        clean_portfolio = get_default_portfolio()
+        st.session_state.portfolio = clean_portfolio
+        save_portfolio(clean_portfolio) # 同步抹除 JSON 檔案
+        st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
+        import time
+        time.sleep(0.5)
+        st.rerun()
