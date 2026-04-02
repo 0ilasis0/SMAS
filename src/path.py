@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ml.const import RNNType
+    from ml.const import DLModelType, RNNType
 
 def resource_path(*paths):
     """
@@ -53,8 +53,8 @@ class PathConfig:
         return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json", oos_days)
 
     @classmethod
-    def get_dl_model_path(cls, ticker: str, rnn_type: "RNNType", oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{rnn_type.name}_model", ".pth", oos_days)
+    def get_dl_model_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_type.name}_{rnn_type.name}_model", ".pth", oos_days)
 
     @classmethod
     def get_dl_scalar_path(cls, ticker: str, rnn_type: "RNNType", oos_days: int = 0) -> Path:

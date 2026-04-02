@@ -13,7 +13,8 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MetaCol, MLConst, ModelCol
+from ml.const import (DLModelType, FeatureCol, MetaCol, MLConst, ModelCol,
+                      RNNType)
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
@@ -31,9 +32,16 @@ class QuantAIEngine:
     量化 AI 引擎中樞。
     封裝了資料抓取、三腦模型訓練 (XGBoost + DL + Market)、Meta-Learner 融合，以及線上推論的完整管線。
     """
-    def __init__(self, ticker: str, oos_days: int, api_keys: list[str] = None):
+    def __init__(self, ticker: str, oos_days: int,
+            dl_model_type: DLModelType, rnn_type: RNNType,
+            api_keys: list[str] = None
+        ):
         self.config = SessionConfig(ticker=ticker)
         self.oos_days = oos_days
+
+        # 紀錄當前引擎使用的 DL 架構
+        self.dl_model_type = dl_model_type
+        self.rnn_type = rnn_type
 
         # 基礎設施
         self.db = DataManager()
@@ -52,7 +60,7 @@ class QuantAIEngine:
 
         self.paths = {
             ModelCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
-            ModelCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.rnn_type, self.oos_days),
+            ModelCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.dl_model_type, self.rnn_type, self.oos_days),
             ModelCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
             ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
         }
@@ -171,13 +179,13 @@ class QuantAIEngine:
 
         X_dl_train, y_dl_train, valid_index_train = dl_engine.process_pipeline(df_train_only, is_training=True)
 
-        dl_trainer = DLTrainer(ticker=self.config.ticker, rnn_type=self.config.rnn_type)
+        dl_trainer = DLTrainer(ticker=self.config.ticker, dl_model_type=self.dl_model_type, rnn_type=self.rnn_type)
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train, lookahead=self.config.lookahead)
 
         if save_models:
             final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[ModelCol.DL])
 
-            scaler_save_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
+            scaler_save_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.dl_model_type, self.rnn_type, self.oos_days)
             joblib.dump(final_dl_scaler, scaler_save_path)
             dbg.log(f"DL Scaler 已儲存至: {scaler_save_path}")
 
@@ -262,11 +270,11 @@ class QuantAIEngine:
         try:
             self.xgb_model = XGBTrainer.load_inference_model(self.paths[ModelCol.XGB])
 
-            scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.rnn_type, self.oos_days)
+            scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.dl_model_type, self.rnn_type, self.oos_days)
             self.dl_scaler = joblib.load(scaler_path)
 
             dl_input_size = DLHyperParams.INPUT_SIZE
-            self.dl_model = DLTrainer(self.config.ticker, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[ModelCol.DL])
+            self.dl_model = DLTrainer(self.config.ticker, self.dl_model_type, self.rnn_type).load_inference_model(dl_input_size, self.paths[ModelCol.DL])
 
             self.meta_learner = MetaLearner(self.config.ticker)
             self.meta_learner.load_inference_model(self.paths[ModelCol.META])
