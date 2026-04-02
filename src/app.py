@@ -10,7 +10,7 @@ from ui.const import Page, PortfolioCol
 from ui.params import BacktestParams
 from ui.portfolio import render_portfolio_page, trade_dialog
 from ui.report import render_report
-from ui.sidebar import render_sidebar, system_settings_dialog
+from ui.sidebar import render_sidebar
 from ui.state import init_session_state
 
 

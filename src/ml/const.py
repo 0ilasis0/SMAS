@@ -12,8 +12,8 @@ class RNNType(StrEnum):
     GRU = "GRU"
 
 class DLModelType(StrEnum):
-    HYBRID = "HYBRID"      # 你的原版 CNN+RNN
-    PURE_CNN = "PURE_CNN"  # 全新輕量級純 1D-CNN
+    HYBRID = "HYBRID"      # CNN+RNN
+    PURE_CNN = "PURE_CNN"  # 1D-CNN
 
 
 class FeatureCol(StrEnum):

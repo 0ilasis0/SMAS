@@ -1,13 +1,14 @@
 from dataclasses import asdict, dataclass
 from typing import Any, Dict
 
-from ml.const import RNNType
+from ml.const import DLModelType, RNNType
 
 
 @dataclass
 class SessionConfig:
     """存放當前任務的『環境變數』"""
     ticker: str
+    dl_model_type: DLModelType = DLModelType.HYBRID
     rnn_type: RNNType = RNNType.LSTM
     lookahead: int = 10
 
