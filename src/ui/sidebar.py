@@ -1,8 +1,11 @@
+import time
+
 import streamlit as st
 
 from bt.strategy_config import TradingPersona
 from ml.model.llm_oracle import TradingMode
 from ui.const import Page
+from ui.portfolio import get_default_portfolio, save_portfolio
 from ui.state import (on_ticker_change, reset_result, save_settings,
                       save_watchlist)
 from ui.stock_names import get_tw_stock_mapping
@@ -10,12 +13,12 @@ from ui.stock_names import get_tw_stock_mapping
 
 def render_sidebar() -> tuple[TradingPersona, TradingMode]:
     # 讀取當前的鎖定狀態
-    is_locked = st.session_state.get('is_training', False)
+    is_locked = st.session_state.get('is_training', False) or st.session_state.get('is_global_training', False)
 
     name_map = get_tw_stock_mapping()
 
     with st.sidebar:
-        st.title("⚙️ IDSS 控制台")
+        st.title("IDSS 控制台")
 
         if is_locked:
             st.warning("⏳ 系統正在進行 AI 模型訓練，控制台暫時鎖定。")
@@ -122,6 +125,30 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 reset_result()
                 st.rerun()
 
+        st.divider()
+
+        # 全域系統總設定 (Global Settings)
+        with st.popover("⚙️ 系統設定", use_container_width=True):
+            st.markdown("#### 🤖 AI 引擎維運 (MLOps)")
+            st.caption("定期讓所有模型吸收最新市場 K 線與趨勢。建議於**每週末**執行一次。過程可能需要數分鐘。")
+
+            if st.button("🔄 執行全域深度重訓", type="primary", use_container_width=True):
+                st.session_state.is_global_training = True
+                st.rerun()
+
+            st.divider()
+
+            st.markdown("#### ⚠️ 危險操作區")
+            st.caption("注意：此操作將清空所有的「持股紀錄」，並將資金重置為初始狀態。")
+            if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
+                clean_portfolio = get_default_portfolio()
+                st.session_state.portfolio = clean_portfolio
+                save_portfolio(clean_portfolio) # 同步抹除 JSON 檔案
+                st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
+                time.sleep(0.5)
+                st.rerun()
+
+        if st.session_state.current_page == Page.DASHBOARD:
             return persona_mapping[selected_persona_str], mode_mapping[selected_mode_str]
         else:
             return TradingPersona.MODERATE, TradingMode.SWING

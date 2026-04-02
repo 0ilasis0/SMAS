@@ -50,6 +50,61 @@ def run_mlops_pipeline(ticker: str):
             st.stop()
 
 
+def run_global_mlops_pipeline():
+    """執行全域 MLOps：走訪自選股清單，全部重新抓資料並深度重訓"""
+    watch_list = st.session_state.get('watch_list', [])
+    total_stocks = len(watch_list)
+
+    if not watch_list:
+        st.warning("⚠️ 自選股清單為空，無需訓練。")
+        st.session_state.is_global_training = False
+        time.sleep(1)
+        st.rerun()
+        return
+
+    # 加入整體進度條與動態 Status 標題
+    progress_bar = st.progress(0, text="準備啟動 MLOps 全域管線...")
+
+    with st.status("🔄 全域深度重訓執行中 (週末 MLOps 管線)...", expanded=True) as status:
+        for idx, ticker in enumerate(watch_list):
+            current_step = idx + 1
+
+            # 動態更新進度條文字
+            progress_bar.progress(idx / total_stocks, text=f"進度：正在訓練 {ticker} ({current_step}/{total_stocks})")
+
+            # 動態更新狀態框標題
+            status.update(label=f"🔄 正在處理 {ticker} ({current_step}/{total_stocks})...")
+
+            try:
+                # 階段 1：清除舊資料，下載最新 K 線
+                st.write(f"📥 [{ticker}] 清除快取並下載最新資料...")
+                engine_bt = QuantAIEngine(ticker=ticker, oos_days=BacktestParams.MAX_DAYS)
+                engine_bt.update_market_data(force_wipe=True)
+
+                # 階段 2：訓練回測大腦
+                st.write(f"🧠 [{ticker}] 訓練歷史回測大腦...")
+                engine_bt.train_all_models(save_models=True)
+
+                # 階段 3：訓練實盤大腦
+                st.write(f"⚔️ [{ticker}] 訓練最新實盤大腦...")
+                engine_live = QuantAIEngine(ticker=ticker, oos_days=0)
+                engine_live.train_all_models(save_models=True)
+
+                st.write(f"✅ [{ticker}] 模型升級完畢！")
+            except Exception as e:
+                st.error(f"❌ [{ticker}] 訓練失敗: {e}")
+
+        # 完成後將進度條推滿
+        progress_bar.progress(1.0, text="🎉 所有模型訓練完畢！")
+        status.update(label="🎉 所有自選股模型深度重訓完畢！系統已吸收最新市場趨勢。", state="complete", expanded=False)
+        time.sleep(2)
+
+        # 訓練完畢，清空進度條並解鎖重整
+        progress_bar.empty()
+        st.session_state.is_global_training = False
+        st.rerun()
+
+
 # ==========================================
 # 主程式流 (Main Application Flow)
 # ==========================================
@@ -95,9 +150,14 @@ def main():
         st.warning("👈 請先從左側邊欄新增並選擇一檔股票！")
         st.stop()
 
+    if st.session_state.get('is_global_training', False):
+        run_global_mlops_pipeline()
+        st.stop()
+
     # 如果使用者按下了「強制重訓」，狀態會是 True，直接進入訓練管線
     if st.session_state.get('is_training', False):
         run_mlops_pipeline(st.session_state.current_ticker)
+        st.stop()
 
     # 確保「實盤大腦」載入
     if st.session_state.ctrl_live is None:
@@ -127,19 +187,6 @@ def main():
     st.markdown("---")
 
     if st.session_state.current_page == Page.PORTFOLIO:
-        col1, col2 = st.columns([8, 1])
-        with col2:
-            with st.popover("⚙️ 設定"):
-                if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
-                    clean_portfolio = get_default_portfolio()
-                    st.session_state.portfolio = clean_portfolio
-                    save_portfolio(clean_portfolio)
-
-                    st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
-                    time.sleep(0.5)
-                    st.rerun()
-                st.caption("注意：此操作將會清空所有的「可用現金」與「持股紀錄」。")
-
         # 渲染下方的既有資產報表
         db_manager = st.session_state.ctrl_live.engine.db if st.session_state.ctrl_live else None
         render_portfolio_page(db_manager)
