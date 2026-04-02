@@ -178,7 +178,7 @@ class IDSSController:
 
         # ⚪ 觀望情境：拉出來與 BUY/SELL 同層級，直接判定，不耗費資源查 DB
         elif action_str == DecisionAction.HOLD:
-            hold_reason = f"\n\n**[觀望判定]** "
+            hold_reason = f"\n\n\n**[觀望判定]** "
 
             if bb.prob_market_safe < 0.4:
                 if current_position > 0:
