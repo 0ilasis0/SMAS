@@ -108,9 +108,9 @@ class PureCNN1D(nn.Module):
 class DLModelFactory:
     ''' 兵工廠 (Model Factory) '''
     @staticmethod
-    def create(model_type: DLModelType, num_features: int, time_steps: int = DLHyperParams.TIME_STEPS) -> nn.Module:
+    def create(model_type: DLModelType, num_features: int, time_steps: int = DLHyperParams.TIME_STEPS, rnn_type: RNNType = RNNType.LSTM) -> nn.Module:
         if model_type == DLModelType.HYBRID:
-            return CNN_RNN(num_features=num_features, rnn_type=RNNType.LSTM)
+            return CNN_RNN(num_features=num_features, rnn_type=rnn_type)
         elif model_type == DLModelType.PURE_CNN:
             return PureCNN1D(num_features=num_features, time_steps=time_steps)
         else:

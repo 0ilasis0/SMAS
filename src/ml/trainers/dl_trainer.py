@@ -15,13 +15,14 @@ from base import MathTool, MLTool
 from debug import dbg
 from ml.const import DLModelType
 from ml.params import DLHyperParams, TrainConfig
-from ml.trainers.dl_net import DLModelFactory
+from ml.trainers.dl_net import DLModelFactory, RNNType
 
 
 class DLTrainer:
     ''' DL 離線訓練器 (與 XGBTrainer API 對齊) '''
-    def __init__(self, ticker: str, dl_model_type: DLModelType):
+    def __init__(self, ticker: str, dl_model_type: DLModelType, rnn_type: RNNType):
         self.dl_model_type = dl_model_type
+        self.rnn_type = rnn_type
         self.ticker = ticker
         self.device = self._detect_device()
 
@@ -87,7 +88,8 @@ class DLTrainer:
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
-                time_steps=DLHyperParams.TIME_STEPS
+                time_steps=DLHyperParams.TIME_STEPS,
+                rnn_type=self.rnn_type
             ).to(self.device)
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
@@ -187,7 +189,8 @@ class DLTrainer:
         model = DLModelFactory.create(
             model_type=self.dl_model_type,
             num_features=num_features,
-            time_steps=DLHyperParams.TIME_STEPS
+            time_steps=DLHyperParams.TIME_STEPS,
+            rnn_type=self.rnn_type
         ).to(self.device)
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
@@ -230,7 +233,8 @@ class DLTrainer:
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
-                time_steps=DLHyperParams.TIME_STEPS
+                time_steps=DLHyperParams.TIME_STEPS,
+                rnn_type=self.rnn_type
             ).to(self.device)
             model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
             model.eval()
