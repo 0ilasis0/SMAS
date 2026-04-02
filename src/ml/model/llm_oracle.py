@@ -63,10 +63,6 @@ class GeminiOracle:
         return hashlib.md5(payload.encode(EncodingConst.UTF8)).hexdigest()
 
     def fetch_recent_news(self, ticker: str) -> str:
-        """
-        透過 Google News RSS 抓取台股在地化繁體中文新聞。
-        比 yfinance 穩定 100 倍，且精準度極高。
-        """
         try:
             # 確保關鍵字精準：例如把 "2330.TW" 變成 "2330 股票"
             search_keyword = ticker.replace('.TW', '').replace('.TWO', '') + " 股票 when:14d"

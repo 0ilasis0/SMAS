@@ -74,7 +74,6 @@ class IDSSController:
         account = Account(cash=current_cash)
         bb = Blackboard(ticker=self.ticker, account=account)
 
-        bb.oracle = self.engine.oracle
         bb.prob_final = prediction_result.get(MetaCol.PROB_FINAL, 0.5)
         bb.prob_xgb = prediction_result.get(MetaCol.PROB_XGB, 0.5)
         bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, 0.5)
@@ -95,7 +94,7 @@ class IDSSController:
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (模式: {mode.value})...")
         tree.tick(bb)
 
-        # 5. 取得決策動作
+        bb.gemini_reasoning = ""
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
 

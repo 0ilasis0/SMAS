@@ -245,8 +245,11 @@ class GenerateGeminiReportNode(BaseNode):
             else:
                 final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {action_upper}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
 
-            # 覆寫原本的智慧定價字串，替換成完整豐富的 AI 報告
-            blackboard.gemini_reasoning += final_report
+            if pricing_logic:
+                blackboard.gemini_reasoning = f"{final_report}\n{pricing_logic}"
+            else:
+                blackboard.gemini_reasoning = final_report
+
             dbg.log(f"📝 報告生成完畢：\n{final_report}")
             return NodeState.SUCCESS
 
@@ -254,4 +257,3 @@ class GenerateGeminiReportNode(BaseNode):
             dbg.error(f"Gemini 報告生成節點發生例外: {e}")
             blackboard.gemini_reasoning = "模組發生例外，無法生成真實報告。"
             return NodeState.FAILURE
-

@@ -273,7 +273,7 @@ def cash_operation_dialog():
     st.markdown("請輸入您要存入或提出的金額。")
     pf = st.session_state.portfolio
     op_type = st.radio("操作類型", ["📥 存入資金 (Deposit)", "📤 提出資金 (Withdraw)"], horizontal=True)
-    amount = st.number_input("金額 (NTD)", min_value=100.0, max_value=100000000.0, step=10000.0, format="%.0f")
+    amount = st.number_input("金額 (NTD)", min_value=0, max_value=100000000, step=10000, format="%.0f")
 
     if st.button("確認執行", type="primary", use_container_width=True):
         if op_type.startswith("📤"):
