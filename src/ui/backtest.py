@@ -1,6 +1,6 @@
 import streamlit as st
 
-from backtest import BacktestEngine
+from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory
 from controller import IDSSController
 from path import PathConfig
