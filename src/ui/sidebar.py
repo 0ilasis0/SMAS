@@ -1,6 +1,7 @@
 import time
 
 import streamlit as st
+import yfinance as yf
 
 from bt.strategy_config import TradingPersona
 from ml.model.llm_oracle import TradingMode
@@ -11,6 +12,16 @@ from ui.state import (on_ticker_change, reset_result, save_settings,
 from ui.stock_names import get_tw_stock_mapping
 
 
+def is_valid_ticker(ticker: str) -> bool:
+    """輕量級驗證：檢查 Yahoo Finance 是否有該標的之資料"""
+    try:
+        # 使用 history 抓取 1 天資料，速度最快且不會印出不必要的 log
+        ticker_obj = yf.Ticker(ticker)
+        df = ticker_obj.history(period="1d")
+        return not df.empty
+    except Exception:
+        return False
+
 def render_sidebar() -> tuple[TradingPersona, TradingMode]:
     # 讀取當前的鎖定狀態
     is_locked = st.session_state.get('is_training', False) or st.session_state.get('is_global_training', False)
@@ -18,7 +29,7 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
     name_map = get_tw_stock_mapping()
 
     with st.sidebar:
-        st.title("IDSS 控制台")
+        st.title("⚙️ IDSS 控制台")
 
         if is_locked:
             st.warning("⏳ 系統正在進行 AI 模型訓練，控制台暫時鎖定。")
@@ -41,21 +52,38 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
             st.markdown("---")
             st.markdown("### 📌 自選股專案區")
 
+            # 建立一個佔位符，用來顯示錯誤訊息 (放在 form 外面才不會被 clear_on_submit 清掉)
+            msg_placeholder = st.empty()
+
             with st.form("add_ticker_form", clear_on_submit=True):
                 cols = st.columns([3, 1])
-                new_ticker = cols[0].text_input("輸入代號", label_visibility="collapsed", placeholder="輸入代號...", disabled=is_locked)
+                new_ticker = cols[0].text_input("輸入代號", label_visibility="collapsed", placeholder="輸入代號 (例: 2330)...", disabled=is_locked)
                 submitted = cols[1].form_submit_button("新增", disabled=is_locked)
 
                 if submitted and new_ticker:
                     clean_ticker = new_ticker.strip().upper()
+
+                    # 自動補齊台股後綴
                     if not clean_ticker.endswith(".TW") and not clean_ticker.endswith(".TWO"):
                         clean_ticker += ".TW"
-                    if clean_ticker not in st.session_state.watch_list:
-                        st.session_state.watch_list.append(clean_ticker)
-                        save_watchlist(st.session_state.watch_list)
-                        if st.session_state.current_ticker is None:
-                            on_ticker_change(clean_ticker)
-                        st.rerun()
+
+                    # 1. 檢查是否已經存在清單中
+                    if clean_ticker in st.session_state.watch_list:
+                        msg_placeholder.warning(f"⚠️ {clean_ticker} 已經在自選單中了！")
+
+                    # 2. 啟動防呆網路驗證
+                    else:
+                        with st.spinner(f"正在驗證 {clean_ticker} 是否存在..."):
+                            if is_valid_ticker(clean_ticker):
+                                # 驗證通過 ➔ 儲存並重整
+                                st.session_state.watch_list.append(clean_ticker)
+                                save_watchlist(st.session_state.watch_list)
+                                if st.session_state.current_ticker is None:
+                                    on_ticker_change(clean_ticker)
+                                st.rerun()
+                            else:
+                                # 驗證失敗 ➔ 拒絕儲存，並報錯
+                                msg_placeholder.error(f"❌ 找不到標的 {clean_ticker}！請確認代號是否正確。")
 
             with st.container(height=250):
                 for ticker in st.session_state.watch_list:
@@ -158,6 +186,5 @@ def system_settings_dialog():
         st.session_state.portfolio = clean_portfolio
         save_portfolio(clean_portfolio) # 同步抹除 JSON 檔案
         st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
-        import time
         time.sleep(0.5)
         st.rerun()
