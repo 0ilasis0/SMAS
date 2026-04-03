@@ -513,7 +513,6 @@ class QuantAIEngine:
         if len(df) < 2:
             return df
 
-        # 注意：請確保傳入的常數有加上 .value 或是字串，避免 KeyError
         col_close = StockCol.CLOSE.value if hasattr(StockCol.CLOSE, 'value') else 'close'
         col_open = StockCol.OPEN.value if hasattr(StockCol.OPEN, 'value') else 'open'
         col_high = StockCol.HIGH.value if hasattr(StockCol.HIGH, 'value') else 'high'

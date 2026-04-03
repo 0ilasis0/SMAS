@@ -61,8 +61,7 @@ class BacktestEngine:
 
     def run(self, df: pd.DataFrame, silence: bool = False):
         """
-        執行回測。
-        :param df: 必須包含 ['Close', 'High', MetaCol.PROB_XGB, MetaCol.PROB_DL, MetaCol.PROB_FINAL] 欄位，且 Index 為日期。
+        執行回測
         """
         if silence: dbg.toggle()
         self.history_records.clear()
