@@ -51,6 +51,11 @@ class BacktestEngine:
     IDSS 行為樹專用回測引擎。
     結合歷史 K 線與 AI 預測勝率，逐日進行沙盤推演，並計算最終績效。
     """
+
+    PEAK = 'peak'
+    DRAWDOWN = 'Drawdown'
+    DAILY_RETURN = 'Daily_Return'
+
     def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
         self.account = Account(cash=initial_cash)
@@ -162,14 +167,14 @@ class BacktestEngine:
         cagr = (final_equity / self.initial_cash) ** (252 / trading_days) - 1 if trading_days > 0 else 0
 
         # 計算 MDD
-        df_res['Peak'] = df_res[HistoryCol.TOTAL_EQUITY].cummax()
-        df_res['Drawdown'] = (df_res[HistoryCol.TOTAL_EQUITY] - df_res['Peak']) / df_res['Peak']
-        max_drawdown = df_res['Drawdown'].min()
+        df_res[self.PEAK] = df_res[HistoryCol.TOTAL_EQUITY].cummax()
+        df_res[self.DRAWDOWN] = (df_res[HistoryCol.TOTAL_EQUITY] - df_res[self.PEAK]) / df_res[self.PEAK]
+        max_drawdown = df_res[self.DRAWDOWN].min()
 
         # 計算夏普值 (Sharpe Ratio)
-        df_res['Daily_Return'] = df_res[HistoryCol.TOTAL_EQUITY].pct_change().fillna(0)
-        daily_volatility = df_res['Daily_Return'].std()
-        sharpe_ratio = (df_res['Daily_Return'].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
+        df_res[self.DAILY_RETURN] = df_res[HistoryCol.TOTAL_EQUITY].pct_change().fillna(0)
+        daily_volatility = df_res[self.DAILY_RETURN].std()
+        sharpe_ratio = (df_res[self.DAILY_RETURN].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
 
         # 統計交易次數
         buy_count = len(df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY])
@@ -199,8 +204,8 @@ class BacktestEngine:
         ax1.grid(True, alpha=0.3)
 
         ax1_dd = ax1.twinx()
-        ax1_dd.fill_between(df_res.index, df_res['Drawdown'], 0, color=Color.RED, alpha=0.2, label='Drawdown')
-        ax1_dd.set_ylabel('Drawdown (%)', color=Color.RED)
+        ax1_dd.fill_between(df_res.index, df_res[self.DRAWDOWN], 0, color=Color.RED, alpha=0.2, label=self.DRAWDOWN)
+        ax1_dd.set_ylabel(f'{self.DRAWDOWN} (%)', color=Color.RED)
         ax1_dd.tick_params(axis='y', labelcolor=Color.RED)
 
         lines_1, labels_1 = ax1.get_legend_handles_labels()
@@ -209,7 +214,7 @@ class BacktestEngine:
 
         # 第二層：股價走勢與買賣點
         ax2 = plt.subplot(3, 1, 2, sharex=ax1)
-        ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color='gray', alpha=0.7)
+        ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.7)
         buys = df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY]
         sells = df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL]
         ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color=Color.GREEN, s=100, label='Buy', zorder=5)

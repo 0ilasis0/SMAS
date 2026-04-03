@@ -120,9 +120,15 @@ class MarketTrainer:
     @staticmethod
     def load_inference_model(model_path: Path | str) -> lgb.LGBMClassifier:
         try:
+            model_path = Path(model_path)
+
+            if not model_path.exists():
+                dbg.error(f"大盤模型載入失敗: 找不到檔案 {model_path}")
+                return None
+
             model = joblib.load(model_path)
             dbg.log("成功載入 LightGBM 大盤防禦模型。")
             return model
         except Exception as e:
-            dbg.error(f"大盤模型載入失敗: {e}")
+            dbg.error(f"大盤模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
             return None

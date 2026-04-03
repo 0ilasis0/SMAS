@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -6,6 +7,7 @@ class ModelCol(StrEnum):
     DL = "dl",
     META = "meta",
     MARKET = "market"
+    SCALAR = "scalar"
 
 class RNNType(StrEnum):
     LSTM = "LSTM"
@@ -84,4 +86,4 @@ class MLConst:
     MAX_LOOKBACK = 400
 
 class MLCol(StrEnum):
-    N_ESTIMATORS = "'n_estimators'"
+    N_ESTIMATORS = "n_estimators"

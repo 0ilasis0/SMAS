@@ -96,15 +96,6 @@ class XGBTrainer:
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 
-        if cv_importances:
-            avg_importance = np.mean(cv_importances, axis=0)
-            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
-
-            dbg.log("\n🏆 【XGBoost 核心特徵重要性 (Top 5)】")
-            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
-                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
-            dbg.log("-" * 40)
-
         return oof_predictions.dropna()
 
     def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path):
@@ -131,10 +122,14 @@ class XGBTrainer:
     @staticmethod
     def load_inference_model(model_path: Path | str) -> xgb.XGBClassifier:
         try:
+            if not model_path.exists():
+                dbg.error(f"XGBOOST模型載入失敗: 找不到檔案 {model_path}")
+                return None
+
             model = xgb.XGBClassifier()
             model.load_model(model_path)
             dbg.log(f"成功載入 XGBoost 模型: {model_path}")
             return model
         except Exception as e:
-            dbg.error(f"模型載入失敗: {e}")
+            dbg.error(f"大盤模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
             return None

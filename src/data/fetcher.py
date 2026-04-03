@@ -11,7 +11,6 @@ from debug import dbg
 
 class Fetcher:
 
-    DAILY_INDEX = StockCol.DATE
     INTRADAY_INDEX = 'Datetime'
 
     MAX_RETRIES = 3
@@ -49,7 +48,7 @@ class Fetcher:
         expected_cols = StockCol.get_ohlcv()
         df = df.reindex(columns=expected_cols).fillna(0)
 
-        df.index.name = self.DAILY_INDEX
+        df.index.name = StockCol.DATE
 
         # 精準時區校正：先轉為台灣時間，再拔除標籤
         if df.index.tz is not None:

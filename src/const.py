@@ -13,6 +13,7 @@ class Color(StrEnum):
     PURPLE = "purple"
     BLUE = "blue"
     WHITE = "white"
+    GRAY = "gray"
 
 @dataclass(frozen=True)
 class GlobalParams:

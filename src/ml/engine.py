@@ -61,7 +61,8 @@ class QuantAIEngine:
             ModelCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
             ModelCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days),
             ModelCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
-            ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days)
+            ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days),
+            ModelCol.SCALAR: PathConfig.get_dl_scalar_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days)
         }
 
         self.cache_file = Path(PathConfig.CACHE_FILE)
@@ -184,25 +185,21 @@ class QuantAIEngine:
         if save_models:
             final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[ModelCol.DL])
 
-            scaler_save_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days)
-            joblib.dump(final_dl_scaler, scaler_save_path)
-            dbg.log(f"DL Scaler 已儲存至: {scaler_save_path}")
+            joblib.dump(final_dl_scaler, self.paths[ModelCol.SCALAR])
+            dbg.log(f"DL Scaler 已儲存至: {self.paths[ModelCol.SCALAR]}")
 
         # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
 
-        if not self.paths[ModelCol.MARKET].exists():
+        market_path = self.paths[ModelCol.MARKET]
+        if not market_path.exists():
             dbg.log(f"未發現 OOS={self.oos_days} 的大盤防禦模型，開始進行全局訓練...")
 
-            # 使用 Enum 避免字串打錯
-            twii = MacroTicker.TWII.value
-            sox = MacroTicker.SOX.value
-
             # 給第三腦專屬的「純淨大盤資料」，以 ^TWII 為主體！
-            df_market_pure = self.db.get_aligned_market_data(twii, [sox])
+            df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value])
 
             if df_market_pure.empty:
-                dbg.error(f"🚨 資料庫找不到大盤資料 {twii}！請務必先執行 ai_engine.update_market_data()！")
+                dbg.error(f"🚨 資料庫找不到大盤資料 {MacroTicker.TWII.value}！請務必先執行 ai_engine.update_market_data()！")
                 return
 
             # 確保訓練時也避開 oos_days
@@ -216,7 +213,7 @@ class QuantAIEngine:
             market_trainer.train_with_cv(df_market_train, lookahead=self.config.lookahead)
 
             if save_models:
-                market_trainer.train_and_save_final_model(df_market_train, self.paths[ModelCol.MARKET])
+                market_trainer.train_and_save_final_model(df_market_train, market_path)
 
         else:
             dbg.log(f"大盤防禦模型 (OOS={self.oos_days}) 已存在，跳過重複訓練。")
@@ -269,8 +266,7 @@ class QuantAIEngine:
         try:
             self.xgb_model = XGBTrainer.load_inference_model(self.paths[ModelCol.XGB])
 
-            scaler_path = PathConfig.get_dl_scalar_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days)
-            self.dl_scaler = joblib.load(scaler_path)
+            self.dl_scaler = joblib.load(self.paths[ModelCol.SCALAR])
 
             dl_input_size = DLHyperParams.INPUT_SIZE
             self.dl_model = DLTrainer(self.config.ticker, self.config.dl_model_type, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[ModelCol.DL])
@@ -465,7 +461,7 @@ class QuantAIEngine:
             return pd.DataFrame()
 
         # Meta 融合預測
-        X_meta = df_backtest[[MetaCol.PROB_XGB, MetaCol.PROB_DL]].values
+        X_meta = df_backtest[MetaCol.PROB_XGB, MetaCol.PROB_DL]
         df_backtest[MetaCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
         dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")

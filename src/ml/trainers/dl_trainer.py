@@ -230,6 +230,10 @@ class DLTrainer:
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """【供 UI 推論端使用】載入訓練好的模型權重"""
         try:
+            if not model_path.exists():
+                dbg.error(f"深度學習模型載入失敗: 找不到檔案 {model_path}")
+                return None
+
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
@@ -241,5 +245,5 @@ class DLTrainer:
             dbg.log(f"成功載入 DL 模型: {model_path}")
             return model
         except Exception as e:
-            dbg.error(f"模型載入失敗: {e}")
+            dbg.error(f"大盤模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
             return None
