@@ -1,7 +1,7 @@
 from bt.blackboard import Blackboard
-from bt.const import BtVar, ConditionCol, DecisionAction, LLMCol
+from bt.const import ConditionCol, DecisionAction, LLMSentimentCol
 from bt.core import BaseNode, NodeState
-from bt.params import ConsiderConfig, TaxRate
+from bt.params import ConsiderConfig, LLMParams, TaxRate
 from debug import dbg
 from ml.const import FeatureCol
 
@@ -73,8 +73,8 @@ class CheckSentimentFilterNode(BaseNode):
         self.min_score = min_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
-        current_reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
+        current_score = getattr(blackboard, LLMSentimentCol.SCORE, LLMParams.DEFAULT_SENTIMENT_SCORE)
+        current_reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
 
         if current_score < self.min_score:
             dbg.war(f"📰 [進攻取消] LLM 判讀新聞為重大利空 (分數: {current_score}/10, 理由: {current_reason})，拒絕買進！")
@@ -94,10 +94,10 @@ class CheckSellSentimentFilterNode(BaseNode):
         self.block_score = block_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, 5)
-        current_reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
+        current_score = getattr(blackboard, LLMSentimentCol.SCORE, 5)
+        current_reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
 
-        # 如果情緒極度樂觀，阻止這次的賣出 (回傳 FAILURE 打斷 Sequence)
+        # 如果情緒極度樂觀，阻止這次的賣出
         if current_score >= self.block_score:
             dbg.log(f"🛡️ [停利攔截] LLM 判讀新聞為極度利多 (分數: {current_score}/10, 理由: {current_reason})。阻擋 AI 賣出訊號，讓獲利繼續奔跑！")
             return NodeState.FAILURE

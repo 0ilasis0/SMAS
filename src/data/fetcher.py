@@ -1,7 +1,6 @@
 import time
 
 import pandas as pd
-import requests
 import yfinance as yf
 
 from base import MathTool

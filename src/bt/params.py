@@ -13,3 +13,7 @@ class ConsiderConfig:
     # 勝率
     BUY_THRESHOLD: float = 0.6
     SELL_THRESHOLD: float = 0.4
+
+@dataclass(frozen=True)
+class LLMParams:
+    DEFAULT_SENTIMENT_SCORE = 5

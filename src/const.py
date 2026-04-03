@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -12,3 +13,7 @@ class Color(StrEnum):
     PURPLE = "purple"
     BLUE = "blue"
     WHITE = "white"
+
+@dataclass(frozen=True)
+class GlobalParams:
+    DEFAULT_ERROR = -99999

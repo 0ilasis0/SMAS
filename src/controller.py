@@ -6,9 +6,10 @@ from base import KeyManager
 from bt.account import Account
 from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
-from bt.const import DecisionAction, LLMCol
+from bt.const import DecisionAction, LLMSentimentCol
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
+from const import GlobalParams
 from data.const import StockCol, TimeUnit, YfInterval
 from debug import dbg
 from ml.const import FeatureCol, MetaCol
@@ -74,12 +75,12 @@ class IDSSController:
         account = Account(cash=current_cash)
         bb = Blackboard(ticker=self.ticker, account=account)
 
-        bb.prob_final = prediction_result.get(MetaCol.PROB_FINAL, 0.5)
-        bb.prob_xgb = prediction_result.get(MetaCol.PROB_XGB, 0.5)
-        bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, 0.5)
-        bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, 1.0)
-        bb.sentiment_score = prediction_result.get(LLMCol.SENTIMENT_SCORE, 5)
-        bb.sentiment_reason = prediction_result.get(LLMCol.SENTIMENT_REASON, "無")
+        bb.prob_final = prediction_result.get(MetaCol.PROB_FINAL, GlobalParams.DEFAULT_ERROR)
+        bb.prob_xgb = prediction_result.get(MetaCol.PROB_XGB, GlobalParams.DEFAULT_ERROR)
+        bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, GlobalParams.DEFAULT_ERROR)
+        bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, GlobalParams.DEFAULT_ERROR)
+        bb.sentiment_score = prediction_result.get(LLMSentimentCol.SCORE, 5)
+        bb.sentiment_reason = prediction_result.get(LLMSentimentCol.REASON, "無")
         bb.position = current_position
         bb.avg_cost = avg_cost
 
@@ -89,6 +90,13 @@ class IDSSController:
         bb.daily_volume = prediction_result.get("avg_5d_vol", 0.0)
         bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH, 0.0)
         bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D, 0.0)
+
+        if any(p < 0 for p in [bb.prob_final, bb.prob_xgb, bb.prob_dl, bb.prob_market_safe]):
+            dbg.error(f"🚨 [致命錯誤] 檢測到 AI 引擎輸出異常機率值 ({GlobalParams.DEFAULT_ERROR})，神經網路可能已崩潰或特徵缺失！")
+            return {
+                "status": "error",
+                "message": "AI 引擎推論失敗 (機率異常)，為保護資金安全，系統已強制熔斷並鎖死交易功能。"
+            }
 
         # 4. 執行行為樹決策 (Tick)
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (模式: {mode.value})...")

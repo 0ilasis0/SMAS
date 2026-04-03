@@ -2,8 +2,9 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from bt.account import Account
-from bt.const import BtVar, DecisionAction
-from bt.params import TaxRate
+from bt.const import DecisionAction
+from bt.params import LLMParams, TaxRate
+from const import GlobalParams
 
 
 @dataclass
@@ -18,18 +19,18 @@ class Blackboard:
     current_price: float = 0.0
 
     # 預測勝率 (來自 QuantAIEngine)
-    prob_xgb: float = 0.5
-    prob_dl: float = 0.5
-    prob_final: float = 0.5
+    prob_xgb: float = GlobalParams.DEFAULT_ERROR
+    prob_dl: float = GlobalParams.DEFAULT_ERROR
+    prob_final: float = GlobalParams.DEFAULT_ERROR
+    prob_market_safe: float = GlobalParams.DEFAULT_ERROR
 
-    prob_market_safe: float = 1.0  # 大盤安全機率 (第三腦預測)
     cooldown_timer: int = 0        # 停損冷卻期倒數天數
 
     # AI 分析與決策結果
     oracle:str = ""
     action_decision: str = DecisionAction.HOLD
     gemini_reasoning: str = ""    # Gemini 產出的分析報告
-    sentiment_score: int = BtVar.DEFAULT_LLM_SCORE
+    sentiment_score: int = LLMParams.DEFAULT_SENTIMENT_SCORE
     sentiment_reason: str = ""     # 新聞情緒理由
 
     last_trade_shares: int = 0

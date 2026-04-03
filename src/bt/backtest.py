@@ -8,9 +8,9 @@ import pandas as pd
 
 from bt.account import Account
 from bt.blackboard import Blackboard
-from bt.const import BtVar, DecisionAction
+from bt.const import BlackboardCol, DecisionAction
 from bt.strategy import build_trading_tree
-from bt.strategy_config import PersonaFactory, StrategyConfig, TradingPersona
+from bt.strategy_config import StrategyConfig
 from const import Color
 from data.const import StockCol
 from debug import dbg
@@ -44,6 +44,7 @@ class BacktestRecord:
     def to_dict(self):
         """轉換為字典供 Pandas 使用"""
         return asdict(self)
+
 
 class BacktestEngine:
     """
@@ -100,9 +101,9 @@ class BacktestEngine:
             self.bb.action_decision = DecisionAction.HOLD
 
             # 全域時鐘，每天確實扣減冷卻期
-            current_cd = getattr(self.bb, BtVar.COOLDOWN_TIMER, 0)
+            current_cd = getattr(self.bb, BlackboardCol.COOLDOWN_TIMER, 0)
             if current_cd > 0:
-                setattr(self.bb, BtVar.COOLDOWN_TIMER, current_cd - 1)
+                setattr(self.bb, BlackboardCol.COOLDOWN_TIMER, current_cd - 1)
 
             # 執行行為樹心跳 (Tick)
             self.tree.tick(self.bb)
@@ -262,40 +263,41 @@ class BacktestEngine:
         return stats
 
 
-if __name__ == "__main__":
-    from ml.engine import QuantAIEngine
+# if __name__ == "__main__":
+#     from ml.engine import QuantAIEngine
+    # from bt.strategy_config import PersonaFactory, TradingPersona
 
-    # 測試參數
-    tickers = ["2330.TW"]
-    test_days = 0
-    user_cash = 2000000
-    user_persona = TradingPersona.MODERATE
+#     # 測試參數
+#     tickers = ["2330.TW"]
+#     test_days = 0
+#     user_cash = 2000000
+#     user_persona = TradingPersona.MODERATE
 
-    strategy_config = PersonaFactory.get_config(user_persona)
+#     strategy_config = PersonaFactory.get_config(user_persona)
 
-    for ticker in tickers:
-        ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days, api_keys=None)
+#     for ticker in tickers:
+#         ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days, api_keys=None)
 
-        # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
-        # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-        ai_engine.update_market_data()
-        ai_engine.train_all_models(save_models=True)
+#         # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
+#         # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
+#         ai_engine.update_market_data()
+#         ai_engine.train_all_models(save_models=True)
 
-        if not ai_engine.load_inference_models():
-            dbg.error("❌ 模型載入失敗...")
-            exit()
+#         if not ai_engine.load_inference_models():
+#             dbg.error("❌ 模型載入失敗...")
+#             exit()
 
-        df_real_data = ai_engine.generate_backtest_data()
+#         df_real_data = ai_engine.generate_backtest_data()
 
-        if df_real_data.empty:
-            dbg.error("❌ 無法產生回測資料！")
-            exit()
+#         if df_real_data.empty:
+#             dbg.error("❌ 無法產生回測資料！")
+#             exit()
 
-        df_test = df_real_data.tail(test_days)
+#         df_test = df_real_data.tail(test_days)
 
-        print("\n📊 【AI 預測勝率分佈統計】")
-        print(df_test[MetaCol.PROB_FINAL].describe())
+#         print("\n📊 【AI 預測勝率分佈統計】")
+#         print(df_test[MetaCol.PROB_FINAL].describe())
 
-        dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-        engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy_config)
-        engine.run(df_test)
+#         dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
+#         engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy_config)
+#         engine.run(df_test)

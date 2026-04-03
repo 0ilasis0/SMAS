@@ -2,8 +2,6 @@ from abc import ABC, abstractmethod
 from enum import Enum, auto
 
 from bt.blackboard import Blackboard
-from bt.const import BtVar
-from debug import dbg
 
 
 class NodeState(Enum):
@@ -17,7 +15,7 @@ class BaseNode(ABC):
     """
     所有行為樹節點的抽象基底類別。
     """
-    def __init__(self, name: str = BtVar.BASE_NODE):
+    def __init__(self, name: str = 'base_node'):
         self.name = name
 
     @abstractmethod
@@ -45,7 +43,6 @@ class Sequence(BaseNode):
             state = child.tick(blackboard)
 
             if state == NodeState.FAILURE:
-                # dbg.log(f"❌ [Sequence 阻斷] 節點 '{self.name}' 在子節點 '{child.name}' 失敗")
                 return NodeState.FAILURE
             elif state == NodeState.RUNNING:
                 return NodeState.RUNNING
@@ -69,7 +66,7 @@ class Selector(BaseNode):
             state = child.tick(blackboard)
             if state != NodeState.FAILURE:
                 return state
-        # 所有的備案都失敗了
+
         return NodeState.FAILURE
 
 
@@ -81,6 +78,8 @@ class Inverter(BaseNode):
     (用途範例：Inverter(檢查是否持有部位) -> 變成「確認目前為空手」)
     """
     def __init__(self, name: str, child: BaseNode):
+        if not isinstance(child, BaseNode):
+            raise TypeError(f"{child} must be a BaseNode")
         super().__init__(name)
         self.child = child
 

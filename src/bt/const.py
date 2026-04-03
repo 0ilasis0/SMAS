@@ -2,23 +2,19 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
-@dataclass(frozen=True)
-class BtVar:
-    BASE_NODE = "base_node"
-    GENERATE_GEMINI_REPORT = "generate_gemini_report"
-    TRADE_UNIT = 1000
+class BlackboardCol(StrEnum):
+    ORACLE = "oracle"
     COOLDOWN_TIMER = "cooldown_timer"
-    DEFAULT_LLM_SCORE = 5
 
-
-class LLMCol(StrEnum):
-    SENTIMENT_SCORE = "sentiment_score"
-    SENTIMENT_REASON = "sentiment_reason"
+class LLMSentimentCol(StrEnum):
+    SCORE = "score"
+    REASON = "reason"
 
 class ExecuteCol(StrEnum):
     BUY = "buy"
     SELL = "sell"
     HOLD = "hold"
+    GENERATE_GEMINI_REPORT = "generate_gemini_report"
 
 class ConditionCol(StrEnum):
     CHECK_NOT_OVERHEATED = "check_not_overheated_node"

@@ -1,16 +1,22 @@
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pandas as pd
 
+from base import MathTool
 from bt.blackboard import Blackboard
-from bt.const import BtVar, DecisionAction, ExecuteCol, LLMCol
+from bt.const import BlackboardCol, DecisionAction, ExecuteCol, LLMSentimentCol
 from bt.core import BaseNode, NodeState
-from bt.params import TaxRate
+from bt.params import LLMParams, TaxRate
 from debug import dbg
 
 if TYPE_CHECKING:
     from ml.model.llm_oracle import GeminiOracle
 
+
+@dataclass(frozen=True)
+class ActionVar:
+    TRADE_UNIT: int = 1000
 
 # 交易動作節點 (虛擬交易執行)
 class ExecuteBuyNode(BaseNode):
@@ -33,22 +39,21 @@ class ExecuteBuyNode(BaseNode):
             dbg.war(f"遭遇漲停板鎖死 (開盤漲幅 {rise_rate:.2%})，無法執行買進！")
             return NodeState.FAILURE
 
+        # 計算應該的稅金
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
-        raw_shares = max(0, min(max_shares_prop, max_shares_min))
+        MathTool.clamp(max_shares_prop, 0, max_shares_min)
 
-        # 終極修復：自動偵測成交量單位 (張 vs 股)
         vol = blackboard.daily_volume
 
         max_liquidity_shares = int(vol * 0.05)
         raw_shares = min(raw_shares, max_liquidity_shares)
 
-        # 嚴格限制整股
-        shares_to_buy = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+        # 限制買賣必為整數
+        shares_to_buy = (raw_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
 
-        # 偵錯探針：把為什麼不買的原因大聲說出來！
         if shares_to_buy <= 0:
-            # dbg.war(f"買進失敗: 欲買 0 股。預算={usable_cash:.0f}, 股價={price:.2f}, 流動性上限={max_liquidity_shares}股")
+            dbg.war(f"買進失敗: 欲買 0 股。預算={usable_cash:.0f}, 股價={price:.2f}, 流動性上限={max_liquidity_shares}股")
             return NodeState.FAILURE
 
         # 先計算交易成本，再進行防呆檢查
@@ -82,7 +87,6 @@ class ExecuteBuyNode(BaseNode):
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
-
 class ExecuteSellNode(BaseNode):
     def __init__(self, position_ratio: float, name: str = ExecuteCol.SELL):
         super().__init__(name)
@@ -100,11 +104,11 @@ class ExecuteSellNode(BaseNode):
             shares_to_sell = position
         else:
             raw_shares = int(position * self.position_ratio)
-            shares_to_sell = (raw_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+            shares_to_sell = (raw_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
 
             # 若計算出 0 股，但確實想減碼，則強迫賣出 1 張 (或剩下的全部)
             if shares_to_sell == 0 and raw_shares > 0:
-                shares_to_sell = min(position, BtVar.TRADE_UNIT)
+                shares_to_sell = min(position, ActionVar.TRADE_UNIT)
 
 
         drop_rate = (price - blackboard.current_price) / blackboard.current_price
@@ -116,7 +120,7 @@ class ExecuteSellNode(BaseNode):
         max_liquidity_shares = int(blackboard.daily_volume * 0.05)
         if shares_to_sell > max_liquidity_shares:
             dbg.war(f"賣出量 ({shares_to_sell}) 超過市場流動性上限 ({max_liquidity_shares})，僅能部分成交！")
-            shares_to_sell = (max_liquidity_shares // BtVar.TRADE_UNIT) * BtVar.TRADE_UNIT
+            shares_to_sell = (max_liquidity_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
 
         if shares_to_sell <= 0:
             return NodeState.FAILURE
@@ -168,7 +172,6 @@ class IgnoreFailure(BaseNode):
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         state = self.child.tick(blackboard)
-        # 如果子節點還在 RUNNING，就乖乖向上回傳 RUNNING (未來擴充非同步 API 時會用到)
         if state == NodeState.RUNNING:
             return NodeState.RUNNING
         return NodeState.SUCCESS
@@ -180,14 +183,14 @@ class GenerateGeminiReportNode(BaseNode):
     負責收集黑板上的所有資訊，打包成 Prompt，並呼叫 Gemini 產出分析報告。
     內建「防幻覺與嚴禁竄改」的 System Prompt 框架。
     """
-    def __init__(self, oracle=None, name: str = BtVar.GENERATE_GEMINI_REPORT):
+    def __init__(self, oracle=None, name: str = ExecuteCol.GENERATE_GEMINI_REPORT):
         super().__init__(name)
         self.oracle = oracle
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
 
-        active_oracle: "GeminiOracle" | None = getattr(blackboard, 'oracle', self.oracle)
+        active_oracle: "GeminiOracle" | None = getattr(blackboard, BlackboardCol.ORACLE, self.oracle)
 
         if not active_oracle:
             dbg.war("⚠️ [Debug 警告] 找不到 Gemini Oracle 實體！將強制降級為『模擬報告』。請確認 API Key 是否載入，且有綁定至 Blackboard。")
@@ -207,8 +210,8 @@ class GenerateGeminiReportNode(BaseNode):
         else:
             trade_info_str = f"- 實際執行動作：未知狀態 ({action_val})。"
 
-        score = getattr(blackboard, LLMCol.SENTIMENT_SCORE, BtVar.DEFAULT_LLM_SCORE)
-        reason = getattr(blackboard, LLMCol.SENTIMENT_REASON, '無相關新聞或未啟用 LLM')
+        score = getattr(blackboard, LLMSentimentCol.SCORE, LLMParams.DEFAULT_SENTIMENT_SCORE)
+        reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
 
         pricing_logic = getattr(blackboard, 'gemini_reasoning', '')
 
