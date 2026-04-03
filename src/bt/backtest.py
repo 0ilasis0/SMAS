@@ -148,9 +148,10 @@ class BacktestEngine:
             )
             self.history_records.append(final_record.to_dict())
 
+        report_stats = self._generate_report()
+
         if silence: dbg.toggle()
 
-        report_stats = self._generate_report()
         return report_stats
 
     def _generate_report(self):
