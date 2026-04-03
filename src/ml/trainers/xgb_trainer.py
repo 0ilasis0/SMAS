@@ -96,6 +96,15 @@ class XGBTrainer:
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 
+        if cv_importances:
+            avg_importance = np.mean(cv_importances, axis=0)
+            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+
+            dbg.log("\n🏆 【XGBoost 核心特徵重要性 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("-" * 40)
+
         return oof_predictions.dropna()
 
     def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path):

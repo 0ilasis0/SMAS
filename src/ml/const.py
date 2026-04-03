@@ -34,17 +34,20 @@ class FeatureCol(StrEnum):
     BB_WIDTH = "bb_width"
     RETURN_5D = "return_5d"
 
+    # K線與量價微結構特徵
+    K_UPPER = "k_upper"         # 上影線比例
+    K_LOWER = "k_lower"         # 下影線比例
+    K_BODY = "k_body"           # 實體K線比例
+    BUY_POWER = "buy_power"     # 當日買盤力道 (收盤價位置)
+    RS_5D = "rs_5d"             # 個股與大盤的相對強
+
     # 標籤 (Label)
     TARGET = "target"
 
     @classmethod
     def get_features(cls):
         """回傳所有要餵給 AI 學習的特徵欄位清單 (排除 Target)"""
-        return [
-            cls.BIAS_WEEK, cls.BIAS_MONTH, cls.BIAS_QUARTER, cls.BIAS_YEAR,
-            cls.RSI, cls.MACD, cls.MACD_SIGNAL,
-            cls.VOL_CHANGE, cls.CLOSE_CHANGE, cls.BB_WIDTH
-        ]
+        return [e.value for e in cls if e.value != cls.TARGET.value]
 
 class MarketFeatureCol(StrEnum):
     """大盤專屬特徵欄位名稱"""

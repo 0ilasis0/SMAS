@@ -343,7 +343,7 @@ class QuantAIEngine:
         # 第三腦 (Market Brain) 推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
 
-        df_market_pure = self.db.get_aligned_market_data('^TWII', ['^SOX']).tail(MLConst.MAX_LOOKBACK)
+        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII, [MacroTicker.SOX]).tail(MLConst.MAX_LOOKBACK)
         df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
 
         if target_date not in df_market_clean.index:
@@ -441,7 +441,7 @@ class QuantAIEngine:
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
 
         # 抓取純淨的大盤全量資料
-        df_market_pure = self.db.get_aligned_market_data('^TWII', ['^SOX'])
+        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII, [MacroTicker.SOX])
         df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
 
         X_market = df_market_clean[MarketFeatureCol.get_features()]
