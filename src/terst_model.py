@@ -107,7 +107,7 @@ def run_model_comparison():
                     final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 
                 bt_engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy)
-                stats = bt_engine.run(df_test)
+                stats = bt_engine.run(df=df_test, silence=True)
                 train_time = time.time() - start_time
 
                 first_close = df_test[StockCol.CLOSE].iloc[0]

@@ -16,4 +16,4 @@ class Color(StrEnum):
 
 @dataclass(frozen=True)
 class GlobalParams:
-    DEFAULT_ERROR = -99999
+    DEFAULT_ERROR = -9999999

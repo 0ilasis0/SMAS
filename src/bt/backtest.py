@@ -59,11 +59,12 @@ class BacktestEngine:
 
         self.history_records = []
 
-    def run(self, df: pd.DataFrame):
+    def run(self, df: pd.DataFrame, silence: bool = False):
         """
         執行回測。
         :param df: 必須包含 ['Close', 'High', MetaCol.PROB_XGB, MetaCol.PROB_DL, MetaCol.PROB_FINAL] 欄位，且 Index 為日期。
         """
+        if silence: dbg.toggle()
         self.history_records.clear()
 
         # 將帳戶與黑板狀態重置為初始狀態
@@ -125,7 +126,7 @@ class BacktestEngine:
             )
             self.history_records.append(record.to_dict())
 
-        if len(df) > 0:
+        if not df.empty:
             last_date = df.index[-1]
             last_row = df.iloc[-1]
             last_close = last_row[StockCol.CLOSE]
@@ -143,8 +144,9 @@ class BacktestEngine:
             )
             self.history_records.append(final_record.to_dict())
 
-        report_stats = self._generate_report()
+        if silence: dbg.toggle()
 
+        report_stats = self._generate_report()
         return report_stats
 
     def _generate_report(self):
