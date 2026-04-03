@@ -42,7 +42,7 @@ class ExecuteBuyNode(BaseNode):
         # 計算應該的稅金
         max_shares_prop = int(usable_cash // (price * (1 + TaxRate.FEE_RATE)))
         max_shares_min = int((usable_cash - TaxRate.MIN_FEE) // price)
-        MathTool.clamp(max_shares_prop, 0, max_shares_min)
+        raw_shares = MathTool.clamp(max_shares_prop, 0, max_shares_min)
 
         vol = blackboard.daily_volume
 

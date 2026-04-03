@@ -8,6 +8,7 @@ import streamlit as st
 from bt.params import TaxRate
 from data.const import StockCol
 from path import PathConfig
+from ui.base import is_valid_ticker
 from ui.const import EncodingConst, PortfolioCol
 from ui.stock_names import get_tw_stock_mapping
 
@@ -231,10 +232,17 @@ def trade_dialog(db_manager, prefill_ticker: str = "", prefill_action: str = Non
         total_settlement = base_amount - fee - tax
         st.info(f"💵 預估應收交割：**${total_settlement:,.0f}** (扣除手續費 ${fee}、交易稅 ${tax})")
 
+    msg_placeholder = st.empty()
     if st.button("確認送出交易", type="primary", use_container_width=True):
+        if current_shares == 0 and len(pos_data[PortfolioCol.HISTORY]) == 0:
+            with st.spinner(f"正在驗證 {ticker} 是否存在..."):
+                if not is_valid_ticker(ticker):
+                    msg_placeholder.error(f"❌ 找不到標的 {ticker}！請確認代號是否正確。")
+                    return
+
         if is_buy:
             if total_settlement > current_cash:
-                st.error(f"❌ 可用現金不足！(應付: ${total_settlement:,.0f} / 餘額: ${current_cash:,.0f})")
+                msg_placeholder.error(f"❌ 可用現金不足！(應付: ${total_settlement:,.0f} / 餘額: ${current_cash:,.0f})")
                 return
             old_total_cost = current_shares * current_avg_cost
             new_total_cost = old_total_cost + total_settlement
@@ -244,7 +252,7 @@ def trade_dialog(db_manager, prefill_ticker: str = "", prefill_action: str = Non
 
         else:
             if trade_shares > current_shares:
-                st.error(f"❌ 庫存餘額不足！(目前僅持有: {current_shares} 股)")
+                msg_placeholder.error(f"❌ 庫存餘額不足！(目前僅持有: {current_shares} 股)")
                 return
             new_shares = current_shares - trade_shares
             new_avg_cost = current_avg_cost if new_shares > 0 else 0.0

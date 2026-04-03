@@ -461,7 +461,7 @@ class QuantAIEngine:
             return pd.DataFrame()
 
         # Meta 融合預測
-        X_meta = df_backtest[MetaCol.PROB_XGB, MetaCol.PROB_DL]
+        X_meta = df_backtest[[MetaCol.PROB_XGB, MetaCol.PROB_DL]]
         df_backtest[MetaCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
         dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")
