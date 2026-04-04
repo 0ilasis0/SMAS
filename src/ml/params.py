@@ -53,14 +53,14 @@ class TrainConfig:
 class DLHyperParams:
     """CNN-LSTM 深度學習超參數"""
     INPUT_SIZE: int = 8
-    TIME_STEPS: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
-    CNN_OUT_CHANNELS: int = 16          # CNN 特徵提取後的維度
-    LSTM_HIDDEN: int = 32               # LSTM 隱藏層神經元數量
+    TIME_STEPS: int = 20                # 滑動窗口大小
+    CNN_OUT_CHANNELS: int = 64          # CNN 特徵提取後的維度 (已Optuna)
+    LSTM_HIDDEN: int = 16               # LSTM 隱藏層神經元數量 (已Optuna)
     NUM_LAYERS: int = 1
     BATCH_SIZE: int = 32
-    LEARNING_RATE: float = 0.002
+    LEARNING_RATE: float = 0.000329     # (已Optuna)
     EPOCHS: int = 50
-    DROPOUT: float = 0.2
+    DROPOUT: float = 0.309903           # (已Optuna)
     SCHEDULER_PATIENCE: int = 3
     SCHEDULER_FACTOR: float = 0.5
     KERNEL_SIZE: int = 2
