@@ -105,6 +105,24 @@
                     "fee": 142,
                     "tax": 300,
                     "total": 99558.0
+                },
+                {
+                    "date": "2026-04-04 13:38:30",
+                    "action": "BUY",
+                    "price": 1800.0,
+                    "shares": 1000,
+                    "fee": 2565,
+                    "tax": 0,
+                    "total": 1802565.0
+                },
+                {
+                    "date": "2026-04-04 13:56:17",
+                    "action": "SELL",
+                    "price": 1810.0,
+                    "shares": 1000,
+                    "fee": 2579,
+                    "tax": 5430,
+                    "total": 1801991.0
                 }
             ]
         },
@@ -141,6 +159,66 @@
             "shares": 0,
             "avg_cost": 0.0,
             "history": []
+        },
+        "2002.TW": {
+            "shares": 2000,
+            "avg_cost": 18.356,
+            "history": [
+                {
+                    "date": "2026-04-04 13:21:59",
+                    "action": "BUY",
+                    "price": 18.33,
+                    "shares": 2000,
+                    "fee": 52,
+                    "tax": 0,
+                    "total": 36712.0
+                }
+            ]
+        },
+        "00878.TW": {
+            "shares": 1000,
+            "avg_cost": 21.28,
+            "history": [
+                {
+                    "date": "2026-04-04 13:29:53",
+                    "action": "BUY",
+                    "price": 21.25,
+                    "shares": 1000,
+                    "fee": 30,
+                    "tax": 0,
+                    "total": 21280.0
+                }
+            ]
+        },
+        "00934.TW": {
+            "shares": 1000,
+            "avg_cost": 15.021,
+            "history": [
+                {
+                    "date": "2026-04-04 13:31:28",
+                    "action": "BUY",
+                    "price": 15.0,
+                    "shares": 1000,
+                    "fee": 21,
+                    "tax": 0,
+                    "total": 15021.0
+                }
+            ]
+        },
+        "00923.TW": {
+            "shares": 1000,
+            "avg_cost": 18.135,
+            "history": [
+                {
+                    "date": "2026-04-04 13:34:23",
+                    "action": "BUY",
+                    "price": 18.11,
+                    "shares": 1000,
+                    "fee": 25,
+                    "tax": 0,
+                    "total": 18135.0
+                }
+            ]
         }
     }
 }

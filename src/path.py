@@ -36,9 +36,9 @@ class PathConfig:
     WATCHLIST = PathBase.processed / "watchlist.json"
     SETTINGS = PathBase.processed / "settings.json"
     PORTFOLIO = PathBase.processed / "portfolio.json"
+    CACHE_FILE = PathBase.processed / "update_cache.json"
     IDSS_DATA = PathBase.processed / "idss_data.db"
     LLM_CACHE = PathBase.processed / "llm_cache.db"
-    CACHE_FILE = PathBase.processed / "update_cache.json"
     GEMINI_KEY = PathBase.raw / ".env"
     MODEL_DIR = PathBase.model
 
