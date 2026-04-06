@@ -516,7 +516,7 @@ class QuantAIEngine:
         col_vol = StockCol.VOLUME.value if hasattr(StockCol.VOLUME, 'value') else 'volume'
 
         daily_returns = df[col_close].pct_change().dropna()
-        anomaly_mask = daily_returns.abs() > 0.4  # 台股不可能單日漲跌超過 40%
+        anomaly_mask = daily_returns.abs() > 0.6  # 台股不可能單日漲跌超過 60%
 
         if anomaly_mask.any():
             dbg.war(f"🚨 [Watchdog] 偵測到 {ticker} 出現異常跳空 (大於 40%)！")
