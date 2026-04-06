@@ -28,6 +28,7 @@ class DataManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
+            # 日線表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS daily_k_lines (
                     ticker TEXT,
@@ -42,7 +43,7 @@ class DataManager:
                 )
             ''')
 
-            # 2. 建立分時 K 線表 (包含 adj_close)
+            # 分時線表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS intraday_k_lines (
                     ticker TEXT,
@@ -57,7 +58,7 @@ class DataManager:
                 )
             ''')
 
-            # 3. 建立自選股表
+            # 建立自選股表
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS user_watchlist (
                     ticker TEXT PRIMARY KEY,

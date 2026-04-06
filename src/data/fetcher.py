@@ -12,6 +12,7 @@ from debug import dbg
 class Fetcher:
 
     INTRADAY_INDEX = 'Datetime'
+    address = "Asia/Taipei"
 
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 2
@@ -38,23 +39,7 @@ class Fetcher:
             actions=False
         )
 
-        if df.empty:
-            dbg.war(f"抓取失敗或無資料: {ticker_symbol}")
-            return pd.DataFrame()
-
-        df.columns = df.columns.str.lower()
-        df.rename(columns={'adj close': StockCol.ADJ_CLOSE}, inplace=True)
-
-        expected_cols = StockCol.get_ohlcv()
-        df = df.reindex(columns=expected_cols).fillna(0)
-
-        df.index.name = StockCol.DATE
-
-        # 精準時區校正：先轉為台灣時間，再拔除標籤
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert('Asia/Taipei').tz_localize(None)
-
-        return df
+        return self._process_fetched_data(df, ticker_symbol, index_name=StockCol.DATE)
 
     def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_MAX_DAY) -> pd.DataFrame:
         """
@@ -72,24 +57,32 @@ class Fetcher:
             actions=False
         )
 
+        return self._process_fetched_data(df, ticker_symbol, index_name=self.INTRADAY_INDEX)
+
+    def _process_fetched_data(self, df: pd.DataFrame, ticker_symbol: str, index_name: str) -> pd.DataFrame:
+        """
+        共用資料處理管線：負責欄位改名、對齊、補零與時區校正。
+        """
         if df.empty:
-            dbg.war(f"[{ticker_symbol}] 分時資料抓取失敗或無資料")
+            dbg.war(f"[{ticker_symbol}] 抓取失敗或無資料")
             return pd.DataFrame()
 
         df.columns = df.columns.str.lower()
-
         df.rename(columns={'adj close': StockCol.ADJ_CLOSE}, inplace=True)
-        if StockCol.ADJ_CLOSE not in df.columns:
-            df[StockCol.ADJ_CLOSE] = df[StockCol.CLOSE]
 
+        # 防呆：如果 yfinance 沒有給 adj close，就用 close 代替
+        if StockCol.ADJ_CLOSE not in df.columns:
+            df[StockCol.ADJ_CLOSE] = df[StockCol.CLOSE] if StockCol.CLOSE in df.columns else 0.0
+
+        # 確保 OHLCV 欄位順序正確
         expected_cols = StockCol.get_ohlcv()
         df = df.reindex(columns=expected_cols).fillna(0)
 
-        df.index.name = self.INTRADAY_INDEX
+        df.index.name = index_name
 
-        # 精準時區校正
+        # 精準時區校正：轉為當地時間並拔除時區標籤
         if df.index.tz is not None:
-            df.index = df.index.tz_convert('Asia/Taipei').tz_localize(None)
+            df.index = df.index.tz_convert(self.address).tz_localize(None)
 
         return df
 

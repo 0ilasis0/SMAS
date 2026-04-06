@@ -30,11 +30,11 @@ def tune_global_hyperparameters():
     def objective(trial: optuna.Trial):
         global consecutive_failures
 
-        # 1. 讓 Optuna 抽卡
-        suggested_channels = trial.suggest_categorical("CNN_OUT_CHANNELS", [16, 32, 64])
-        suggested_hidden = trial.suggest_categorical("LSTM_HIDDEN", [16, 32, 64, 128])
+        suggested_channels = trial.suggest_categorical("CNN_OUT_CHANNELS", [8, 16, 32])
+        suggested_hidden = trial.suggest_categorical("LSTM_HIDDEN", [16, 32])
+
         suggested_lr = trial.suggest_float("LEARNING_RATE", 1e-4, 5e-3, log=True)
-        suggested_dropout = trial.suggest_float("DROPOUT", 0.1, 0.5)
+        suggested_dropout = trial.suggest_float("DROPOUT", 0.2, 0.5)
 
         # 因為我們鎖定 n_jobs=1，這樣做百分之百安全，且不需要去動到任何底層的神經網路代碼！
         DLHyperParams.CNN_OUT_CHANNELS = suggested_channels
