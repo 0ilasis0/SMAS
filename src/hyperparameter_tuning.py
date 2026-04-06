@@ -144,7 +144,6 @@ def tune_global_hyperparameters():
     )
 
     dbg.log(f"🚀 開始尋優！紀錄存於: {sqlite_path.name}")
-    # 只要解決了隱患2，您現在可以放心地把 n_jobs 調高了 (例如您的 CPU 有 8 核心，可以設 n_jobs=2 或 4 榨乾算力)
     target_trials = 50
     current_trials = len(study.trials)
     remaining_trials = target_trials - current_trials
