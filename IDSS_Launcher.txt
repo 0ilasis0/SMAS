@@ -1,0 +1,8 @@
+Set WshShell = CreateObject("WScript.Shell")
+' 0 代表完全隱藏黑框
+WshShell.Run chr(34) & "run.bat" & Chr(34), 0
+Set WshShell = Nothing
+
+' 等待 3 秒讓 Streamlit 啟動，然後打開瀏覽器
+WScript.Sleep 3000
+WshShell.Run "http://localhost:8501"
