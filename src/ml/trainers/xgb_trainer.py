@@ -25,8 +25,7 @@ class XGBTrainer:
         ):
         self.ticker = ticker
         self.params = asdict(hp)
-        # 🚀 修正 1：加上 .value，確保能正確從字串字典中取出 n_estimators
-        self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS.value, 100)
+        self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS, 100)
 
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
@@ -96,9 +95,6 @@ class XGBTrainer:
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 
-        # ==========================================
-        # 🚀 升級 2：印出 XGBoost 左腦的「特徵重要性排行榜」
-        # ==========================================
         if cv_importances:
             avg_importance = np.mean(cv_importances, axis=0)
             importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
@@ -121,8 +117,7 @@ class XGBTrainer:
 
         # 套用 CV 計算出的最佳樹量
         final_params = self.params.copy()
-        # 🚀 修正 3：加上 .value
-        final_params[MLCol.N_ESTIMATORS.value] = self.optimal_trees
+        final_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
@@ -146,6 +141,7 @@ class XGBTrainer:
             model.load_model(model_path)
             dbg.log(f"成功載入 XGBoost 模型: {model_path}")
             return model
+
         except Exception as e:
             dbg.error(f"XGBoost 模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
             return None

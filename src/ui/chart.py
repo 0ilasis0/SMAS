@@ -4,6 +4,7 @@ import streamlit as st
 
 from const import Color
 from data.const import StockCol
+from ui.const import SessionKey
 
 
 @st.cache_data(ttl=3600)
@@ -16,32 +17,36 @@ def render_chart():
     """渲染中央 K 線圖 (支援動態縮放、全中文月份、無縫接合斷點)"""
     with st.expander("📉 近期走勢圖 (顯示近 3 年)", expanded=True):
         try:
-            ctrl = st.session_state.ctrl_live
-            if not ctrl: return
+            ctrl = st.session_state.get(SessionKey.CTRL_LIVE.value)
+            current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
+
+            if not ctrl or not current_ticker:
+                return
 
             # 使用快取函數拿取資料，避免每次切換 Tab 都重查 DB
-            df_recent = get_cached_market_data(st.session_state.current_ticker)
+            df_recent = get_cached_market_data(current_ticker)
 
             if not df_recent.empty:
                 fig = go.Figure()
+
                 fig.add_trace(go.Candlestick(x=df_recent.index,
-                                             open=df_recent[StockCol.OPEN],
-                                             high=df_recent[StockCol.HIGH],
-                                             low=df_recent[StockCol.LOW],
-                                             close=df_recent[StockCol.CLOSE],
-                                             increasing_line_color=Color.RED,
-                                             decreasing_line_color=Color.GREEN,
+                                             open=df_recent[StockCol.OPEN.value],
+                                             high=df_recent[StockCol.HIGH.value],
+                                             low=df_recent[StockCol.LOW.value],
+                                             close=df_recent[StockCol.CLOSE.value],
+                                             increasing_line_color=Color.RED.value,
+                                             decreasing_line_color=Color.GREEN.value,
                                              name='K線'))
 
-                ma5 = df_recent[StockCol.CLOSE].rolling(window=5).mean().bfill()
-                ma20 = df_recent[StockCol.CLOSE].rolling(window=20).mean().bfill()
-                ma60 = df_recent[StockCol.CLOSE].rolling(window=60).mean().bfill()
-                ma240 = df_recent[StockCol.CLOSE].rolling(window=240).mean().bfill()
+                ma5 = df_recent[StockCol.CLOSE.value].rolling(window=5).mean().bfill()
+                ma20 = df_recent[StockCol.CLOSE.value].rolling(window=20).mean().bfill()
+                ma60 = df_recent[StockCol.CLOSE.value].rolling(window=60).mean().bfill()
+                ma240 = df_recent[StockCol.CLOSE.value].rolling(window=240).mean().bfill()
 
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE, width=1.5), name='5MA(週線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE, width=1.5), name='20MA(月線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE, width=1.5), name='60MA(季線)'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE, width=1.5), name='240MA(年線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE.value, width=1.5), name='5MA(週線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE.value, width=1.5), name='20MA(月線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE.value, width=1.5), name='60MA(季線)'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE.value, width=1.5), name='240MA(年線)'))
 
                 all_dates = pd.date_range(start=df_recent.index.min(), end=df_recent.index.max())
                 missing_dates = all_dates.difference(df_recent.index)

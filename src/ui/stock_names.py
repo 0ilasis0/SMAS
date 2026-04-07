@@ -1,4 +1,3 @@
-# ui/stock_names.py
 import requests
 import streamlit as st
 
@@ -37,6 +36,6 @@ def get_tw_stock_mapping() -> dict:
 
     # 如果 API 剛好掛掉，給幾個預設值當作防呆底線
     if not mapping:
-        return {"2330.TW": "台積電", "2337.TW": "旺宏", "5469.TW": "瀚宇博", "2388.TW": "威盛"}
+        return {"2330.TW": "台積電"}
 
     return mapping

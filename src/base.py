@@ -1,12 +1,12 @@
 import os
 
-from dotenv import load_dotenv
 import pandas as pd
-import numbers as np
+from dotenv import load_dotenv
+from numpy.typing import NDArray
+
 from const import GlobalVar
 from debug import dbg
 from path import PathConfig
-from numpy.typing import NDArray
 
 
 class FrozenMeta(type):

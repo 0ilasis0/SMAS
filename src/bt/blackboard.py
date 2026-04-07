@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict
 
 from bt.account import Account
-from bt.const import DecisionAction
+from bt.const import TradeDecision
 from bt.params import LLMParams, TaxRate
 from const import GlobalParams
 
@@ -27,9 +27,9 @@ class Blackboard:
     cooldown_timer: int = 0        # 停損冷卻期倒數天數
 
     # AI 分析與決策結果
-    oracle:str = ""
-    action_decision: str = DecisionAction.HOLD
-    gemini_reasoning: str = ""    # Gemini 產出的分析報告
+    oracle: Any = None
+    action_decision: str = TradeDecision.HOLD
+    gemini_reasoning: str = ""     # Gemini 產出的分析報告
     sentiment_score: int = LLMParams.DEFAULT_SENTIMENT_SCORE
     sentiment_reason: str = ""     # 新聞情緒理由
 

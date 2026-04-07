@@ -1,25 +1,27 @@
 from bt.blackboard import Blackboard
-from bt.const import ConditionCol, DecisionAction, LLMSentimentCol
-from bt.core import BaseNode, NodeState
+from bt.const import BTCondition, TradeDecision
+from bt.core import ConditionNode, NodeState
 from bt.params import ConsiderConfig, LLMParams, TaxRate
 from debug import dbg
-from ml.const import FeatureCol
+from ml.const import FeatureCol, OracleCol
 
 
-# 防守與獲利了結
-class CheckSellSentimentFilterNode(BaseNode):
+# ==========================================
+# 防守與獲利了結 (Sell / Defensive Conditions)
+# ==========================================
+class CheckSellSentimentFilterNode(ConditionNode):
     """
     LLM 停利防禦過濾節點 (News Sentiment 賣出守門員)。
     若近期新聞被判定為極度利多 (分數 >= 門檻)，則退回賣出請求，繼續讓獲利奔跑。
-    ⚠️ 嚴格警告：此節點絕對不可放在「強制停損 (Stop-Loss)」的邏輯分支出去！
+    警告：此節點絕對不可放在「強制停損 (Stop-Loss)」的邏輯分支出去！
     """
-    def __init__(self, block_score: int, name: str = ConditionCol.CHECK_SELL_SENTIMENT_FILTER):
+    def __init__(self, block_score: int, name: str = BTCondition.SELL_SENTIMENT_FILTER):
         super().__init__(name)
         self.block_score = block_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_score = getattr(blackboard, LLMSentimentCol.SCORE, 5)
-        current_reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
+        current_score = getattr(blackboard, OracleCol.SCORE.value, 5)
+        current_reason = getattr(blackboard, OracleCol.REASON.value, '無相關新聞或未啟用 LLM')
 
         # 如果情緒極度樂觀，阻止這次的賣出
         if current_score >= self.block_score:
@@ -29,12 +31,12 @@ class CheckSellSentimentFilterNode(BaseNode):
         # 情緒普普或看跌，同意放行技術面賣出
         return NodeState.SUCCESS
 
-class CheckHasPositionNode(BaseNode):
+class CheckHasPositionNode(ConditionNode):
     """
     檢查目前是否持有部位。
     若持有部位回傳 SUCCESS，若空手回傳 FAILURE。
     """
-    def __init__(self, name: str = ConditionCol.CHECK_HAS_POSITION):
+    def __init__(self, name: str = BTCondition.HAS_POSITION):
         super().__init__(name)
 
     def tick(self, blackboard: Blackboard) -> NodeState:
@@ -42,12 +44,12 @@ class CheckHasPositionNode(BaseNode):
             return NodeState.SUCCESS
         return NodeState.FAILURE
 
-class CheckStopLossNode(BaseNode):
+class CheckStopLossNode(ConditionNode):
     """
     檢查是否觸發停損。
     若虧損比例超過容忍值，回傳 SUCCESS (代表條件成立，觸發後續賣出動作)。
     """
-    def __init__(self, loss_tolerance: float, cooldown_days: int, name: str = ConditionCol.CHECK_STOP_LOSS):
+    def __init__(self, loss_tolerance: float, cooldown_days: int, name: str = BTCondition.STOP_LOSS):
         super().__init__(name)
         self.loss_tolerance = loss_tolerance
         self.cooldown_days = cooldown_days
@@ -67,17 +69,18 @@ class CheckStopLossNode(BaseNode):
             trigger_price = blackboard.current_price if close_return <= self.loss_tolerance else blackboard.executable_price
             dbg.war(f"⚠️ [風險控管] 觸發強制停損！觸價: {trigger_price:.2f} 預估報酬率: {min(close_return, open_return):.2%} <= 容忍底線 {self.loss_tolerance:.2%} (SUCCESS)")
 
+            # 🚨 特例：雖然是 ConditionNode，但冷卻倒數屬於「觸發當下的狀態改變」，在此保留。
             blackboard.cooldown_timer = self.cooldown_days
             return NodeState.SUCCESS
 
         return NodeState.FAILURE
 
-class CheckTrailingStopNode(BaseNode):
+class CheckTrailingStopNode(ConditionNode):
     """
     移動停損 (Trailing Stop) 檢查。
     從持倉以來的最高點回落超過設定比例，即觸發出場 (鎖住利潤或限制虧損)。
     """
-    def __init__(self, drawdown_tolerance: float, cooldown_days: int, name: str = ConditionCol.CHECK_TRAILING_STOP):
+    def __init__(self, drawdown_tolerance: float, cooldown_days: int, name: str = BTCondition.TRAILING_STOP):
         super().__init__(name)
         self.drawdown_tolerance = drawdown_tolerance
         self.cooldown_days = cooldown_days
@@ -87,8 +90,8 @@ class CheckTrailingStopNode(BaseNode):
             return NodeState.FAILURE
 
         highest_price = blackboard.highest_price
-        close_drawdown = (blackboard.current_price - highest_price) / highest_price
-        open_drawdown = (blackboard.executable_price - highest_price) / highest_price
+        close_drawdown = (blackboard.current_price - highest_price) / (highest_price + 1e-9)
+        open_drawdown = (blackboard.executable_price - highest_price) / (highest_price + 1e-9)
 
         if close_drawdown <= self.drawdown_tolerance or open_drawdown <= self.drawdown_tolerance:
             actual_drawdown = min(close_drawdown, open_drawdown)
@@ -99,11 +102,11 @@ class CheckTrailingStopNode(BaseNode):
 
         return NodeState.FAILURE
 
-class CheckSellSignalNode(BaseNode):
+class CheckSellSignalNode(ConditionNode):
     """
     檢查綜合勝率是否跌破「賣出門檻」（例如模型極度看空）。
     """
-    def __init__(self, threshold: float = ConsiderConfig.SELL_THRESHOLD, name: str = ConditionCol.CHECK_SELL_SIGNAL):
+    def __init__(self, threshold: float = ConsiderConfig.SELL_THRESHOLD, name: str = BTCondition.SELL_SIGNAL):
         super().__init__(name)
         self.threshold = threshold
 
@@ -116,12 +119,12 @@ class CheckSellSignalNode(BaseNode):
 
         return NodeState.FAILURE
 
-class CheckTakeProfitNode(BaseNode):
+class CheckTakeProfitNode(ConditionNode):
     """
     檢查是否觸發停利。
     若獲利比例超過目標值，回傳 SUCCESS (代表條件成立，觸發後續賣出動作)。
     """
-    def __init__(self, profit_target: float, name: str = ConditionCol.CHECK_TAKE_PROFIT):
+    def __init__(self, profit_target: float, name: str = BTCondition.TAKE_PROFIT):
         super().__init__(name)
         self.profit_target = profit_target
 
@@ -135,12 +138,12 @@ class CheckTakeProfitNode(BaseNode):
             return NodeState.SUCCESS
         return NodeState.FAILURE
 
-class CheckNotPartialTakenNode(BaseNode):
+class CheckNotPartialTakenNode(ConditionNode):
     """
     檢查是否「尚未」執行過部分停利。
     用來防止「碎肉機陷阱」(避免每天都在賣一半)。
     """
-    def __init__(self, name: str = ConditionCol.CHECK_NOT_PARTIAL_TAKEN):
+    def __init__(self, name: str = BTCondition.NOT_PARTIAL_TAKEN):
         super().__init__(name)
 
     def tick(self, blackboard: Blackboard) -> NodeState:
@@ -150,9 +153,11 @@ class CheckNotPartialTakenNode(BaseNode):
         return NodeState.SUCCESS
 
 
-# 進攻與建倉
-class CheckCooldownNode(BaseNode):
-    def __init__(self, cooldown_days: int, name: str = ConditionCol.CHECK_COOLDOWN):
+# ==========================================
+# 進攻與建倉 (Buy / Offensive Conditions)
+# ==========================================
+class CheckCooldownNode(ConditionNode):
+    def __init__(self, cooldown_days: int, name: str = BTCondition.COOLDOWN):
         super().__init__(name)
         self.cooldown_days = cooldown_days
 
@@ -163,13 +168,12 @@ class CheckCooldownNode(BaseNode):
 
         return NodeState.SUCCESS
 
-class CheckTrendFilterNode(BaseNode):
+class CheckTrendFilterNode(ConditionNode):
     """
     大趨勢過濾節點。
-    如果目前股價處於明確的空頭趨勢 (例如跌破月線/季線)，拒絕做多。
-    (這裡我們用一個簡單的近似法：如果股價距離過去的高點跌幅超過 15%，視為空頭瀑布)
+    如果目前大盤防禦模型判定危機極高，拒絕做多。
     """
-    def __init__(self, safe_threshold: float, name: str = ConditionCol.CHECK_TREND_FILTER):
+    def __init__(self, safe_threshold: float, name: str = BTCondition.TREND_FILTER):
         super().__init__(name)
         self.safe_threshold = safe_threshold
 
@@ -179,18 +183,18 @@ class CheckTrendFilterNode(BaseNode):
             return NodeState.FAILURE
         return NodeState.SUCCESS
 
-class CheckSentimentFilterNode(BaseNode):
+class CheckSentimentFilterNode(ConditionNode):
     """
     LLM 情緒防禦過濾節點 (News Sentiment 守門員)。
     若近期新聞被判定為重大利空 (分數低於門檻)，拒絕多單進場。
     """
-    def __init__(self, min_score: int, name: str = ConditionCol.CHECK_SENTIMENT_FILTER):
+    def __init__(self, min_score: int, name: str = BTCondition.SENTIMENT_FILTER):
         super().__init__(name)
         self.min_score = min_score
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        current_score = getattr(blackboard, LLMSentimentCol.SCORE, LLMParams.DEFAULT_SENTIMENT_SCORE)
-        current_reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
+        current_score = getattr(blackboard, OracleCol.SCORE.value, LLMParams.DEFAULT_SENTIMENT_SCORE)
+        current_reason = getattr(blackboard, OracleCol.REASON.value, '無相關新聞或未啟用 LLM')
 
         if current_score < self.min_score:
             dbg.war(f"📰 [進攻取消] LLM 判讀新聞為重大利空 (分數: {current_score}/10, 理由: {current_reason})，拒絕買進！")
@@ -198,12 +202,12 @@ class CheckSentimentFilterNode(BaseNode):
 
         return NodeState.SUCCESS
 
-class CheckEntryCountLimitNode(BaseNode):
+class CheckEntryCountLimitNode(ConditionNode):
     """
     檢查加碼次數是否未達上限。
     用來防止「無底洞奈米加碼」。
     """
-    def __init__(self, max_entries: int, name: str = ConditionCol.CHECK_ENTRY_COUNT_LIMIT):
+    def __init__(self, max_entries: int, name: str = BTCondition.ENTRY_COUNT_LIMIT):
         super().__init__(name)
         self.max_entries = max_entries
 
@@ -213,12 +217,12 @@ class CheckEntryCountLimitNode(BaseNode):
 
         return NodeState.FAILURE
 
-class CheckGapLimitNode(BaseNode):
+class CheckGapLimitNode(ConditionNode):
     """
     檢查隔日開盤跳空幅度是否過大。
     用來防止 AI 判定買進，但隔天直接開漲停或大幅跳空，導致買在極高風險的位置。
     """
-    def __init__(self, max_gap_ratio: float, name: str = ConditionCol.CHECK_GAP_LIMIT):
+    def __init__(self, max_gap_ratio: float, name: str = BTCondition.GAP_LIMIT):
         super().__init__(name)
         # 預設：如果明天開盤跳空大於 ~%，就放棄買進
         self.max_gap_ratio = max_gap_ratio
@@ -238,39 +242,37 @@ class CheckGapLimitNode(BaseNode):
 
         return NodeState.SUCCESS
 
-class CheckNotOverheatedNode(BaseNode):
+class CheckNotOverheatedNode(ConditionNode):
     """
     防線 2：追高防呆鎖 (IDSS 自訂引擎版)。
     如果股票短線漲太多 (近 5 日)、乖離過大 (月線)，強制禁止買進。
     """
-    def __init__(self, max_return_5d: float, max_bias_20: float, name=ConditionCol.CHECK_NOT_OVERHEATED):
+    def __init__(self, max_return_5d: float, max_bias_20: float, name=BTCondition.NOT_OVERHEATED):
         super().__init__(name)
         self.max_return_5d = max_return_5d
         self.max_bias_20 = max_bias_20
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         # 1. 取得黑板上的防呆數據
-        ret_5d = getattr(blackboard, FeatureCol.RETURN_5D, 0.0)
-        bias_20 = getattr(blackboard, FeatureCol.BIAS_MONTH, 0.0)
+        ret_5d = getattr(blackboard, FeatureCol.RETURN_5D.value, 0.0)
+        bias_20 = getattr(blackboard, FeatureCol.BIAS_MONTH.value, 0.0)
 
         # 2. 判斷是否過熱
         if ret_5d > self.max_return_5d or bias_20 > self.max_bias_20:
-
-            # 物理煞車：強制寫入 HOLD 並記錄警告
-            blackboard.action_decision = DecisionAction.HOLD
-            blackboard.gemini_reasoning = f"⚠️ 系統觸發追高防呆鎖 (近5日漲幅: {ret_5d:.1%}, 月線乖離: {bias_20:.1%})。為防主力出貨，強制阻斷買進訊號。"
-
+            dbg.war(f"⚠️ [進攻取消] 系統觸發追高防呆鎖 (近5日漲幅: {ret_5d:.1%}, 月線乖離: {bias_20:.1%})。拒絕追價買進！(FAILURE)")
             return NodeState.FAILURE
 
         return NodeState.SUCCESS
 
 
-# 共同
-class CheckBuySignalNode(BaseNode):
+# ==========================================
+# 共同 (Common Conditions)
+# ==========================================
+class CheckBuySignalNode(ConditionNode):
     """
     檢查綜合勝率是否達到「買進門檻」。
     """
-    def __init__(self, threshold: float = ConsiderConfig.BUY_THRESHOLD, name: str = ConditionCol.CHECK_BUY_SIGNAL):
+    def __init__(self, threshold: float = ConsiderConfig.BUY_THRESHOLD, name: str = BTCondition.BUY_SIGNAL):
         super().__init__(name)
         self.threshold = threshold
 
@@ -279,6 +281,4 @@ class CheckBuySignalNode(BaseNode):
         if prob >= self.threshold:
             dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} >= 買進門檻 ➔ 允許買進 (SUCCESS)")
             return NodeState.SUCCESS
-        # dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} <= 買進門檻 ➔ 不買進")
         return NodeState.FAILURE
-

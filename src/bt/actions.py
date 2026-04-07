@@ -1,14 +1,15 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
 from base import MathTool
 from bt.blackboard import Blackboard
-from bt.const import BlackboardCol, DecisionAction, ExecuteCol, LLMSentimentCol
-from bt.core import BaseNode, NodeState
+from bt.const import BlackboardKey, BTAction, TradeDecision
+from bt.core import ActionNode, NodeState
 from bt.params import LLMParams, TaxRate
 from debug import dbg
+from ml.const import OracleCol
 
 if TYPE_CHECKING:
     from ml.model.llm_oracle import GeminiOracle
@@ -18,9 +19,11 @@ if TYPE_CHECKING:
 class ActionVar:
     TRADE_UNIT: int = 1000
 
+# ==========================================
 # 交易動作節點 (虛擬交易執行)
-class ExecuteBuyNode(BaseNode):
-    def __init__(self, capital_ratio: float, name: str = ExecuteCol.BUY):
+# ==========================================
+class ExecuteBuyNode(ActionNode):
+    def __init__(self, capital_ratio: float, name: str = BTAction.EXECUTE_BUY):
         super().__init__(name)
         self.capital_ratio = capital_ratio
 
@@ -72,7 +75,8 @@ class ExecuteBuyNode(BaseNode):
         new_position = blackboard.position + shares_to_buy
         blackboard.avg_cost = (old_total_cost + total_cost) / new_position
         blackboard.position = new_position
-        blackboard.action_decision = DecisionAction.BUY
+
+        blackboard.action_decision = TradeDecision.BUY
 
         # 寫入黑板供 Gemini 使用
         blackboard.last_trade_shares = shares_to_buy
@@ -87,8 +91,8 @@ class ExecuteBuyNode(BaseNode):
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
-class ExecuteSellNode(BaseNode):
-    def __init__(self, position_ratio: float, name: str = ExecuteCol.SELL):
+class ExecuteSellNode(ActionNode):
+    def __init__(self, position_ratio: float, name: str = BTAction.EXECUTE_SELL):
         super().__init__(name)
         self.position_ratio = position_ratio
 
@@ -109,7 +113,6 @@ class ExecuteSellNode(BaseNode):
             # 若計算出 0 股，但確實想減碼，則強迫賣出 1 張 (或剩下的全部)
             if shares_to_sell == 0 and raw_shares > 0:
                 shares_to_sell = min(position, ActionVar.TRADE_UNIT)
-
 
         drop_rate = (price - blackboard.current_price) / blackboard.current_price
         if drop_rate <= -0.095:
@@ -144,7 +147,7 @@ class ExecuteSellNode(BaseNode):
             # 部分減碼：標記已經停利過，防止碎肉機陷阱
             blackboard.is_partial_profit_taken = True
 
-        blackboard.action_decision = DecisionAction.SELL
+        blackboard.action_decision = TradeDecision.SELL
         blackboard.last_trade_shares = shares_to_sell
         blackboard.last_trade_price = price
         blackboard.last_trade_profit = profit
@@ -153,44 +156,33 @@ class ExecuteSellNode(BaseNode):
         blackboard.cached_return_rate = None
         return NodeState.SUCCESS
 
-class ExecuteHoldNode(BaseNode):
+class ExecuteHoldNode(ActionNode):
     """保持觀望，不進行任何交易"""
-    def __init__(self, name: str = ExecuteCol.HOLD):
+    def __init__(self, name: str = BTAction.EXECUTE_HOLD):
         super().__init__(name)
 
     def tick(self, blackboard: Blackboard) -> NodeState:
-        blackboard.action_decision = DecisionAction.HOLD
+        blackboard.action_decision = TradeDecision.HOLD
         dbg.log("[交易執行] 維持現狀 (HOLD)。")
         return NodeState.SUCCESS
 
 
-class IgnoreFailure(BaseNode):
-    """裝飾節點：將子節點的 FAILURE 強制轉為 SUCCESS (非關鍵路徑避震器)"""
-    def __init__(self, child: BaseNode):
-        super().__init__(child.name + "_Ignored")
-        self.child = child
-
-    def tick(self, blackboard: Blackboard) -> NodeState:
-        state = self.child.tick(blackboard)
-        if state == NodeState.RUNNING:
-            return NodeState.RUNNING
-        return NodeState.SUCCESS
-
-
+# ==========================================
 # AI 報告生成節點 (呼叫 Gemini)
-class GenerateGeminiReportNode(BaseNode):
+# ==========================================
+class GenerateGeminiReportNode(ActionNode):
     """
     負責收集黑板上的所有資訊，打包成 Prompt，並呼叫 Gemini 產出分析報告。
     內建「防幻覺與嚴禁竄改」的 System Prompt 框架。
     """
-    def __init__(self, oracle=None, name: str = ExecuteCol.GENERATE_GEMINI_REPORT):
+    def __init__(self, oracle=None, name: str = BTAction.GENERATE_REPORT):
         super().__init__(name)
         self.oracle = oracle
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
 
-        active_oracle: "GeminiOracle" | None = getattr(blackboard, BlackboardCol.ORACLE, self.oracle)
+        active_oracle: "GeminiOracle" | None = getattr(blackboard, BlackboardKey.ORACLE.value, self.oracle)
 
         if not active_oracle:
             dbg.war("⚠️ [Debug 警告] 找不到 Gemini Oracle 實體！將強制降級為『模擬報告』。請確認 API Key 是否載入，且有綁定至 Blackboard。")
@@ -200,18 +192,18 @@ class GenerateGeminiReportNode(BaseNode):
         action_val = blackboard.action_decision
 
         trade_info_str = ""
-        if action_val == DecisionAction.BUY:
+        if action_val == TradeDecision.BUY:
             trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
-        elif action_val == DecisionAction.SELL:
+        elif action_val == TradeDecision.SELL:
             action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
             trade_info_str = f"- 實際執行動作：系統已成功【{action_type}】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
-        elif action_val == DecisionAction.HOLD:
+        elif action_val == TradeDecision.HOLD:
             trade_info_str = "- 實際執行動作：系統判定維持現狀【觀望 (HOLD)】。"
         else:
             trade_info_str = f"- 實際執行動作：未知狀態 ({action_val})。"
 
-        score = getattr(blackboard, LLMSentimentCol.SCORE, LLMParams.DEFAULT_SENTIMENT_SCORE)
-        reason = getattr(blackboard, LLMSentimentCol.REASON, '無相關新聞或未啟用 LLM')
+        score = getattr(blackboard, OracleCol.SCORE.value, LLMParams.DEFAULT_SENTIMENT_SCORE)
+        reason = getattr(blackboard, OracleCol.REASON.value, '無相關新聞或未啟用 LLM')
 
         pricing_logic = getattr(blackboard, 'gemini_reasoning', '')
 

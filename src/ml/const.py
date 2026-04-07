@@ -102,18 +102,6 @@ class QuoteCol(StrEnum):
     AVG_5D_VOL = "avg_5d_vol"
 
 
-class APIKey(StrEnum):
-    """ Controller 回傳給 UI 的標準化 JSON Key"""
-    STATUS = "status"
-    MESSAGE = "message"
-    MODE = "mode"
-    PERSONA = "persona"
-    DECISION = "decision"
-    ACCOUNT = "account_after_trade"
-    AI_SIGNALS = "ai_signals"
-    SENTIMENT = "sentiment"
-    REPORT = "report"
-
 class DLParamKey(StrEnum):
     """ 深度學習超參數字典鍵值 (避免字串拼寫錯誤)"""
     BATCH_SIZE = "BATCH_SIZE"

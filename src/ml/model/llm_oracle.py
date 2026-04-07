@@ -5,7 +5,7 @@ import time
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from enum import StrEnum
 
@@ -22,10 +22,11 @@ class TradingMode(StrEnum):
     DAY_TRADE = "day_trade"
     SWING = "swing"
 
+
 class GeminiOracle:
     """
     量化系統的 LLM 。
-    實作完美隔離的 API Key Client 切換機制。
+    實作完美隔離的 API Key Client 切換機制與按日情緒快取。
     """
     FALLBACK_MODELS = [
         'models/gemini-3.1-flash-lite-preview', # 🥇 (15 RPM / 500 RPD) - 海量掃描專用
@@ -41,11 +42,14 @@ class GeminiOracle:
         self.api_keys = api_keys
         self.mode = mode
         self.db_path = PathConfig.LLM_CACHE
+        # 取得台灣時區，防止雲端部署時區錯亂
+        self.tw_tz = timezone(timedelta(hours=8))
         self._init_db()
 
     def _init_db(self):
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
+        # 加入 timeout=10 防禦多進程資料庫鎖定 (database is locked)
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS sentiment_cache (
@@ -58,8 +62,9 @@ class GeminiOracle:
             ''')
             conn.commit()
 
-    def _get_payload_hash(self, ticker: str, news_text: str) -> str:
-        payload = f"{ticker}_{news_text}"
+    def _get_payload_hash(self, ticker: str, date_str: str) -> str:
+        # 使用「股票代號 + 日期」作為 Hash，這樣能保證同一檔股票在同一天只會消耗一次 API
+        payload = f"{ticker}_{date_str}"
         return hashlib.md5(payload.encode(EncodingConst.UTF8)).hexdigest()
 
     def fetch_recent_news(self, ticker: str) -> str:
@@ -96,7 +101,9 @@ class GeminiOracle:
                 if pub_date_str:
                     try:
                         dt = parsedate_to_datetime(pub_date_str)
-                        clean_date = dt.strftime('%Y-%m-%d')
+                        # 轉為台灣時區
+                        dt_tw = dt.astimezone(self.tw_tz)
+                        clean_date = dt_tw.strftime('%Y-%m-%d')
                     except Exception:
                         clean_date = pub_date_str
 
@@ -170,25 +177,23 @@ class GeminiOracle:
             dbg.log(f"[{ticker}] 當沖模式啟動：略過 LLM 判斷，給予中立分數 5")
             return 5, "當沖模式，略過新聞分析。"
 
+        current_today_str = datetime.now(self.tw_tz).strftime('%Y-%m-%d')
+        payload_hash = self._get_payload_hash(ticker, current_today_str)
+
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT score, reason FROM sentiment_cache WHERE payload_hash=?", (payload_hash,))
+            row = cursor.fetchone()
+            if row:
+                dbg.log(f"[{ticker}] 🎯 命中今日 LLM 情感快取！直接取回分數: {row[0]}")
+                return row[0], row[1]
+
+        dbg.log(f"[{ticker}] 尚未有今日快取，啟動 LLM 網路查訊與情緒分析管線...")
         news_text = self.fetch_recent_news(ticker)
 
         if not news_text.strip():
             return 5, "無最新重大新聞。"
 
-        payload_hash = self._get_payload_hash(ticker, news_text)
-
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT score, reason FROM sentiment_cache WHERE payload_hash=?", (payload_hash,))
-            row = cursor.fetchone()
-            if row:
-                dbg.log(f"[{ticker}] 命中 LLM 快取！直接取回情緒分數: {row[0]}")
-                return row[0], row[1]
-
-        dbg.log(f"[{ticker}] 未命中快取，啟動 LLM 多線程情緒分析管線...")
-
-        # 抓取當天時間
-        current_today_str = datetime.now().strftime('%Y-%m-%d')
         prompt = f"""
         【系統時間】：今天是 {current_today_str}。
 
@@ -222,10 +227,11 @@ class GeminiOracle:
         score = int(result.get('score', 5))
         reason = result.get('reason', '無')
 
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO sentiment_cache (payload_hash, ticker, score, reason) VALUES (?, ?, ?, ?)",
+                "INSERT INTO sentiment_cache (payload_hash, ticker, score, reason) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(payload_hash) DO UPDATE SET score=excluded.score, reason=excluded.reason, timestamp=CURRENT_TIMESTAMP",
                 (payload_hash, ticker, score, reason)
             )
             conn.commit()

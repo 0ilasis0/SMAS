@@ -1,5 +1,5 @@
 {
-    "global_cash": 67483.0,
+    "global_cash": 113485.0,
     "positions": {
         "2388.TW": {
             "shares": 3000,
@@ -7,7 +7,7 @@
             "history": [
                 {
                     "date": "2026-04-03 21:39:22",
-                    "action": "BUY",
+                    "action": "buy",
                     "price": 53.6,
                     "shares": 1000,
                     "fee": 76,
@@ -16,7 +16,7 @@
                 },
                 {
                     "date": "2026-04-03 21:39:35",
-                    "action": "BUY",
+                    "action": "buy",
                     "price": 49.4,
                     "shares": 2000,
                     "fee": 140,
@@ -89,40 +89,67 @@
             "avg_cost": 0.0,
             "history": [
                 {
-                    "date": "2026-04-03 21:42:16",
-                    "action": "BUY",
-                    "price": 100.0,
-                    "shares": 1000,
-                    "fee": 142,
+                    "date": "2026-04-07 19:20:29",
+                    "action": "buy",
+                    "price": 5.0,
+                    "shares": 5000,
+                    "fee": 35,
                     "tax": 0,
-                    "total": 100142.0
+                    "total": 25035.0
                 },
                 {
-                    "date": "2026-04-03 21:42:29",
-                    "action": "SELL",
-                    "price": 100.0,
-                    "shares": 1000,
+                    "date": "2026-04-07 19:20:39",
+                    "action": "sell",
+                    "price": 10.0,
+                    "shares": 2000,
+                    "fee": 28,
+                    "tax": 60,
+                    "total": 19912.0
+                },
+                {
+                    "date": "2026-04-07 19:20:50",
+                    "action": "buy",
+                    "price": 20.0,
+                    "shares": 3000,
+                    "fee": 85,
+                    "tax": 0,
+                    "total": 60085.0
+                },
+                {
+                    "date": "2026-04-07 19:21:20",
+                    "action": "sell",
+                    "price": 20.0,
+                    "shares": 5000,
                     "fee": 142,
                     "tax": 300,
                     "total": 99558.0
                 },
                 {
-                    "date": "2026-04-04 13:38:30",
-                    "action": "BUY",
-                    "price": 1800.0,
+                    "date": "2026-04-07 19:21:29",
+                    "action": "sell",
+                    "price": 20.0,
                     "shares": 1000,
-                    "fee": 2565,
-                    "tax": 0,
-                    "total": 1802565.0
+                    "fee": 28,
+                    "tax": 60,
+                    "total": 19912.0
                 },
                 {
-                    "date": "2026-04-04 13:56:17",
-                    "action": "SELL",
-                    "price": 1810.0,
-                    "shares": 1000,
-                    "fee": 2579,
-                    "tax": 5430,
-                    "total": 1801991.0
+                    "date": "2026-04-07 19:21:37",
+                    "action": "buy",
+                    "price": 20.0,
+                    "shares": 2000,
+                    "fee": 57,
+                    "tax": 0,
+                    "total": 40057.0
+                },
+                {
+                    "date": "2026-04-07 19:22:35",
+                    "action": "sell",
+                    "price": 10.0,
+                    "shares": 2000,
+                    "fee": 28,
+                    "tax": 60,
+                    "total": 19912.0
                 }
             ]
         },
@@ -234,6 +261,11 @@
                     "total": 82517.0
                 }
             ]
+        },
+        "233054.TW": {
+            "shares": 0,
+            "avg_cost": 0.0,
+            "history": []
         }
     }
 }

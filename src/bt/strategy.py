@@ -1,5 +1,4 @@
-from bt.actions import (ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode,
-                        GenerateGeminiReportNode, IgnoreFailure)
+from bt.actions import ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode
 from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
                            CheckEntryCountLimitNode, CheckGapLimitNode,
                            CheckHasPositionNode, CheckNotOverheatedNode,
@@ -37,7 +36,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
                     CheckTrailingStopNode(drawdown_tolerance=config.trailing_stop_drawdown, cooldown_days=config.cooldown_days)
                 ]),
                 ExecuteSellNode(position_ratio=config.stop_loss_sell_ratio),
-                # IgnoreFailure(GenerateGeminiReportNode())
+                # ForceSuccess(GenerateGeminiReportNode())
             ]),
 
             # 級別 2：AI 預警 -> 勝率低迷，先減碼降風險
@@ -45,7 +44,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
                 CheckSellSignalNode(threshold=config.sell_signal_threshold)] +
                 ai_sell_conditions +
                 [ExecuteSellNode(position_ratio=config.warning_sell_ratio),
-                # IgnoreFailure(GenerateGeminiReportNode())
+                # ForceSuccess(GenerateGeminiReportNode())
             ]),
 
             # 級別 3：極端停利 -> 暴漲達標，先入袋為安，剩下讓利潤奔跑
@@ -54,7 +53,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
                 CheckNotPartialTakenNode(),
                 Inverter("非強烈看漲", CheckBuySignalNode(threshold=config.strong_buy_threshold)),
                 ExecuteSellNode(position_ratio=config.take_profit_sell_ratio),
-                # IgnoreFailure(GenerateGeminiReportNode())
+                # ForceSuccess(GenerateGeminiReportNode())
             ])
         ])
     ])
@@ -65,7 +64,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     attack_conditions = [
         CheckCooldownNode(cooldown_days=config.cooldown_days),
         CheckTrendFilterNode(safe_threshold=config.safe_threshold),
-        CheckNotOverheatedNode(max_return_5d=StrategyConfig.max_return_5d, max_bias_20=StrategyConfig.max_bias_20)
+        CheckNotOverheatedNode(max_return_5d=config.max_return_5d, max_bias_20=config.max_bias_20)
     ]
     if config.enable_llm_oracle:
         attack_conditions.append(CheckSentimentFilterNode(min_score=config.min_sentiment_score))
@@ -80,7 +79,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
                 CheckEntryCountLimitNode(max_entries=config.max_entries),
                 CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
                 ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
-                # IgnoreFailure(GenerateGeminiReportNode())
+                # ForceSuccess(GenerateGeminiReportNode())
             ]),
 
             # 狀況 B：普通看漲 -> 保守買進試水溫
@@ -89,7 +88,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
                 CheckEntryCountLimitNode(max_entries=config.max_entries),
                 CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
                 ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),
-                # IgnoreFailure(GenerateGeminiReportNode())
+                # ForceSuccess(GenerateGeminiReportNode())
             ])
         ])
     ])
@@ -99,7 +98,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     # ==========================================
     hold_strategy = Sequence("觀望策略", [
         ExecuteHoldNode(),
-        # IgnoreFailure(GenerateGeminiReportNode())
+        # ForceSuccess(GenerateGeminiReportNode())
     ])
 
     # ==========================================

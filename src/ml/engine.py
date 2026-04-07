@@ -13,8 +13,8 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import (DLModelType, FeatureCol, MarketCol, MLConst, ModelCol,
-                      RNNType)
+from ml.const import (DLModelType, FeatureCol, MLConst, ModelCol, OracleCol,
+                      QuoteCol, RNNType, SignalCol)
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
@@ -171,7 +171,7 @@ class QuantAIEngine:
         if save_models:
             xgb_trainer.train_and_save_final_model(df_xgb_train, self.paths[ModelCol.XGB])
 
-        y_true = df_xgb_train[FeatureCol.TARGET]
+        y_true = df_xgb_train[FeatureCol.TARGET.value]
 
         # DL (CNN-RNN) 處理管線 (Level 0)
         dbg.log("\n--- [訓練階段] 右腦：Deep Learning ---")
@@ -233,20 +233,20 @@ class QuantAIEngine:
         if isinstance(oof_dl, np.ndarray):
             oof_dl = pd.Series(oof_dl, index=valid_index_train)
 
-        df_oof = df_oof.join(oof_xgb.rename(MarketCol.PROB_XGB)) \
-                       .join(oof_dl.rename(MarketCol.PROB_DL)) \
-                       .join(y_true.rename(FeatureCol.TARGET))
+        df_oof = df_oof.join(oof_xgb.rename(SignalCol.PROB_XGB.value)) \
+                       .join(oof_dl.rename(SignalCol.PROB_DL.value)) \
+                       .join(y_true.rename(FeatureCol.TARGET.value))
 
         # 刪除長度不一致的暖機期
-        df_oof.dropna(subset=[MarketCol.PROB_XGB, MarketCol.PROB_DL, FeatureCol.TARGET], inplace=True)
+        df_oof.dropna(subset=[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value, FeatureCol.TARGET.value], inplace=True)
 
         if df_oof.empty:
             dbg.error("OOF 對齊後資料為空！請檢查各模型的訓練資料長度。")
             return
 
-        aligned_oof_xgb = df_oof[MarketCol.PROB_XGB]
-        aligned_oof_dl = df_oof[MarketCol.PROB_DL]
-        aligned_y_true = df_oof[FeatureCol.TARGET]
+        aligned_oof_xgb = df_oof[SignalCol.PROB_XGB.value]
+        aligned_oof_dl = df_oof[SignalCol.PROB_DL.value]
+        aligned_y_true = df_oof[FeatureCol.TARGET.value]
 
         meta_learner = MetaLearner(ticker=self.config.ticker)
         X_meta, y_meta = meta_learner.evaluate_oof(aligned_oof_xgb, aligned_oof_dl, aligned_y_true)
@@ -289,7 +289,7 @@ class QuantAIEngine:
     def predict_today(self, mode: TradingMode = TradingMode.SWING) -> dict | None:
         """
         供 UI 或行為樹呼叫：預測今天的最終勝率與大盤安全度。
-        回傳: (final_prob, prob_market_safe)
+        回傳: 結構化的字典
         """
         if None in (self.xgb_model, self.dl_model, self.meta_learner, self.dl_scaler, self.market_model):
             dbg.error("模型未完全載入，無法進行推論！")
@@ -339,7 +339,7 @@ class QuantAIEngine:
         # 第三腦 (Market Brain) 推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
 
-        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII, [MacroTicker.SOX]).tail(MLConst.MAX_LOOKBACK)
+        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value]).tail(MLConst.MAX_LOOKBACK)
         df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
 
         if target_date not in df_market_clean.index:
@@ -353,7 +353,7 @@ class QuantAIEngine:
         # 總指揮 (Meta-Learner) 融合
         final_prob = self.meta_learner.predict_final_probability(prob_xgb, prob_dl)
 
-        #啟動 LLM (GeminiOracle) 獲取情緒分數
+        # 啟動 LLM (GeminiOracle) 獲取情緒分數
         sentiment_score = 5
         sentiment_reason = "未提供 API Key，略過情緒分析"
 
@@ -372,20 +372,19 @@ class QuantAIEngine:
 
         dbg.log(f"[{self.config.ticker} 今日總結] 勝率: {final_prob:.2%} | 大盤安全度: {prob_market_safe:.2%} | 新聞情緒: {sentiment_score}分")
 
-        # 將所有預測結果打包回傳
         return {
-            MarketCol.TICKER: self.config.ticker,
-            MarketCol.DATE: target_date.strftime('%Y-%m-%d'),
-            MarketCol.PROB_FINAL: final_prob,
-            MarketCol.PROB_XGB: prob_xgb,
-            MarketCol.PROB_DL: prob_dl,
-            MarketCol.PROB_MARKET_SAFE: prob_market_safe,
-            MarketCol.SENTIMENT_SCORE: sentiment_score,
-            MarketCol.SENTIMENT_REASON: sentiment_reason,
-            MarketCol.CURRENT_PRICE: float(current_price),
-            MarketCol.AVG_5D_VOL: float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
-            FeatureCol.BIAS_MONTH: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
-            FeatureCol.RETURN_5D: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
+            QuoteCol.TICKER.value: self.config.ticker,
+            QuoteCol.DATE.value: target_date.strftime('%Y-%m-%d'),
+            SignalCol.PROB_FINAL.value: final_prob,
+            SignalCol.PROB_XGB.value: prob_xgb,
+            SignalCol.PROB_DL.value: prob_dl,
+            SignalCol.PROB_MARKET_SAFE.value: prob_market_safe,
+            OracleCol.SCORE.value: sentiment_score,
+            OracleCol.REASON.value: sentiment_reason,
+            QuoteCol.CURRENT_PRICE.value: float(current_price),
+            QuoteCol.AVG_5D_VOL.value: float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
+            FeatureCol.BIAS_MONTH.value: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
+            FeatureCol.RETURN_5D.value: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
         }
 
     def generate_backtest_data(self) -> pd.DataFrame:
@@ -415,7 +414,7 @@ class QuantAIEngine:
         prob_xgb_series = pd.Series(
             self.xgb_model.predict_proba(X_xgb)[:, 1],
             index=df_xgb_clean.index,
-            name=MarketCol.PROB_XGB
+            name=SignalCol.PROB_XGB.value
         )
 
         # DL 批次推論
@@ -431,13 +430,13 @@ class QuantAIEngine:
             device = next(self.dl_model.parameters()).device
             X_tensor = torch.as_tensor(X_dl_scaled, dtype=torch.float32, device=device)
             prob_dl_array = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
-        prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MarketCol.PROB_DL)
+        prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=SignalCol.PROB_DL.value)
 
         # Market 批次推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
 
         # 抓取純淨的大盤全量資料
-        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII, [MacroTicker.SOX])
+        df_market_pure = self.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value])
         df_market_clean = market_engine.process_pipeline(df_market_pure, is_training=False)
 
         X_market = df_market_clean[MarketFeatureCol.get_features()]
@@ -446,7 +445,7 @@ class QuantAIEngine:
         prob_market_safe_series = pd.Series(
             1.0 - prob_danger_array,
             index=df_market_clean.index,  # 這裡的 index 是 TWII 的日期
-            name=MarketCol.PROB_MARKET_SAFE
+            name=SignalCol.PROB_MARKET_SAFE.value
         )
 
         # df_raw (個股日期) 會自動去 Left Join TWII 的日期，完美對齊！
@@ -454,15 +453,15 @@ class QuantAIEngine:
         df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
 
         # 清除暖機期的 NaN (只要有一顆大腦沒訊號，那天就不能做決策)
-        df_backtest.dropna(subset=[MarketCol.PROB_XGB, MarketCol.PROB_DL, MarketCol.PROB_MARKET_SAFE], inplace=True)
+        df_backtest.dropna(subset=[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value, SignalCol.PROB_MARKET_SAFE.value], inplace=True)
 
         if df_backtest.empty:
             dbg.war("合併後的預測資料為空，請檢查資料長度是否足夠讓模型暖機。")
             return pd.DataFrame()
 
         # Meta 融合預測
-        X_meta = df_backtest[[MarketCol.PROB_XGB, MarketCol.PROB_DL]]
-        df_backtest[MarketCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
+        X_meta = df_backtest[[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value]]
+        df_backtest[SignalCol.PROB_FINAL.value] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
         dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")
         return df_backtest
@@ -479,8 +478,8 @@ class QuantAIEngine:
         """
         if len(df) < 2: return
 
-        col_close = str(StockCol.CLOSE.value)
-        col_adj = str(StockCol.ADJ_CLOSE.value)
+        col_close = StockCol.CLOSE.value if hasattr(StockCol.CLOSE, 'value') else 'close'
+        col_adj = StockCol.ADJ_CLOSE.value if hasattr(StockCol.ADJ_CLOSE, 'value') else 'adj_close'
 
         if col_adj not in df.columns:
             dbg.war(f"🚨 [Watchdog] 警告！{ticker} 資料庫缺少 {col_adj} 欄位，請執行「強制深度重訓」以更新 Schema。")

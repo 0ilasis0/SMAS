@@ -6,15 +6,17 @@ from base import KeyManager
 from bt.account import Account
 from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
-from bt.const import DecisionAction
+from bt.const import TradeDecision
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from const import GlobalParams
-from data.const import StockCol, TimeUnit, YfInterval
+from data.const import StockCol, TimeUnit
+from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, MarketCol
+from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol
 from ml.engine import QuantAIEngine
 from ml.model.llm_oracle import TradingMode
+from ui.const import APIKey
 
 
 class IDSSController:
@@ -75,21 +77,21 @@ class IDSSController:
         account = Account(cash=current_cash)
         bb = Blackboard(ticker=self.ticker, account=account)
 
-        bb.prob_final = prediction_result.get(MarketCol.PROB_FINAL, GlobalParams.DEFAULT_ERROR)
-        bb.prob_xgb = prediction_result.get(MarketCol.PROB_XGB, GlobalParams.DEFAULT_ERROR)
-        bb.prob_dl = prediction_result.get(MarketCol.PROB_DL, GlobalParams.DEFAULT_ERROR)
-        bb.prob_market_safe = prediction_result.get(MarketCol.PROB_MARKET_SAFE, GlobalParams.DEFAULT_ERROR)
-        bb.sentiment_score = prediction_result.get(MarketCol.SENTIMENT_SCORE, 5)
-        bb.sentiment_reason = prediction_result.get(MarketCol.SENTIMENT_REASON, "無")
+        bb.prob_final = prediction_result.get(SignalCol.PROB_FINAL.value, GlobalParams.DEFAULT_ERROR)
+        bb.prob_xgb = prediction_result.get(SignalCol.PROB_XGB.value, GlobalParams.DEFAULT_ERROR)
+        bb.prob_dl = prediction_result.get(SignalCol.PROB_DL.value, GlobalParams.DEFAULT_ERROR)
+        bb.prob_market_safe = prediction_result.get(SignalCol.PROB_MARKET_SAFE.value, GlobalParams.DEFAULT_ERROR)
+        bb.sentiment_score = prediction_result.get(OracleCol.SCORE.value, 5)
+        bb.sentiment_reason = prediction_result.get(OracleCol.REASON.value, "無")
         bb.position = current_position
         bb.avg_cost = avg_cost
 
-        current_price = prediction_result.get(MarketCol.CURRENT_PRICE, 0.0)
+        current_price = prediction_result.get(QuoteCol.CURRENT_PRICE.value, 0.0)
         bb.current_price = current_price
         bb.executable_price = current_price
-        bb.daily_volume = prediction_result.get(MarketCol.AVG_5D_VOL, 0.0)
-        bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH, 0.0)
-        bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D, 0.0)
+        bb.daily_volume = prediction_result.get(QuoteCol.AVG_5D_VOL.value, 0.0)
+        bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH.value, 0.0)
+        bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D.value, 0.0)
 
         if any(p < 0 for p in [bb.prob_final, bb.prob_xgb, bb.prob_dl, bb.prob_market_safe]):
             dbg.error(f"🚨 [致命錯誤] 檢測到 AI 引擎輸出異常機率值 ({GlobalParams.DEFAULT_ERROR})，神經網路可能已崩潰或特徵缺失！")
@@ -109,23 +111,23 @@ class IDSSController:
         # ==========================================
         # 整合美股跳空校正的智慧定價引擎
         # ==========================================
-        if action_str in [DecisionAction.BUY, DecisionAction.SELL] and current_price > 0:
+        if action_str in [TradeDecision.BUY.value, TradeDecision.SELL.value] and current_price > 0:
             df_recent = self.engine.db.get_daily_data(self.ticker).tail(20)
 
             atr = current_price * 0.02
             if not df_recent.empty and len(df_recent) > 1:
-                prev_close = df_recent[StockCol.CLOSE].shift(1)
-                tr1 = df_recent[StockCol.HIGH] - df_recent[StockCol.LOW]
-                tr2 = (df_recent[StockCol.HIGH] - prev_close).abs()
-                tr3 = (df_recent[StockCol.LOW] - prev_close).abs()
+                prev_close = df_recent[StockCol.CLOSE.value].shift(1)
+                tr1 = df_recent[StockCol.HIGH.value] - df_recent[StockCol.LOW.value]
+                tr2 = (df_recent[StockCol.HIGH.value] - prev_close).abs()
+                tr3 = (df_recent[StockCol.LOW.value] - prev_close).abs()
                 true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
                 atr = true_range.tail(14).mean()
 
             sox_return = 0.0
             df_sox = self.engine.db.get_daily_data('^SOX').tail(2)
             if not df_sox.empty and len(df_sox) >= 2:
-                sox_close_last = df_sox[StockCol.CLOSE].iloc[-1]
-                sox_close_prev = df_sox[StockCol.CLOSE].iloc[-2]
+                sox_close_last = df_sox[StockCol.CLOSE.value].iloc[-1]
+                sox_close_prev = df_sox[StockCol.CLOSE.value].iloc[-2]
                 sox_return = (sox_close_last - sox_close_prev) / sox_close_prev
 
             # 判斷是否為電子/科技類股 (簡易防呆)
@@ -145,7 +147,7 @@ class IDSSController:
                 pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預期今日開盤價位移至 {expected_open_price:.2f}。 "
 
             # 決策定價樹 (BUY)
-            if action_str == DecisionAction.BUY:
+            if action_str == TradeDecision.BUY.value:
                 if market_safe < 0.35:
                     raw_price = expected_open_price - (1.2 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
@@ -164,7 +166,7 @@ class IDSSController:
                     bb.gemini_reasoning += pricing_prefix + f"屬常規震盪格局，建議耐心掛「偏低價」等待盤中自然拉回成交 (建議買價: {trade_price:.2f})。"
 
             # 決策定價樹 (SELL)
-            elif action_str == DecisionAction.SELL:
+            elif action_str == TradeDecision.SELL.value:
                 if bb.prob_final <= 0.20 or market_safe < 0.3:
                     raw_price = expected_open_price - (0.5 * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
@@ -184,8 +186,8 @@ class IDSSController:
 
             bb.last_trade_price = trade_price
 
-        # ⚪ 觀望情境：拉出來與 BUY/SELL 同層級，直接判定，不耗費資源查 DB
-        elif action_str == DecisionAction.HOLD:
+        # ⚪ 觀望情境
+        elif action_str == TradeDecision.HOLD.value:
             hold_reason = f"\n\n\n**[觀望判定]** "
 
             if bb.prob_market_safe < 0.4:
@@ -205,9 +207,8 @@ class IDSSController:
             bb.gemini_reasoning += hold_reason
             bb.last_trade_price = 0.0
 
-        # 改回 should_run_llm，確保能正常觸發 AI 寫報告！
         if should_run_llm:
-            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+            dbg.log("\n啟陪盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
             bb.oracle = self.engine.oracle
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
             report_node.tick(bb)
@@ -216,40 +217,45 @@ class IDSSController:
         bb.gemini_reasoning += "\n\n---\n**【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
         # 6. 打包結構化結果
-        final_date = prediction_result.get(MarketCol.DATE, datetime.now().strftime('%Y-%m-%d'))
+        final_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
 
         return {
-            "status": "success",
-            MarketCol.TICKER: self.ticker,
-            MarketCol.DATE: final_date,
-            "mode": mode.value,
-            "persona": persona.value if hasattr(persona, 'value') else str(persona),
-            "decision": {
-                "action": action_str,
-                "trade_shares": bb.last_trade_shares,
-                "trade_price": trade_price,
+            APIKey.STATUS.value: "success",
+            QuoteCol.TICKER.value: self.ticker,
+            QuoteCol.DATE.value: final_date,
+            APIKey.MODE.value: mode.value,
+            APIKey.PERSONA.value: persona.value if hasattr(persona, 'value') else str(persona),
+
+            APIKey.DECISION.value: {
+                APIKey.ACTION.value: action_str,
+                APIKey.TRADE_SHARES.value: bb.last_trade_shares,
+                APIKey.TRADE_PRICE.value: trade_price,
             },
-            "account_after_trade": {
-                "cash_left": bb.cash,
-                "position_left": bb.position
+
+            APIKey.ACCOUNT.value: {
+                APIKey.CASH_LEFT.value: bb.cash,
+                APIKey.POSITION_LEFT.value: bb.position
             },
-            "ai_signals": {
-                MarketCol.PROB_FINAL: bb.prob_final,
-                MarketCol.PROB_XGB: bb.prob_xgb,
-                MarketCol.PROB_DL: bb.prob_dl,
-                MarketCol.PROB_MARKET_SAFE: bb.prob_market_safe
+
+            APIKey.AI_SIGNALS.value: {
+                SignalCol.PROB_FINAL.value: bb.prob_final,
+                SignalCol.PROB_XGB.value: bb.prob_xgb,
+                SignalCol.PROB_DL.value: bb.prob_dl,
+                SignalCol.PROB_MARKET_SAFE.value: bb.prob_market_safe
             },
-            "sentiment": {
-                MarketCol.SENTIMENT_SCORE: bb.sentiment_score,
-                MarketCol.SENTIMENT_REASON: bb.sentiment_reason
+
+            APIKey.SENTIMENT.value: {
+                OracleCol.SCORE.value: bb.sentiment_score,
+                OracleCol.REASON.value: bb.sentiment_reason
             },
-            "report": bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
+
+            APIKey.REPORT.value: bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
 
     def sync_market_data(self) -> bool:
         dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
         try:
-            success = self.engine.update_market_data(period=YfInterval.DAILY_MARKET_YEAR, unit=TimeUnit.YEAR)
+            success = self.engine.update_market_data(period=DataLimit.DAILY_MAX_YEAR, unit=TimeUnit.YEAR)
             if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
             else: dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
             return success

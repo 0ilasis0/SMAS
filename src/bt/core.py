@@ -6,11 +6,14 @@ from bt.blackboard import Blackboard
 
 class NodeState(Enum):
     """行為樹節點的執行狀態"""
-    SUCCESS = auto()  # 執行成功
+    SUCCESS = auto()  # 執行成功 / 條件符合
     FAILURE = auto()  # 執行失敗 / 條件不符
-    RUNNING = auto()  # 執行中 (在回合制交易中較少用到，多用於連續動作)
+    RUNNING = auto()  # 執行中 (在回合制定時 K 線交易中較少用到，保留以供未來擴充)
 
 
+# ==========================================
+# 1. 抽象基底節點
+# ==========================================
 class BaseNode(ABC):
     """
     所有行為樹節點的抽象基底類別。
@@ -27,6 +30,30 @@ class BaseNode(ABC):
         pass
 
 
+# ==========================================
+# 2. 語意化葉節點 (Leaf Nodes)
+# ==========================================
+class ConditionNode(BaseNode):
+    """
+    條件節點 (葉節點)。
+    語意上僅負責「讀取與檢查」Blackboard 的狀態，不應對系統狀態進行修改。
+    """
+    def __init__(self, name: str = 'condition_node'):
+        super().__init__(name)
+
+
+class ActionNode(BaseNode):
+    """
+    動作節點 (葉節點)。
+    語意上負責「執行實體動作」或「修改」Blackboard 的狀態 (例如產生交易訊號)。
+    """
+    def __init__(self, name: str = 'action_node'):
+        super().__init__(name)
+
+
+# ==========================================
+# 3. 組合節點 (Composite Nodes)
+# ==========================================
 class Sequence(BaseNode):
     """
     序列節點 (AND 邏輯)。
@@ -70,11 +97,13 @@ class Selector(BaseNode):
         return NodeState.FAILURE
 
 
+# ==========================================
+# 4. 裝飾節點 (Decorator Nodes)
+# ==========================================
 class Inverter(BaseNode):
     """
-    反轉節點 (NOT 邏輯 / 裝飾節點)。
+    反轉節點 (NOT 邏輯)。
     只能包含一個子節點。將子節點的 SUCCESS 轉為 FAILURE，FAILURE 轉為 SUCCESS。
-    RUNNING 狀態則原封不動回傳。
     (用途範例：Inverter(檢查是否持有部位) -> 變成「確認目前為空手」)
     """
     def __init__(self, name: str, child: BaseNode):
@@ -90,3 +119,21 @@ class Inverter(BaseNode):
         elif state == NodeState.FAILURE:
             return NodeState.SUCCESS
         return state
+
+
+class ForceSuccess(BaseNode):
+    """
+    強制成功節點 (Always Succeed)。
+    無論子節點回傳什麼，此節點永遠回傳 SUCCESS。
+    (用途範例：用在 Sequence 內部包裝「非必要」的動作，如寫入次要 Log。即使寫入失敗，也不會阻斷主流程的執行)
+    """
+    def __init__(self, name: str, child: BaseNode):
+        if not isinstance(child, BaseNode):
+            raise TypeError(f"{child} must be a BaseNode")
+        super().__init__(name)
+        self.child = child
+
+    def tick(self, blackboard: Blackboard) -> NodeState:
+        self.child.tick(blackboard)
+        # 無論 child 是 SUCCESS, FAILURE 或 RUNNING，直接蓋掉回傳 SUCCESS
+        return NodeState.SUCCESS

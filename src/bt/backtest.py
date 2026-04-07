@@ -8,13 +8,13 @@ import pandas as pd
 
 from bt.account import Account
 from bt.blackboard import Blackboard
-from bt.const import BlackboardCol, DecisionAction
+from bt.const import BlackboardKey, TradeDecision
 from bt.strategy import build_trading_tree
 from bt.strategy_config import StrategyConfig
 from const import Color
 from data.const import StockCol
 from debug import dbg
-from ml.const import FeatureCol, MarketCol
+from ml.const import FeatureCol, SignalCol
 from path import PathConfig
 
 
@@ -37,7 +37,7 @@ class BacktestRecord:
     Cash: float
     Position: int
     Total_Equity: float
-    Action: DecisionAction
+    Action: TradeDecision
     prob_final: float
     prob_market_safe: float
 
@@ -82,33 +82,33 @@ class BacktestEngine:
             next_row = df.iloc[i + 1]
 
             date = df.index[i]
-            current_close = row[StockCol.CLOSE]
+            current_close = row[StockCol.CLOSE.value]
 
             # 將今天的收盤資訊與明天的「開盤價」、「成交量」傳給黑板
             self.bb.current_date = str(date)
 
             self.bb.update_price(
                 current_price=current_close,
-                high_price=row[StockCol.HIGH],
-                executable_price=next_row[StockCol.OPEN],  # 實際執行交易的價格
-                daily_volume=next_row[StockCol.VOLUME]     # 流動性上限
+                high_price=row[StockCol.HIGH.value],
+                executable_price=next_row[StockCol.OPEN.value],  # 實際執行交易的價格
+                daily_volume=next_row[StockCol.VOLUME.value]     # 流動性上限
             )
-            self.bb.prob_market_safe = row.get(MarketCol.PROB_MARKET_SAFE, 1.0)
-            self.bb.prob_final = row[MarketCol.PROB_FINAL]
 
-            self.bb.prob_xgb = row[MarketCol.PROB_XGB]
-            self.bb.prob_dl = row[MarketCol.PROB_DL]
+            self.bb.prob_market_safe = row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
+            self.bb.prob_final = row[SignalCol.PROB_FINAL.value]
+            self.bb.prob_xgb = row[SignalCol.PROB_XGB.value]
+            self.bb.prob_dl = row[SignalCol.PROB_DL.value]
 
-            self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH, 0.0)
-            self.bb.return_5d = row.get(FeatureCol.RETURN_5D, 0.0)
+            self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH.value, 0.0)
+            self.bb.return_5d = row.get(FeatureCol.RETURN_5D.value, 0.0)
 
             # 清空前一天的決策紀錄
-            self.bb.action_decision = DecisionAction.HOLD
+            self.bb.action_decision = TradeDecision.HOLD
 
             # 全域時鐘，每天確實扣減冷卻期
-            current_cd = getattr(self.bb, BlackboardCol.COOLDOWN_TIMER, 0)
+            current_cd = getattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, 0)
             if current_cd > 0:
-                setattr(self.bb, BlackboardCol.COOLDOWN_TIMER, current_cd - 1)
+                setattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, current_cd - 1)
 
             # 執行行為樹心跳 (Tick)
             self.tree.tick(self.bb)
@@ -133,7 +133,7 @@ class BacktestEngine:
         if not df.empty:
             last_date = df.index[-1]
             last_row = df.iloc[-1]
-            last_close = last_row[StockCol.CLOSE]
+            last_close = last_row[StockCol.CLOSE.value]
             last_equity = self.bb.cash + (self.bb.position * last_close)
 
             final_record = BacktestRecord(
@@ -142,9 +142,9 @@ class BacktestEngine:
                 Cash=self.bb.cash,
                 Position=self.bb.position,
                 Total_Equity=last_equity,
-                Action=DecisionAction.HOLD, # 最後一天不動作
-                prob_final=last_row.get(MarketCol.PROB_FINAL, 0.5),
-                prob_market_safe=last_row.get(MarketCol.PROB_MARKET_SAFE, 1.0)
+                Action=TradeDecision.HOLD, # 最後一天不動作
+                prob_final=last_row.get(SignalCol.PROB_FINAL.value, 0.5),
+                prob_market_safe=last_row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
             )
             self.history_records.append(final_record.to_dict())
 
@@ -177,9 +177,8 @@ class BacktestEngine:
         daily_volatility = df_res[self.DAILY_RETURN].std()
         sharpe_ratio = (df_res[self.DAILY_RETURN].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
 
-        # 統計交易次數
-        buy_count = len(df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY])
-        sell_count = len(df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL])
+        buy_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY])
+        sell_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL])
 
         dbg.log("\n" + "="*40)
         dbg.log("📊 IDSS 行為樹回測績效報告")
@@ -216,8 +215,8 @@ class BacktestEngine:
         # 第二層：股價走勢與買賣點
         ax2 = plt.subplot(3, 1, 2, sharex=ax1)
         ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.7)
-        buys = df_res[df_res[HistoryCol.ACTION] == DecisionAction.BUY]
-        sells = df_res[df_res[HistoryCol.ACTION] == DecisionAction.SELL]
+        buys = df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY]
+        sells = df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL]
         ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color=Color.GREEN, s=100, label='Buy', zorder=5)
         ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color=Color.RED, s=100, label='Sell', zorder=5)
         ax2.set_ylabel('Stock Price')
@@ -268,43 +267,3 @@ class BacktestEngine:
         }
 
         return stats
-
-
-# if __name__ == "__main__":
-#     from ml.engine import QuantAIEngine
-    # from bt.strategy_config import PersonaFactory, TradingPersona
-
-#     # 測試參數
-#     tickers = ["2330.TW"]
-#     test_days = 0
-#     user_cash = 2000000
-#     user_persona = TradingPersona.MODERATE
-
-#     strategy_config = PersonaFactory.get_config(user_persona)
-
-#     for ticker in tickers:
-#         ai_engine = QuantAIEngine(ticker=ticker, oos_days=test_days, api_keys=None)
-
-#         # 假設你需要重新上網爬資料 (如果已經有資料了，這段可以註解)
-#         # 假設你需要重新訓練模型 (如果模型已經是乾淨的，這段可以註解)
-#         ai_engine.update_market_data()
-#         ai_engine.train_all_models(save_models=True)
-
-#         if not ai_engine.load_inference_models():
-#             dbg.error("❌ 模型載入失敗...")
-#             exit()
-
-#         df_real_data = ai_engine.generate_backtest_data()
-
-#         if df_real_data.empty:
-#             dbg.error("❌ 無法產生回測資料！")
-#             exit()
-
-#         df_test = df_real_data.tail(test_days)
-
-#         print("\n📊 【AI 預測勝率分佈統計】")
-#         print(df_test[MetaCol.PROB_FINAL].describe())
-
-#         dbg.log(f"\n🌟 準備以 {ticker} 過去 {test_days} 天的【純淨未知資料】進行嚴格回測...")
-#         engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy_config)
-#         engine.run(df_test)

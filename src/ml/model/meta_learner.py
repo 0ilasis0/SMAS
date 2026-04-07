@@ -9,7 +9,7 @@ from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from base import MathTool
 from debug import dbg
-from ml.const import MarketCol
+from ml.const import SignalCol
 from ml.params import MetaHyperParams, TrainConfig
 
 
@@ -39,8 +39,8 @@ class MetaLearner:
         dbg.log("開始進行 Meta-Learner (Level 1) OOF 整合評估...")
 
         X_meta = pd.DataFrame({
-            MarketCol.PROB_XGB: aligned_oof_xgb,
-            MarketCol.PROB_DL: aligned_oof_dl
+            SignalCol.PROB_XGB: aligned_oof_xgb,
+            SignalCol.PROB_DL: aligned_oof_dl
         })
         y_meta = aligned_y_true.astype(int)
 
@@ -87,7 +87,7 @@ class MetaLearner:
         dbg.log(f" ➔ DL 模型 權重: {weights[1]:.4f}")
         dbg.log(f" ➔ 基礎截距 (偏誤): {intercept:.4f}")
 
-        # 🚀 使用外部傳入的路徑儲存
+        # 使用外部傳入的路徑儲存
         save_path = Path(save_path)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(self.model, save_path)
@@ -96,14 +96,23 @@ class MetaLearner:
     def load_inference_model(self, model_path: Path | str) -> bool:
         """【供 UI 推論端使用】載入訓練好的 Meta-Learner"""
         try:
+            model_path = Path(model_path)
+
+            if not model_path.exists():
+                dbg.error(f"Meta-Learner 載入失敗: 找不到檔案 {model_path}")
+                return False
+
             self.model = joblib.load(model_path)
             dbg.log(f"成功載入 Meta-Learner: {model_path}")
             return True
         except Exception as e:
-            dbg.error(f"Meta-Learner 載入失敗: {e}")
+            dbg.error(f"Meta-Learner 載入發生未知例外 [{type(e).__name__}]: {e}")
             return False
 
     def predict_final_probability(self, prob_xgb: float, prob_dl: float) -> float:
+        """
+        根據 XGBoost 與 DL 的預測機率，透過 Logistic Regression 產出最終綜合機率。
+        """
         if math.isnan(prob_xgb) or math.isnan(prob_dl):
             dbg.war("接收到 NaN 機率，回傳中性勝率 0.5")
             return 0.5

@@ -4,7 +4,8 @@ from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory
 from controller import IDSSController
 from path import PathConfig
-from ui.params import BacktestParams
+from ui.const import SessionKey
+from ui.params import AccountLimit, BacktestParams
 
 
 def render_backtest_tab(selected_persona):
@@ -15,35 +16,42 @@ def render_backtest_tab(selected_persona):
     with col1:
         test_days = st.slider("📅 模擬時間線 (交易日)", min_value=BacktestParams.MIN_DAYS, max_value=BacktestParams.MAX_DAYS, value=BacktestParams.MAX_DAYS, step=BacktestParams.STEP_DAYS)
     with col2:
-        asset_option = st.radio("💰 模擬資金來源", ["使用當前設定資金 (預設 200 萬)", "自訂暫時資金"])
+        asset_option = st.radio("💰 模擬資金來源", [f"使用當前設定資金 (預設 {AccountLimit.DEFAULT_MONEY:,} 元)", "自訂暫時資金"])
+
         if asset_option == "自訂暫時資金":
-            sim_cash = st.number_input("請輸入自訂資金 (NTD)", min_value=100000, max_value=100000000, value=1000000, step=100000)
+            sim_cash = st.number_input("請輸入自訂資金 (NTD)", min_value=AccountLimit.MIN_MONEY, max_value=AccountLimit.MAX_MONEY, value=AccountLimit.DEFAULT_MONEY, step=AccountLimit.STEP_MONEY)
         else:
-            sim_cash = 2000000.0
+            sim_cash = float(AccountLimit.DEFAULT_MONEY)
 
     st.markdown("---")
 
     if st.button("🚀 啟動 IDSS 歷史回測", type="primary", use_container_width=True):
         with st.spinner(f"正在擷取近 {test_days} 天 AI 預測勝率，並進行沙盤推演..."):
 
+            current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
+
             # 動態喚醒「回測專用大腦」
-            if st.session_state.ctrl_bt is None:
+            if st.session_state.get(SessionKey.CTRL_BT.value) is None:
                 st.toast(f"首次啟動回測，正在載入 OOS={BacktestParams.MAX_DAYS} 的盲測模型...", icon="⏳")
-                ctrl_bt = IDSSController(ticker=st.session_state.current_ticker, oos_days=BacktestParams.MAX_DAYS)
+
+                ctrl_bt = IDSSController(ticker=current_ticker, oos_days=BacktestParams.MAX_DAYS)
                 if ctrl_bt.load_system():
-                    st.session_state.ctrl_bt = ctrl_bt
+                    st.session_state[SessionKey.CTRL_BT.value] = ctrl_bt
                 else:
                     st.error(f"❌ 找不到 OOS={BacktestParams.MAX_DAYS} 的回測模型，請先在後台完成訓練！")
                     st.stop()
 
-            df_bt = st.session_state.ctrl_bt.engine.generate_backtest_data()
+            ctrl_bt = st.session_state.get(SessionKey.CTRL_BT.value)
+            df_bt = ctrl_bt.engine.generate_backtest_data()
 
             if not df_bt.empty:
                 df_test = df_bt.tail(test_days)
                 strategy_config = PersonaFactory.get_config(selected_persona)
+
+                # 盲測時關閉 LLM (避免觸發大量新聞 API 消耗與幻覺)
                 strategy_config.enable_llm_oracle = False
 
-                bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=st.session_state.current_ticker, strategy=strategy_config)
+                bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=current_ticker, strategy=strategy_config)
                 stats = bt_engine.run(df_test)
 
                 if stats:
@@ -65,7 +73,7 @@ def render_backtest_tab(selected_persona):
 
                     st.markdown("---")
 
-                    chart_path = PathConfig.get_chart_report_path(st.session_state.current_ticker)
+                    chart_path = PathConfig.get_chart_report_path(current_ticker)
                     if chart_path.exists():
                         st.image(str(chart_path), use_container_width=True)
                     else:
