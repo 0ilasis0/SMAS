@@ -1,0 +1,22 @@
+Set WshShell = WScript.CreateObject("WScript.Shell")
+
+' 取得當前資料夾路徑
+Dim fso
+Set fso = CreateObject("Scripting.FileSystemObject")
+strCurrentDir = fso.GetParentFolderName(WScript.ScriptFullName)
+
+' 建立捷徑
+Set oShellLink = WshShell.CreateShortcut(strCurrentDir & "\SMAS_量化系統.lnk")
+
+' 精準指向您的 WinPython 深層目錄
+oShellLink.TargetPath = strCurrentDir & "\python\WPy64-31241\python-3.12.4.amd64\pythonw.exe"
+oShellLink.Arguments = "launcher.py"
+oShellLink.WorkingDirectory = strCurrentDir
+
+oShellLink.IconLocation = strCurrentDir & "\icon.ico"
+
+' 儲存捷徑
+oShellLink.Save
+
+' 彈出成功視窗
+MsgBox "系統初始化完成！" & vbCrLf & vbCrLf & "請雙擊資料夾內的「SMAS_量化系統」捷徑來啟動程式。", 64, "安裝成功"

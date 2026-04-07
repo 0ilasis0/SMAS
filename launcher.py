@@ -1,46 +1,73 @@
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
-
-import webview
 
 
 def start_streamlit():
-    """在背景啟動 Streamlit 伺服器"""
     print("啟動 IDSS 量化引擎背景服務...")
-    # 使用目前的 Python 執行檔啟動 Streamlit
-    process = subprocess.Popen(
+    # 將 stdout 和 stderr 導向 PIPE，避免在隱藏視窗模式 (pythonw) 下報錯
+    return subprocess.Popen(
         [sys.executable, "-m", "streamlit", "run", "src/app.py", "--server.headless", "true"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
-    return process
+
+def find_browser():
+    """自動尋找客戶電腦中內建的 Edge 或 Chrome"""
+    paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+    ]
+    for p in paths:
+        if os.path.exists(p):
+            return p
+    return None
 
 if __name__ == '__main__':
     # 1. 啟動後端伺服器
     server_process = start_streamlit()
+    time.sleep(3) # 等待伺服器暖機
 
-    # 2. 稍微等待 2~3 秒，確保 Streamlit 的 8501 port 已經啟動
-    time.sleep(3)
+    # 2. 尋找瀏覽器
+    browser_path = find_browser()
+    if not browser_path:
+        print("❌ 找不到 Edge 或 Chrome 瀏覽器！")
+        server_process.terminate()
+        sys.exit(1)
 
-    # 3. 建立原生的桌面視窗 (指向 localhost:8501)
-    # 您可以在這裡自訂視窗大小、標題，甚至禁止使用者調整視窗大小
-    window = webview.create_window(
-        title='IDSS 台股量化交易終端',
-        url='http://localhost:8501',
-        width=1980,
-        height=1080,
-        min_size=(1400, 900)
-    )
+    # 3. 建立獨立沙盒設定檔 (這是完美監聽視窗關閉的魔法！)
+    temp_dir = os.path.join(tempfile.gettempdir(), "IDSS_App_Profile")
 
-    # 4. 啟動視窗 (程式會停在這一行，直到使用者點擊右上角的 X 關閉視窗)
-    webview.start()
+    print("啟動原生 App 視窗...")
+
+    # 4. 啟動獨立的 App 視窗
+    browser_process = subprocess.Popen([
+        browser_path,
+        "--app=http://localhost:8501",
+        f"--user-data-dir={temp_dir}", # 強制獨立進程
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--disable-sync"
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     # ==========================================
-    # 🛑 視窗關閉後的清理機制 (使用者點了 X)
+    # 🛑 程式會停在這裡，直到使用者點擊右上角的 X 關閉視窗
     # ==========================================
+    browser_process.wait()
+
+    # 5. 清理與關機
     print("視窗已關閉，正在自動終止背景 AI 引擎...")
-    server_process.terminate()  # 溫和地發送終止訊號
-    server_process.wait()       # 等待進程完全關閉
+    server_process.terminate()
+    server_process.wait()
+
+    try:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+    except:
+        pass
+
     print("系統安全關閉完畢！")
     sys.exit(0)
