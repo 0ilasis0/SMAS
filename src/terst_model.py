@@ -12,7 +12,7 @@ from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
 from data.const import MacroTicker, StockCol
 from debug import dbg
-from ml.const import DLModelType, FeatureCol, MarketCol, RNNType
+from ml.const import DLModelType, FeatureCol, RNNType, SignalCol
 from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
 from path import PathConfig
@@ -27,11 +27,13 @@ def set_seed(seed=42):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        torch.mps.manual_seed(seed)
 
 def run_model_comparison():
     set_seed(42)
 
-    tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
+    tickers = ["2330.TW", "2603.TW"]
 
     model_configs = [
         {"name": "Pure_1D_CNN", "dl_type": DLModelType.PURE_CNN, "rnn": None},
@@ -63,6 +65,12 @@ def run_model_comparison():
 
             dbg.log(f"\n🧪 正在測試架構: 【{model_name}】")
 
+            # 提前宣告變數，防止 finally 清理時發生 UnboundLocalError
+            ai_engine = None
+            bt_engine = None
+            df_raw = None
+            df_with_target = None
+
             try:
                 ai_engine = QuantAIEngine(
                     ticker=ticker,
@@ -90,19 +98,20 @@ def run_model_comparison():
 
                 xgb_engine = XGBFeatureEngine()
                 df_with_target = xgb_engine.process_pipeline(df_raw, lookahead=ai_engine.config.lookahead, is_training=True)
-                df_test = df_test.join(df_with_target[[FeatureCol.TARGET]], how='left')
-                df_eval = df_test.dropna(subset=[FeatureCol.TARGET, MarketCol.PROB_DL, MarketCol.PROB_FINAL])
+
+                df_test = df_test.join(df_with_target[[FeatureCol.TARGET.value]], how='left')
+                df_eval = df_test.dropna(subset=[FeatureCol.TARGET.value, SignalCol.PROB_DL.value, SignalCol.PROB_FINAL.value])
 
                 dl_auc, dl_acc, final_auc, final_acc = 0.0, 0.0, 0.0, 0.0
 
-                if not df_eval.empty and df_eval[FeatureCol.TARGET].nunique() > 1:
-                    y_true = df_eval[FeatureCol.TARGET]
+                if not df_eval.empty and df_eval[FeatureCol.TARGET.value].nunique() > 1:
+                    y_true = df_eval[FeatureCol.TARGET.value]
 
-                    y_dl_prob = df_eval[MarketCol.PROB_DL]
+                    y_dl_prob = df_eval[SignalCol.PROB_DL.value]
                     dl_auc = roc_auc_score(y_true, y_dl_prob)
                     dl_acc = accuracy_score(y_true, (y_dl_prob > 0.5).astype(int))
 
-                    y_final_prob = df_eval[MarketCol.PROB_FINAL]
+                    y_final_prob = df_eval[SignalCol.PROB_FINAL.value]
                     final_auc = roc_auc_score(y_true, y_final_prob)
                     final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 
@@ -110,8 +119,8 @@ def run_model_comparison():
                 stats = bt_engine.run(df=df_test, silence=True)
                 train_time = time.time() - start_time
 
-                first_close = df_test[StockCol.CLOSE].iloc[0]
-                last_close = df_test[StockCol.CLOSE].iloc[-1]
+                first_close = df_test[StockCol.CLOSE.value].iloc[0]
+                last_close = df_test[StockCol.CLOSE.value].iloc[-1]
                 bnh_return = (last_close - first_close) / first_close
 
                 record = {
@@ -133,16 +142,20 @@ def run_model_comparison():
 
                 # 即時寫入詳細報告，避免中斷時資料遺失
                 df_results = pd.DataFrame(experiment_results)
+
+                # 確保父資料夾存在
+                details_path.parent.mkdir(parents=True, exist_ok=True)
                 df_results.to_csv(details_path, index=False, encoding="utf-8-sig")
 
             except Exception as e:
                 dbg.error(f"❌ 處理 {ticker} - {model_name} 時發生嚴重錯誤: {e}")
 
             finally:
-                if 'ai_engine' in locals(): del ai_engine
-                if 'bt_engine' in locals(): del bt_engine
-                if 'df_raw' in locals(): del df_raw
-                if 'df_with_target' in locals(): del df_with_target
+                # 安全的記憶體釋放
+                del ai_engine
+                del bt_engine
+                del df_raw
+                del df_with_target
 
                 gc.collect()
                 if torch.cuda.is_available():
@@ -159,6 +172,8 @@ def run_model_comparison():
     numeric_cols = ['DL_AUC', 'Meta_AUC', 'B&H_Return(%)', 'Return(%)', 'MDD(%)', 'Sharpe', 'Time(s)']
     df_summary = df_results.groupby('Model')[numeric_cols].mean().round(3).reset_index()
 
+    # 確保父資料夾存在
+    summary_path.parent.mkdir(parents=True, exist_ok=True)
     df_summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
 
     dbg.log(f"\n🎉 實驗完成！")

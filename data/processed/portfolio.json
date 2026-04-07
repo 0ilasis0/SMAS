@@ -1,5 +1,5 @@
 {
-    "global_cash": 113485.0,
+    "global_cash": 6913.0,
     "positions": {
         "2388.TW": {
             "shares": 3000,
@@ -248,8 +248,8 @@
             ]
         },
         "2481.TW": {
-            "shares": 1000,
-            "avg_cost": 82.517,
+            "shares": 0,
+            "avg_cost": 0.0,
             "history": [
                 {
                     "date": "2026-04-07 10:28:48",
@@ -259,6 +259,24 @@
                     "fee": 117,
                     "tax": 0,
                     "total": 82517.0
+                },
+                {
+                    "date": "2026-04-07 19:40:09",
+                    "action": "buy",
+                    "price": 104.5,
+                    "shares": 1000,
+                    "fee": 148,
+                    "tax": 0,
+                    "total": 104648.0
+                },
+                {
+                    "date": "2026-04-07 19:40:31",
+                    "action": "sell",
+                    "price": 104.5,
+                    "shares": 2000,
+                    "fee": 297,
+                    "tax": 627,
+                    "total": 208076.0
                 }
             ]
         },
