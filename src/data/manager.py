@@ -150,23 +150,13 @@ class DataManager:
             conn.commit()
             dbg.log(f"已將 {ticker} 從自選清單移除。")
 
-    def get_daily_data(self, ticker: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-        return self._fetch_data(
-            table_name='daily_k_lines', time_col='date', ticker=ticker, start_time=start_date, end_time=end_date
-        )
-
-    def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
-        return self._fetch_data(
-            table_name='intraday_k_lines', time_col='datetime', ticker=ticker, start_time=start_datetime, end_time=end_datetime
-        )
-
     def get_aligned_market_data(self, stock_ticker: str, macro_tickers: list[str]) -> pd.DataFrame:
         """
         機構級數據對齊引擎
         """
         df_stock = self.get_daily_data(stock_ticker)
-        if df_stock.empty:
-            return df_stock
+
+        if df_stock.empty: return df_stock
 
         aligned_df = df_stock.copy()
         overseas_tickers = MacroTicker.get_overseas_tickers()
@@ -191,6 +181,16 @@ class DataManager:
             aligned_df[macro_cols] = aligned_df[macro_cols].ffill()
 
         return aligned_df
+
+    def get_daily_data(self, ticker: str, start_date: str = None, end_date: str = None) -> pd.DataFrame:
+        return self._fetch_data(
+            table_name='daily_k_lines', time_col='date', ticker=ticker, start_time=start_date, end_time=end_date
+        )
+
+    def get_intraday_data(self, ticker: str, start_datetime: str = None, end_datetime: str = None) -> pd.DataFrame:
+        return self._fetch_data(
+            table_name='intraday_k_lines', time_col='datetime', ticker=ticker, start_time=start_datetime, end_time=end_datetime
+        )
 
     def _fetch_data(self, table_name: str, time_col: str, ticker: str, start_time: str = None, end_time: str = None) -> pd.DataFrame:
         query = f"SELECT * FROM {table_name} WHERE ticker = ?"

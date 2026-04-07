@@ -6,13 +6,13 @@ from base import KeyManager
 from bt.account import Account
 from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
-from bt.const import DecisionAction, LLMSentimentCol
+from bt.const import DecisionAction
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from const import GlobalParams
 from data.const import StockCol, TimeUnit, YfInterval
 from debug import dbg
-from ml.const import FeatureCol, MetaCol
+from ml.const import FeatureCol, MarketCol
 from ml.engine import QuantAIEngine
 from ml.model.llm_oracle import TradingMode
 
@@ -75,19 +75,19 @@ class IDSSController:
         account = Account(cash=current_cash)
         bb = Blackboard(ticker=self.ticker, account=account)
 
-        bb.prob_final = prediction_result.get(MetaCol.PROB_FINAL, GlobalParams.DEFAULT_ERROR)
-        bb.prob_xgb = prediction_result.get(MetaCol.PROB_XGB, GlobalParams.DEFAULT_ERROR)
-        bb.prob_dl = prediction_result.get(MetaCol.PROB_DL, GlobalParams.DEFAULT_ERROR)
-        bb.prob_market_safe = prediction_result.get(MetaCol.PROB_MARKET_SAFE, GlobalParams.DEFAULT_ERROR)
-        bb.sentiment_score = prediction_result.get(LLMSentimentCol.SCORE, 5)
-        bb.sentiment_reason = prediction_result.get(LLMSentimentCol.REASON, "無")
+        bb.prob_final = prediction_result.get(MarketCol.PROB_FINAL, GlobalParams.DEFAULT_ERROR)
+        bb.prob_xgb = prediction_result.get(MarketCol.PROB_XGB, GlobalParams.DEFAULT_ERROR)
+        bb.prob_dl = prediction_result.get(MarketCol.PROB_DL, GlobalParams.DEFAULT_ERROR)
+        bb.prob_market_safe = prediction_result.get(MarketCol.PROB_MARKET_SAFE, GlobalParams.DEFAULT_ERROR)
+        bb.sentiment_score = prediction_result.get(MarketCol.SENTIMENT_SCORE, 5)
+        bb.sentiment_reason = prediction_result.get(MarketCol.SENTIMENT_REASON, "無")
         bb.position = current_position
         bb.avg_cost = avg_cost
 
-        current_price = prediction_result.get("current_price", 0.0)
+        current_price = prediction_result.get(MarketCol.CURRENT_PRICE, 0.0)
         bb.current_price = current_price
         bb.executable_price = current_price
-        bb.daily_volume = prediction_result.get("avg_5d_vol", 0.0)
+        bb.daily_volume = prediction_result.get(MarketCol.AVG_5D_VOL, 0.0)
         bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH, 0.0)
         bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D, 0.0)
 
@@ -216,12 +216,12 @@ class IDSSController:
         bb.gemini_reasoning += "\n\n---\n**【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
         # 6. 打包結構化結果
-        final_date = prediction_result.get("date", datetime.now().strftime('%Y-%m-%d'))
+        final_date = prediction_result.get(MarketCol.DATE, datetime.now().strftime('%Y-%m-%d'))
 
         return {
             "status": "success",
-            "ticker": self.ticker,
-            "date": final_date,
+            MarketCol.TICKER: self.ticker,
+            MarketCol.DATE: final_date,
             "mode": mode.value,
             "persona": persona.value if hasattr(persona, 'value') else str(persona),
             "decision": {
@@ -234,14 +234,14 @@ class IDSSController:
                 "position_left": bb.position
             },
             "ai_signals": {
-                "final_prob": bb.prob_final,
-                "xgb_prob": bb.prob_xgb,
-                "dl_prob": bb.prob_dl,
-                "market_safe": bb.prob_market_safe
+                MarketCol.PROB_FINAL: bb.prob_final,
+                MarketCol.PROB_XGB: bb.prob_xgb,
+                MarketCol.PROB_DL: bb.prob_dl,
+                MarketCol.PROB_MARKET_SAFE: bb.prob_market_safe
             },
             "sentiment": {
-                "score": bb.sentiment_score,
-                "reason": bb.sentiment_reason
+                MarketCol.SENTIMENT_SCORE: bb.sentiment_score,
+                MarketCol.SENTIMENT_REASON: bb.sentiment_reason
             },
             "report": bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }

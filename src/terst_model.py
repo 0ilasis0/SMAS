@@ -12,7 +12,7 @@ from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
 from data.const import MacroTicker, StockCol
 from debug import dbg
-from ml.const import DLModelType, FeatureCol, MetaCol, RNNType
+from ml.const import DLModelType, FeatureCol, MarketCol, RNNType
 from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
 from path import PathConfig
@@ -91,18 +91,18 @@ def run_model_comparison():
                 xgb_engine = XGBFeatureEngine()
                 df_with_target = xgb_engine.process_pipeline(df_raw, lookahead=ai_engine.config.lookahead, is_training=True)
                 df_test = df_test.join(df_with_target[[FeatureCol.TARGET]], how='left')
-                df_eval = df_test.dropna(subset=[FeatureCol.TARGET, MetaCol.PROB_DL, MetaCol.PROB_FINAL])
+                df_eval = df_test.dropna(subset=[FeatureCol.TARGET, MarketCol.PROB_DL, MarketCol.PROB_FINAL])
 
                 dl_auc, dl_acc, final_auc, final_acc = 0.0, 0.0, 0.0, 0.0
 
                 if not df_eval.empty and df_eval[FeatureCol.TARGET].nunique() > 1:
                     y_true = df_eval[FeatureCol.TARGET]
 
-                    y_dl_prob = df_eval[MetaCol.PROB_DL]
+                    y_dl_prob = df_eval[MarketCol.PROB_DL]
                     dl_auc = roc_auc_score(y_true, y_dl_prob)
                     dl_acc = accuracy_score(y_true, (y_dl_prob > 0.5).astype(int))
 
-                    y_final_prob = df_eval[MetaCol.PROB_FINAL]
+                    y_final_prob = df_eval[MarketCol.PROB_FINAL]
                     final_auc = roc_auc_score(y_true, y_final_prob)
                     final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 

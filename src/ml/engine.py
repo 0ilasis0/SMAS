@@ -13,7 +13,7 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
-from ml.const import (DLModelType, FeatureCol, MetaCol, MLConst, ModelCol,
+from ml.const import (DLModelType, FeatureCol, MarketCol, MLConst, ModelCol,
                       RNNType)
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
@@ -233,19 +233,19 @@ class QuantAIEngine:
         if isinstance(oof_dl, np.ndarray):
             oof_dl = pd.Series(oof_dl, index=valid_index_train)
 
-        df_oof = df_oof.join(oof_xgb.rename(MetaCol.PROB_XGB)) \
-                       .join(oof_dl.rename(MetaCol.PROB_DL)) \
+        df_oof = df_oof.join(oof_xgb.rename(MarketCol.PROB_XGB)) \
+                       .join(oof_dl.rename(MarketCol.PROB_DL)) \
                        .join(y_true.rename(FeatureCol.TARGET))
 
         # 刪除長度不一致的暖機期
-        df_oof.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, FeatureCol.TARGET], inplace=True)
+        df_oof.dropna(subset=[MarketCol.PROB_XGB, MarketCol.PROB_DL, FeatureCol.TARGET], inplace=True)
 
         if df_oof.empty:
             dbg.error("OOF 對齊後資料為空！請檢查各模型的訓練資料長度。")
             return
 
-        aligned_oof_xgb = df_oof[MetaCol.PROB_XGB]
-        aligned_oof_dl = df_oof[MetaCol.PROB_DL]
+        aligned_oof_xgb = df_oof[MarketCol.PROB_XGB]
+        aligned_oof_dl = df_oof[MarketCol.PROB_DL]
         aligned_y_true = df_oof[FeatureCol.TARGET]
 
         meta_learner = MetaLearner(ticker=self.config.ticker)
@@ -374,16 +374,16 @@ class QuantAIEngine:
 
         # 將所有預測結果打包回傳
         return {
-            "ticker": self.config.ticker,
-            "date": target_date.strftime('%Y-%m-%d'),
-            "prob_final": final_prob,
-            "prob_xgb": prob_xgb,
-            "prob_dl": prob_dl,
-            "prob_market_safe": prob_market_safe,
-            "sentiment_score": sentiment_score,
-            "sentiment_reason": sentiment_reason,
-            "current_price": float(current_price),
-            "avg_5d_vol": float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
+            MarketCol.TICKER: self.config.ticker,
+            MarketCol.DATE: target_date.strftime('%Y-%m-%d'),
+            MarketCol.PROB_FINAL: final_prob,
+            MarketCol.PROB_XGB: prob_xgb,
+            MarketCol.PROB_DL: prob_dl,
+            MarketCol.PROB_MARKET_SAFE: prob_market_safe,
+            MarketCol.SENTIMENT_SCORE: sentiment_score,
+            MarketCol.SENTIMENT_REASON: sentiment_reason,
+            MarketCol.CURRENT_PRICE: float(current_price),
+            MarketCol.AVG_5D_VOL: float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
             FeatureCol.BIAS_MONTH: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
             FeatureCol.RETURN_5D: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
         }
@@ -415,7 +415,7 @@ class QuantAIEngine:
         prob_xgb_series = pd.Series(
             self.xgb_model.predict_proba(X_xgb)[:, 1],
             index=df_xgb_clean.index,
-            name=MetaCol.PROB_XGB
+            name=MarketCol.PROB_XGB
         )
 
         # DL 批次推論
@@ -431,7 +431,7 @@ class QuantAIEngine:
             device = next(self.dl_model.parameters()).device
             X_tensor = torch.as_tensor(X_dl_scaled, dtype=torch.float32, device=device)
             prob_dl_array = torch.sigmoid(self.dl_model(X_tensor)).cpu().numpy().flatten()
-        prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MetaCol.PROB_DL)
+        prob_dl_series = pd.Series(prob_dl_array, index=valid_index, name=MarketCol.PROB_DL)
 
         # Market 批次推論
         market_engine = MarketFeatureEngine(lookahead=self.config.lookahead)
@@ -446,7 +446,7 @@ class QuantAIEngine:
         prob_market_safe_series = pd.Series(
             1.0 - prob_danger_array,
             index=df_market_clean.index,  # 這裡的 index 是 TWII 的日期
-            name=MetaCol.PROB_MARKET_SAFE
+            name=MarketCol.PROB_MARKET_SAFE
         )
 
         # df_raw (個股日期) 會自動去 Left Join TWII 的日期，完美對齊！
@@ -454,15 +454,15 @@ class QuantAIEngine:
         df_backtest = df_backtest.join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
 
         # 清除暖機期的 NaN (只要有一顆大腦沒訊號，那天就不能做決策)
-        df_backtest.dropna(subset=[MetaCol.PROB_XGB, MetaCol.PROB_DL, MetaCol.PROB_MARKET_SAFE], inplace=True)
+        df_backtest.dropna(subset=[MarketCol.PROB_XGB, MarketCol.PROB_DL, MarketCol.PROB_MARKET_SAFE], inplace=True)
 
         if df_backtest.empty:
             dbg.war("合併後的預測資料為空，請檢查資料長度是否足夠讓模型暖機。")
             return pd.DataFrame()
 
         # Meta 融合預測
-        X_meta = df_backtest[[MetaCol.PROB_XGB, MetaCol.PROB_DL]]
-        df_backtest[MetaCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
+        X_meta = df_backtest[[MarketCol.PROB_XGB, MarketCol.PROB_DL]]
+        df_backtest[MarketCol.PROB_FINAL] = self.meta_learner.model.predict_proba(X_meta)[:, 1]
 
         dbg.log(f"✅ 回測資料生成完畢！共產出 {len(df_backtest)} 筆有效預測日。")
         return df_backtest
@@ -490,8 +490,8 @@ class QuantAIEngine:
         raw_returns = df[col_close].pct_change().dropna()
         adj_returns = df[col_adj].pct_change().dropna()
 
-        raw_anomaly = raw_returns.abs() > 0.4
-        adj_anomaly = adj_returns.abs() > 0.4
+        raw_anomaly = raw_returns.abs() > 0.6
+        adj_anomaly = adj_returns.abs() > 0.6
 
         # 情境 A：雙軌制完美發揮作用 (原始有斷層，但還原很平滑)
         if raw_anomaly.any() and not adj_anomaly.any():
@@ -499,7 +499,7 @@ class QuantAIEngine:
 
         # 情境 B：Yahoo 源頭的還原資料壞了
         elif adj_anomaly.any():
-            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 的「還原股價」出現異常斷層 (>40%)，這會干擾 AI 預測！建議重新抓取資料。")
+            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 的「還原股價」出現異常斷層 (>60%)，這會干擾 AI 預測！建議重新抓取資料。")
 
     def _auto_heal_corporate_actions(self, ticker: str, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -523,7 +523,7 @@ class QuantAIEngine:
 
             # 清空 DB 並嘗試重抓，看 Yahoo 是否有更新
             self.db.clear_ticker_data(ticker)
-            df_healed = self.fetcher.fetch_daily_data(ticker, period=10, unit='y')
+            df_healed = self.fetcher.fetch_daily_data(ticker, period=10, unit=TimeUnit.YEAR)
 
             if not df_healed.empty:
                 new_returns = df_healed[col_close].pct_change().dropna()

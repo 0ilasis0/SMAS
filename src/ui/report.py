@@ -2,6 +2,7 @@ import streamlit as st
 
 from bt.const import DecisionAction
 from const import Color
+from ml.const import MarketCol
 
 
 def render_report(result: dict):
@@ -10,7 +11,7 @@ def render_report(result: dict):
         st.error(f"❌ 發生錯誤: {result.get('message', '未知錯誤')}")
         return
 
-    st.success(f"決策生成完畢！(依據最新收盤數據: {result.get('date', '未知')})")
+    st.success(f"決策生成完畢！(正在預測目標日期: {result.get('date', '未知')})")
 
     action = result["decision"]["action"]
 
@@ -44,15 +45,15 @@ def render_report(result: dict):
 
     st.markdown("### 📈 AI 雙腦與大盤雷達指標")
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("綜合決策勝率 (Meta)", f"{result['ai_signals']['final_prob']:.2%}")
-    m2.metric("技術面動能 (XGB)", f"{result['ai_signals']['xgb_prob']:.2%}")
-    m3.metric("K線型態辨識 (DL)", f"{result['ai_signals']['dl_prob']:.2%}")
-    m4.metric("大盤環境安全度", f"{result['ai_signals']['market_safe']:.2%}")
+    m1.metric("綜合決策勝率 (Meta)", f"{result['ai_signals'][MarketCol.PROB_FINAL]:.2%}")
+    m2.metric("技術面動能 (XGB)", f"{result['ai_signals'][MarketCol.PROB_XGB]:.2%}")
+    m3.metric("K線型態辨識 (DL)", f"{result['ai_signals'][MarketCol.PROB_DL]:.2%}")
+    m4.metric("大盤環境安全度", f"{result['ai_signals'][MarketCol.PROB_MARKET_SAFE]:.2%}")
 
     st.markdown("### 📰 Gemini 新聞情緒")
-    score = result['sentiment']['score']
+    score = result['sentiment'][MarketCol.SENTIMENT_SCORE]
     sentiment_color = Color.RED if score >= 7 else Color.GREEN if score <= 3 else Color.ORANGE
-    st.info(f"**情緒分數：:{sentiment_color}[{score} / 10]** \n\n**判讀理由：** {result['sentiment']['reason']}")
+    st.info(f"**情緒分數：:{sentiment_color}[{score} / 10]** \n\n**判讀理由：** {result['sentiment'][MarketCol.SENTIMENT_REASON]}")
 
     st.markdown("### 🤖 總裁戰報")
     st.warning(result["report"], icon="💡")

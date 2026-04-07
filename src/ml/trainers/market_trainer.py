@@ -36,6 +36,7 @@ class MarketTrainer:
 
         cv_aucs = []
         best_iters = [] # 紀錄每個 Fold 的最佳停止點
+        cv_importances = [] # 紀錄大盤特徵重要性
 
         lgbm_params = self.config.to_dict()
 
@@ -83,6 +84,9 @@ class MarketTrainer:
             if model.best_iteration_ is not None:
                 best_iters.append(model.best_iteration_)
 
+            if hasattr(model, 'feature_importances_'):
+                cv_importances.append(model.feature_importances_)
+
             if len(np.unique(y_test)) > 1:
                 auc = roc_auc_score(y_test, y_pred_proba_danger)
                 cv_aucs.append(auc)
@@ -95,6 +99,15 @@ class MarketTrainer:
 
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
+
+        if cv_importances:
+            avg_importance = np.mean(cv_importances, axis=0)
+            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+
+            dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("-" * 40)
 
         return oof_predictions.dropna()
 

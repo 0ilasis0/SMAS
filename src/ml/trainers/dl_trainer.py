@@ -13,14 +13,14 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool, MLTool
 from debug import dbg
-from ml.const import DLModelType
+from ml.const import DLModelType, DLParamKey
 from ml.params import DLHyperParams, TrainConfig
 from ml.trainers.dl_net import DLModelFactory, RNNType
 
 
 class DLTrainer:
     ''' DL 離線訓練器 (與 XGBTrainer API 對齊) '''
-    def __init__(self, ticker: str, dl_model_type: DLModelType, rnn_type: RNNType):
+    def __init__(self, ticker: str, dl_model_type: DLModelType, rnn_type: RNNType, custom_hp: dict = None):
         self.dl_model_type = dl_model_type
         self.rnn_type = rnn_type
         self.ticker = ticker
@@ -28,9 +28,14 @@ class DLTrainer:
 
         dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.dl_model_type}]")
 
-        self.batch_size = DLHyperParams.BATCH_SIZE
-        self.epochs = DLHyperParams.EPOCHS
-        self.learning_rate = DLHyperParams.LEARNING_RATE
+        if custom_hp:
+            self.batch_size = custom_hp.get(DLParamKey.BATCH_SIZE, DLHyperParams.BATCH_SIZE)
+            self.epochs = custom_hp.get(DLParamKey.EPOCHS, DLHyperParams.EPOCHS)
+            self.learning_rate = custom_hp.get(DLParamKey.LEARNING_RATE, DLHyperParams.LEARNING_RATE)
+        else:
+            self.batch_size = DLHyperParams.BATCH_SIZE
+            self.epochs = DLHyperParams.EPOCHS
+            self.learning_rate = DLHyperParams.LEARNING_RATE
 
         self.optimal_epochs = self.epochs
 
@@ -42,7 +47,7 @@ class DLTrainer:
 
     def train_with_cv(self, X_raw: np.ndarray, y: np.ndarray, original_index: pd.Index, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
-        dbg.log(f"開始執行 DL (CNN-LSTM) 嚴格三階段交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
+        dbg.log(f"開始執行 DL (CNN-{self.rnn_type.value if self.rnn_type else '1DCNN'}) 嚴格三階段交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
 
         tscv = TimeSeriesSplit(n_splits=n_splits, gap=lookahead)
         oof_predictions = pd.Series(index=original_index, dtype=float)
@@ -91,6 +96,7 @@ class DLTrainer:
                 time_steps=DLHyperParams.TIME_STEPS,
                 rnn_type=self.rnn_type
             ).to(self.device)
+
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -192,6 +198,7 @@ class DLTrainer:
             time_steps=DLHyperParams.TIME_STEPS,
             rnn_type=self.rnn_type
         ).to(self.device)
+
         criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
 
@@ -230,6 +237,7 @@ class DLTrainer:
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """【供 UI 推論端使用】載入訓練好的模型權重"""
         try:
+            model_path = Path(model_path)
             if not model_path.exists():
                 dbg.error(f"深度學習模型載入失敗: 找不到檔案 {model_path}")
                 return None
@@ -240,10 +248,11 @@ class DLTrainer:
                 time_steps=DLHyperParams.TIME_STEPS,
                 rnn_type=self.rnn_type
             ).to(self.device)
+
             model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
             model.eval()
             dbg.log(f"成功載入 DL 模型: {model_path}")
             return model
         except Exception as e:
-            dbg.error(f"大盤模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
+            dbg.error(f"深度學習模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
             return None

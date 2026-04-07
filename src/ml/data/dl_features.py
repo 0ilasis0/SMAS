@@ -5,7 +5,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from data.const import StockCol
 from debug import dbg
 from ml.const import FeatureCol
-from ml.params import DLHyperParams
+from ml.params import DLHyperParams, IndicatorParams
 
 
 class DLFeatureEngine:
@@ -24,8 +24,8 @@ class DLFeatureEngine:
 
     def process_pipeline(self, df: pd.DataFrame, is_training: bool = True):
         if df is None or df.empty:
-            dbg.war("⚠️ [XGBFeatureEngine] 輸入 DataFrame 為空，無法計算特徵。")
-            return pd.DataFrame()
+            dbg.war("⚠️ [DLFeatureEngine] 輸入 DataFrame 為空，無法計算特徵。")
+            return None, None, None
 
         dbg.log("開始建立 Deep Learning 原始時序特徵矩陣 (Sliding Window)...")
 
@@ -47,7 +47,7 @@ class DLFeatureEngine:
 
         # 基礎 K 線變化 (對數報酬率)
         for col in target_cols:
-            feat_name = f"{col}_log_chg"
+            feat_name = f"{col.value}_log_chg"
 
             if col == StockCol.VOLUME:
                 # 成交量不需要還原
@@ -63,9 +63,9 @@ class DLFeatureEngine:
 
         ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        ma_w = data[ai_vision_col].rolling(window=5).mean()
-        ma_m = data[ai_vision_col].rolling(window=20).mean()
-        rolling_std = data[ai_vision_col].rolling(window=20).std()
+        ma_w = data[ai_vision_col].rolling(window=IndicatorParams.MA_WEEK).mean()
+        ma_m = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).mean()
+        rolling_std = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).std()
 
         new_features[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / (ma_w + 1e-9)
         new_features[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
@@ -97,6 +97,7 @@ class DLFeatureEngine:
             adj_high = data[StockCol.HIGH] * current_adj_factor
 
             future_high_max = adj_high.rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
+            # 判斷未來 N 天內是否上漲超過 2.5%
             target_condition = future_high_max > (data[ai_vision_col] * 1.025)
 
             y_all = target_condition.astype(int).values

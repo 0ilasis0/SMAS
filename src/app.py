@@ -2,6 +2,7 @@ import time
 
 import streamlit as st
 
+from bt.const import ExecuteCol
 from controller import IDSSController
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
@@ -224,14 +225,14 @@ def main():
                 # AI 決策與真實帳房的「一鍵執行橋樑」
                 # ==========================================
                 decision = st.session_state.last_result.get("decision", {})
-                action = decision.get("action", "HOLD")
+                action = decision.get("action", ExecuteCol.HOLD)
 
                 # 只有當 AI 建議 BUY 或 SELL 的時候，才顯示執行按鈕
-                if action in ["BUY", "SELL"]:
+                if action in [ExecuteCol.BUY, ExecuteCol.SELL]:
                     st.markdown("---")
 
                     # 動態改變按鈕顏色與文字
-                    btn_icon = "🛒" if action == "BUY" else "💸"
+                    btn_icon = "🛒" if action == ExecuteCol.BUY else "💸"
                     btn_text = f"{btn_icon} 採納 AI 建議，立即執行 {action} 交易"
 
                     if st.button(btn_text, type="primary", use_container_width=True, disabled=st.session_state.is_training):

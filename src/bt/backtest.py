@@ -14,7 +14,7 @@ from bt.strategy_config import StrategyConfig
 from const import Color
 from data.const import StockCol
 from debug import dbg
-from ml.const import FeatureCol, MetaCol
+from ml.const import FeatureCol, MarketCol
 from path import PathConfig
 
 
@@ -93,11 +93,11 @@ class BacktestEngine:
                 executable_price=next_row[StockCol.OPEN],  # 實際執行交易的價格
                 daily_volume=next_row[StockCol.VOLUME]     # 流動性上限
             )
-            self.bb.prob_market_safe = row.get(MetaCol.PROB_MARKET_SAFE, 1.0)
-            self.bb.prob_final = row[MetaCol.PROB_FINAL]
+            self.bb.prob_market_safe = row.get(MarketCol.PROB_MARKET_SAFE, 1.0)
+            self.bb.prob_final = row[MarketCol.PROB_FINAL]
 
-            self.bb.prob_xgb = row[MetaCol.PROB_XGB]
-            self.bb.prob_dl = row[MetaCol.PROB_DL]
+            self.bb.prob_xgb = row[MarketCol.PROB_XGB]
+            self.bb.prob_dl = row[MarketCol.PROB_DL]
 
             self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH, 0.0)
             self.bb.return_5d = row.get(FeatureCol.RETURN_5D, 0.0)
@@ -143,8 +143,8 @@ class BacktestEngine:
                 Position=self.bb.position,
                 Total_Equity=last_equity,
                 Action=DecisionAction.HOLD, # 最後一天不動作
-                prob_final=last_row.get(MetaCol.PROB_FINAL, 0.5),
-                prob_market_safe=last_row.get(MetaCol.PROB_MARKET_SAFE, 1.0)
+                prob_final=last_row.get(MarketCol.PROB_FINAL, 0.5),
+                prob_market_safe=last_row.get(MarketCol.PROB_MARKET_SAFE, 1.0)
             )
             self.history_records.append(final_record.to_dict())
 

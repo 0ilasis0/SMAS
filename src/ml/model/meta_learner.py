@@ -9,7 +9,7 @@ from sklearn.model_selection import TimeSeriesSplit, cross_val_score
 
 from base import MathTool
 from debug import dbg
-from ml.const import MetaCol
+from ml.const import MarketCol
 from ml.params import MetaHyperParams, TrainConfig
 
 
@@ -39,8 +39,8 @@ class MetaLearner:
         dbg.log("開始進行 Meta-Learner (Level 1) OOF 整合評估...")
 
         X_meta = pd.DataFrame({
-            MetaCol.PROB_XGB: aligned_oof_xgb,
-            MetaCol.PROB_DL: aligned_oof_dl
+            MarketCol.PROB_XGB: aligned_oof_xgb,
+            MarketCol.PROB_DL: aligned_oof_dl
         })
         y_meta = aligned_y_true.astype(int)
 

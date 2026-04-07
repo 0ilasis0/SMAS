@@ -1,4 +1,3 @@
-# ml/xgb_features.py
 import numpy as np
 import pandas as pd
 
@@ -53,11 +52,10 @@ class XGBFeatureEngine:
         ma_q = data[ai_vision_col].rolling(window=self.params.MA_QUARTER).mean()
         ma_y = data[ai_vision_col].rolling(window=self.params.MA_YEAR).mean()
 
-        # 移動平均線乖離率
-        data[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / ma_w
-        data[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / ma_m
-        data[FeatureCol.BIAS_QUARTER] = (data[ai_vision_col] - ma_q) / ma_q
-        data[FeatureCol.BIAS_YEAR] = (data[ai_vision_col] - ma_y) / ma_y
+        data[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / (ma_w + 1e-9)
+        data[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
+        data[FeatureCol.BIAS_QUARTER] = (data[ai_vision_col] - ma_q) / (ma_q + 1e-9)
+        data[FeatureCol.BIAS_YEAR] = (data[ai_vision_col] - ma_y) / (ma_y + 1e-9)
 
         # 使用更準確的 EMA 來計算 RSI，增加指標對近期價格的敏感度
         delta = data[ai_vision_col].diff()
@@ -67,15 +65,14 @@ class XGBFeatureEngine:
         rsi_100 = 100 - (100 / (1 + rs))
         data[FeatureCol.RSI] = (rsi_100 - 50) / 50.0
 
-        # MACD (轉化為百分比 PPO)
         ema_fast = data[ai_vision_col].ewm(span=self.params.MACD_FAST, adjust=False).mean()
         ema_slow = data[ai_vision_col].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
-        data[FeatureCol.MACD] = (ema_fast - ema_slow) / data[ai_vision_col] * 100
+        data[FeatureCol.MACD] = (ema_fast - ema_slow) / (data[ai_vision_col] + 1e-9) * 100
         data[FeatureCol.MACD_SIGNAL] = data[FeatureCol.MACD].ewm(span=self.params.MACD_SIGNAL, adjust=False).mean()
 
         # 布林通道寬度 (BB Width) - 抓波動率壓縮
         rolling_std = data[ai_vision_col].rolling(window=self.params.MA_MONTH).std()
-        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / ma_m
+        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
         # 價格與成交量動能
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
@@ -104,11 +101,11 @@ class XGBFeatureEngine:
         if twii_close_col in data.columns:
             stock_ma5 = data[ai_vision_col].rolling(window=5).mean()
             stock_ma20 = ma_m
-            stock_momentum = (stock_ma5 - stock_ma20) / stock_ma20
+            stock_momentum = (stock_ma5 - stock_ma20) / (stock_ma20 + 1e-9)
 
             twii_ma5 = data[twii_close_col].rolling(window=5).mean()
             twii_ma20 = data[twii_close_col].rolling(window=20).mean()
-            twii_momentum = (twii_ma5 - twii_ma20) / twii_ma20
+            twii_momentum = (twii_ma5 - twii_ma20) / (twii_ma20 + 1e-9)
 
             # 相對強弱 = 個股均線動能 - 大盤均線動能
             data[FeatureCol.RS_5D] = stock_momentum - twii_momentum
