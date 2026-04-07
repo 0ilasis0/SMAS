@@ -14,11 +14,11 @@ from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
 from ml.const import (DLModelType, FeatureCol, MLConst, ModelCol, OracleCol,
-                      QuoteCol, RNNType, SignalCol)
+                      QuoteCol, RNNType, SignalCol, TradingMode)
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
-from ml.model.llm_oracle import GeminiOracle, TradingMode
+from ml.model.llm_oracle import GeminiOracle
 from ml.model.meta_learner import MetaLearner
 from ml.params import DLHyperParams, SessionConfig
 from ml.trainers.dl_trainer import DLTrainer

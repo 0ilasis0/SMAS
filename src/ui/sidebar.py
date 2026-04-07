@@ -3,7 +3,7 @@ import time
 import streamlit as st
 
 from bt.strategy_config import TradingPersona
-from ml.model.llm_oracle import TradingMode
+from ml.const import TradingMode
 from ui.base import is_valid_ticker
 from ui.const import Page, SessionKey
 from ui.state import (on_ticker_change, reset_result, save_settings,
@@ -112,32 +112,18 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 "保守型 (CONSERVATIVE)": TradingPersona.CONSERVATIVE
             }
 
-            mode_mapping = {
-                "波段模式 (SWING)": TradingMode.SWING,
-                "當沖模式 (DAY_TRADE)": TradingMode.DAY_TRADE
-            }
-
             user_settings = st.session_state.get(SessionKey.USER_SETTINGS.value, {})
             saved_persona = user_settings.get("persona", "穩健型 (MODERATE)")
-            saved_mode = user_settings.get("mode", "波段模式 (SWING)")
             p_index = list(persona_mapping.keys()).index(saved_persona) if saved_persona in persona_mapping else 1
-            m_index = list(mode_mapping.keys()).index(saved_mode) if saved_mode in mode_mapping else 0
 
             def on_setting_change():
                 ui_p = st.session_state.get(SessionKey.UI_PERSONA.value)
-                ui_m = st.session_state.get(SessionKey.UI_MODE.value)
-                save_settings(ui_p, ui_m)
-                st.session_state[SessionKey.USER_SETTINGS.value] = {"persona": ui_p, "mode": ui_m}
+                st.session_state[SessionKey.USER_SETTINGS.value] = {"persona": ui_p}
                 reset_result()
 
             selected_persona_str = st.selectbox(
                 "🧠 戰術性格", list(persona_mapping.keys()), index=p_index,
                 key=SessionKey.UI_PERSONA.value, on_change=on_setting_change, disabled=is_locked
-            )
-
-            selected_mode_str = st.selectbox(
-                "⚡ 交易模式", list(mode_mapping.keys()), index=m_index,
-                key=SessionKey.UI_MODE.value, on_change=on_setting_change, disabled=is_locked
             )
 
             st.markdown("---")
@@ -157,10 +143,9 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
             system_settings_dialog()
 
         if st.session_state.get(SessionKey.CURRENT_PAGE.value) == Page.DASHBOARD.value:
-            return persona_mapping[selected_persona_str], mode_mapping[selected_mode_str]
+            return persona_mapping[selected_persona_str]
         else:
-            # 在非 Dashboard 頁面時回傳預設值以避免報錯
-            return TradingPersona.MODERATE, TradingMode.SWING
+            return TradingPersona.MODERATE
 
 
 @st.dialog("⚙️ 系統總設定", width="small")

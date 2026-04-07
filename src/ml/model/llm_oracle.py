@@ -14,13 +14,9 @@ from google.genai import types
 from google.genai.errors import APIError
 
 from debug import dbg
+from ml.const import TradingMode
 from path import PathConfig
 from ui.const import EncodingConst
-
-
-class TradingMode(StrEnum):
-    DAY_TRADE = "day_trade"
-    SWING = "swing"
 
 
 class GeminiOracle:
@@ -173,10 +169,6 @@ class GeminiOracle:
         return None
 
     def get_sentiment_score(self, ticker: str) -> tuple[int, str]:
-        if self.mode == TradingMode.DAY_TRADE:
-            dbg.log(f"[{ticker}] 當沖模式啟動：略過 LLM 判斷，給予中立分數 5")
-            return 5, "當沖模式，略過新聞分析。"
-
         current_today_str = datetime.now(self.tw_tz).strftime('%Y-%m-%d')
         payload_hash = self._get_payload_hash(ticker, current_today_str)
 

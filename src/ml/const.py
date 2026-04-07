@@ -1,6 +1,9 @@
 from enum import StrEnum
 
 
+class TradingMode(StrEnum):
+    SWING = "swing"
+
 # ==========================================
 # 模型與架構定義
 # ==========================================

@@ -107,7 +107,7 @@ def run_global_mlops_pipeline():
 # ==========================================
 def main():
     init_session_state()
-    selected_persona, selected_mode = render_sidebar()
+    selected_persona = render_sidebar()
 
     if not st.session_state.get(HAS_AUTO_UPDATED_KEY, False):
         st.toast("🔄 系統首次啟動：正在檢查並同步最新市場收盤資料...", icon="⏳")
@@ -204,12 +204,12 @@ def main():
         if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=is_training):
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
                 ctrl_live = st.session_state.get(SessionKey.CTRL_LIVE.value)
+
                 result = ctrl_live.execute_decision(
                     current_cash=global_cash,
                     current_position=my_shares,
                     avg_cost=my_avg_cost,
-                    persona=selected_persona,
-                    mode=selected_mode
+                    persona=selected_persona
                 )
                 st.session_state[SessionKey.LAST_RESULT.value] = result
 

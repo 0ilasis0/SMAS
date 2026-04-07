@@ -13,9 +13,8 @@ from const import GlobalParams
 from data.const import StockCol, TimeUnit
 from data.params import DataLimit
 from debug import dbg
-from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol
+from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol, TradingMode
 from ml.engine import QuantAIEngine
-from ml.model.llm_oracle import TradingMode
 from ui.const import APIKey
 
 
@@ -56,19 +55,18 @@ class IDSSController:
         current_position: int,
         avg_cost: float,
         persona: TradingPersona,
-        mode: TradingMode = TradingMode.SWING,
     ) -> dict:
         if not self.is_ready:
             return {"status": "error", "message": "系統尚未載入完成，請先呼叫 load_system()"}
 
         # 1. AI 引擎預測與新聞分析
-        prediction_result = self.engine.predict_today(mode=mode)
+        prediction_result = self.engine.predict_today(mode=TradingMode.SWING)
         if not prediction_result:
             return {"status": "error", "message": "預測失敗，缺乏最新市場資料"}
 
         # 2. 設定投資性格與行為樹
         strategy_config = PersonaFactory.get_config(persona)
-        should_run_llm = bool(self.api_keys and mode != TradingMode.DAY_TRADE)
+        should_run_llm = bool(self.api_keys)
         strategy_config.enable_llm_oracle = False
 
         tree = build_trading_tree(strategy_config)
@@ -101,7 +99,7 @@ class IDSSController:
             }
 
         # 4. 執行行為樹決策 (Tick)
-        dbg.log(f"\n🧠 啟動行為樹戰術決策 (模式: {mode.value})...")
+        dbg.log(f"\n🧠 啟動行為樹戰術決策 (波段模式)...")
         tree.tick(bb)
 
         bb.gemini_reasoning = ""
@@ -223,7 +221,7 @@ class IDSSController:
             APIKey.STATUS.value: "success",
             QuoteCol.TICKER.value: self.ticker,
             QuoteCol.DATE.value: final_date,
-            APIKey.MODE.value: mode.value,
+            APIKey.MODE.value: TradingMode.SWING.value,
             APIKey.PERSONA.value: persona.value if hasattr(persona, 'value') else str(persona),
 
             APIKey.DECISION.value: {
