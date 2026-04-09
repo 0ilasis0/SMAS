@@ -1,0 +1,1 @@
+使用terminal在根目錄下執行streamlit run src/app.py
