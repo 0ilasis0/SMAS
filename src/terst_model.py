@@ -33,7 +33,7 @@ def set_seed(seed=42):
 def run_model_comparison():
     set_seed(42)
 
-    tickers = ["2330.TW", "2603.TW"]
+    tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
 
     model_configs = [
         {"name": "Pure_1D_CNN", "dl_type": DLModelType.PURE_CNN, "rnn": None},
