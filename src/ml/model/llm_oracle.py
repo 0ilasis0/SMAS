@@ -7,14 +7,13 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
-from enum import StrEnum
 
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 
 from debug import dbg
-from ml.const import TradingMode
+from ml.const import OracleCol, TradingMode
 from path import PathConfig
 from ui.const import EncodingConst
 
@@ -208,7 +207,7 @@ class GeminiOracle:
         【嚴格輸出限制】：
         你被禁止輸出任何解釋性文字、Markdown 符號或警告語氣。你只能輸出純 JSON。
         格式必須完全符合：
-        {{"score": 整數, "reason": "以一句話精煉總結新聞利多/利空重點(50字內)"}}
+        {{"{OracleCol.SCORE.value}": 整數, "{OracleCol.REASON.value}": "精煉總結新聞利多/利空重點(80字內)"}}
         """
 
         result = self._call_gemini_with_fallback(prompt)
@@ -216,8 +215,8 @@ class GeminiOracle:
         if result is None:
             return 5, "API 額度耗盡或全面癱瘓，給予中立保護分數。"
 
-        score = int(result.get('score', 5))
-        reason = result.get('reason', '無')
+        score = int(result.get(OracleCol.SCORE.value, 5))
+        reason = result.get(OracleCol.REASON.value, '無')
 
         with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()

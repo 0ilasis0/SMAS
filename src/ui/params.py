@@ -16,5 +16,5 @@ class AccountLimit:
     MAX_MONEY: int = 100_000_000
     MIN_MONEY: int = 0
     STEP_MONEY: int = 10000
-    DEFAULT_SINGLE: int = 2_000_000
-    DEFAULT_GLOBAL: int = 300_000
+    DEFAULT_SINGLE: int = 300_000
+    DEFAULT_GLOBAL: int = 2_000_000

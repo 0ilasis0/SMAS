@@ -52,6 +52,7 @@ class APIKey(StrEnum):
     ACCOUNT = "account_after_trade"
     CASH_LEFT = "cash_left"
     POSITION_LEFT = "position_left"
+    TOTAL_EQUITY = "total_equity"
 
     AI_SIGNALS = "ai_signals"
     SENTIMENT = "sentiment"

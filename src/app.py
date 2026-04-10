@@ -7,9 +7,9 @@ from controller import IDSSController
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
-from ui.const import APIKey, Page, PortfolioCol, SessionKey
+from ui.const import APIKey, Page, SessionKey
 from ui.params import BacktestParams
-from ui.portfolio import render_portfolio_page, trade_dialog
+from ui.portfolio import load_portfolio, render_portfolio_page, trade_dialog
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
@@ -183,12 +183,13 @@ def main():
                 st.rerun()
             st.stop()
 
-    # 取得最新資金與部位資料
-    pf = st.session_state.get(SessionKey.PORTFOLIO.value, {})
-    global_cash = pf.get(PortfolioCol.GLOBAL_CASH.value, 0.0)
-    pos_data = pf.get(PortfolioCol.POSITIONS.value, {}).get(current_ticker, {PortfolioCol.SHARES.value: 0, PortfolioCol.AVG_COST.value: 0.0})
-    my_shares = pos_data.get(PortfolioCol.SHARES.value, 0)
-    my_avg_cost = pos_data.get(PortfolioCol.AVG_COST.value, 0.0)
+    account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
+    global_cash = account.cash
+
+    # 從 Account 提取當前股票的部位狀態
+    pos_obj = account.get_position(current_ticker)
+    my_shares = pos_obj.shares
+    my_avg_cost = pos_obj.avg_cost
 
     st.markdown("---")
     st.title(f"📊 IDSS 決策大廳 - {current_ticker}")
@@ -201,6 +202,12 @@ def main():
     with tab1:
         st.markdown("<br>", unsafe_allow_html=True)
         is_training = st.session_state.get(SessionKey.IS_TRAINING.value, False)
+
+        if my_shares > 0:
+            st.info(f"💼 **目前庫存**：持有 {my_shares:,} 股，均價 {my_avg_cost:,.2f} 元 (佔預估總資產 {pos_obj.market_value / account.total_equity:.1%} )")
+        else:
+            st.info(f"💼 **目前庫存**：空手觀望中。可用資金：{global_cash:,.0f} 元")
+
         if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=is_training):
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
                 ctrl_live = st.session_state.get(SessionKey.CTRL_LIVE.value)

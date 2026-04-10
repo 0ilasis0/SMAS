@@ -73,14 +73,28 @@ class IDSSController:
 
         # 3. 建立黑板與寫入「真實帳戶資料」
         account = Account(cash=current_cash)
-        bb = Blackboard(ticker=self.ticker, account=account)
 
+        # 將目前的庫存狀態寫入 Account，讓其能正確計算 total_equity
+        from bt.account import Position
+        account.positions[self.ticker] = Position(
+            shares=current_position,
+            avg_cost=avg_cost,
+            current_price=prediction_result.get(QuoteCol.CURRENT_PRICE.value, avg_cost)
+        )
+
+        # 建立黑板，並強制宣告這不是回測 (啟用動態風控)
+        bb = Blackboard(ticker=self.ticker, account=account)
+        bb.is_backtest = False
+
+        # 寫入預測數據與環境變數
         bb.prob_final = prediction_result.get(SignalCol.PROB_FINAL.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_xgb = prediction_result.get(SignalCol.PROB_XGB.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_dl = prediction_result.get(SignalCol.PROB_DL.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_market_safe = prediction_result.get(SignalCol.PROB_MARKET_SAFE.value, GlobalParams.DEFAULT_ERROR)
         bb.sentiment_score = prediction_result.get(OracleCol.SCORE.value, 5)
         bb.sentiment_reason = prediction_result.get(OracleCol.REASON.value, "無")
+
+        # 同步黑板的持倉快取
         bb.position = current_position
         bb.avg_cost = avg_cost
 
@@ -102,12 +116,16 @@ class IDSSController:
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (波段模式)...")
         tree.tick(bb)
 
+        # 動作結束後，將最新的持倉同步回 Account (因為 ActionNode 是改 bb.position)
+        account.positions[self.ticker].shares = bb.position
+        account.positions[self.ticker].avg_cost = bb.avg_cost
+
         bb.gemini_reasoning = ""
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
 
         # ==========================================
-        # 整合美股跳空校正的智慧定價引擎
+        # 整合美股跳空校正的智慧定價引擎 (這部分邏輯保留不變，寫得很棒！)
         # ==========================================
         if action_str in [TradeDecision.BUY.value, TradeDecision.SELL.value] and current_price > 0:
             df_recent = self.engine.db.get_daily_data(self.ticker).tail(20)
@@ -128,7 +146,6 @@ class IDSSController:
                 sox_close_prev = df_sox[StockCol.CLOSE.value].iloc[-2]
                 sox_return = (sox_close_last - sox_close_prev) / sox_close_prev
 
-            # 判斷是否為電子/科技類股 (簡易防呆)
             is_tech_stock = self.ticker.startswith(('23', '24', '3', '5', '6', '8'))
             beta = 0.4 if is_tech_stock else 0.1
             expected_open_price = current_price * (1 + (sox_return * beta))
@@ -206,7 +223,7 @@ class IDSSController:
             bb.last_trade_price = 0.0
 
         if should_run_llm:
-            dbg.log("\n啟陪盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
             bb.oracle = self.engine.oracle
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
             report_node.tick(bb)
@@ -231,8 +248,9 @@ class IDSSController:
             },
 
             APIKey.ACCOUNT.value: {
-                APIKey.CASH_LEFT.value: bb.cash,
-                APIKey.POSITION_LEFT.value: bb.position
+                APIKey.CASH_LEFT.value: account.cash,
+                APIKey.POSITION_LEFT.value: bb.position,
+                APIKey.TOTAL_EQUITY: account.total_equity
             },
 
             APIKey.AI_SIGNALS.value: {

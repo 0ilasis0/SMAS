@@ -19,13 +19,13 @@ class RiskMode(StrEnum):
     SINGLE_STOCK = "single_stock"
 
 DISPLAY_ASSET_SOURCE = {
-    AssetSource.GLOBAL: f"全域預設資金 ({AccountLimit.DEFAULT_GLOBAL:,} 元)",
+    AssetSource.GLOBAL: f"總預算預設資金 ({AccountLimit.DEFAULT_GLOBAL:,} 元)",
     AssetSource.CUSTOM: "自訂單檔投入預算"
 }
 
 DISPLAY_RISK_MODE = {
-    RiskMode.REALISTIC: "實戰模擬 (動態水位風控)",
-    RiskMode.SINGLE_STOCK: "個股模擬 (純粹訊號極限)"
+    RiskMode.REALISTIC: "實戰模擬 (用於總資金的分配的實際情況)",
+    RiskMode.SINGLE_STOCK: "個股模擬 (用於已決定動用多少資金上限於該個股)"
 }
 
 def render_backtest_tab(selected_persona):
@@ -65,11 +65,11 @@ def render_backtest_tab(selected_persona):
 
     st.markdown("#### 🛡️ 風險控制系統設定")
     risk_mode_label = st.radio(
-        "行為樹風控層級",
+        "模擬意義",
         options=[RiskMode.REALISTIC, RiskMode.SINGLE_STOCK],
         format_func=lambda x: DISPLAY_RISK_MODE.get(x, x),
         horizontal=True,
-        help="【實戰模擬】會根據庫存比例動態調整買賣門檻。\n【個股模擬】則可能產生極端操作。"
+        help="【實戰模擬】會根據庫存比例動態調整買賣門檻，防止重倉風險。\n\n【個股模擬】則可能產生 All-in 或反覆進出的極端操作，因為你已經限制了能在該個股操作的資金上限。"
     )
 
     is_pure_signal_test = (risk_mode_label == RiskMode.SINGLE_STOCK)
