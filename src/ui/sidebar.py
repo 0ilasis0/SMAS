@@ -160,6 +160,35 @@ def system_settings_dialog():
 
     st.divider()
 
+    st.markdown("#### 🧹 帳務清理")
+    st.caption("一鍵刪除目前「無庫存 (0 股)」之歷史紀錄，保持資產清單乾淨。")
+    if st.button("🧹 清除已出清標的歷史", use_container_width=True):
+        # 取得目前的帳戶物件
+        account: Account = st.session_state.get(SessionKey.PORTFOLIO.value)
+        if not account:
+            st.warning("查無帳戶資料。")
+            return
+
+        # 找出所有 share == 0 的標的
+        inactive_tickers = [ticker for ticker, pos in account.positions.items() if pos.shares == 0]
+
+        if not inactive_tickers:
+            st.info("目前沒有需要清理的已出清標的！")
+        else:
+            # 刪除這些幽靈標的
+            for ticker in inactive_tickers:
+                del account.positions[ticker]
+
+            # 存檔並更新 session_state
+            save_portfolio(account)
+            st.session_state[SessionKey.PORTFOLIO.value] = account
+
+            st.toast(f"✅ 成功清除 {len(inactive_tickers)} 檔已出清標的紀錄！", icon="🧹")
+            time.sleep(0.5)
+            st.rerun()
+
+    st.divider()
+
     st.markdown("#### ⚠️ 危險操作區")
     st.caption("注意：此操作將清空所有的「持股紀錄」，並將資金重置為初始狀態。")
     if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
