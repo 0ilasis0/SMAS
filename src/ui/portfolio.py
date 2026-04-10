@@ -302,39 +302,38 @@ def cash_operation_dialog():
 
     op_type = st.radio("操作類型", ["📥 存入資金 (Deposit)", "📤 提出資金 (Withdraw)"], horizontal=True)
 
-    # 使用 session_state 來記住目前輸入的金額，讓按鈕可以連動修改它
-    if PortfolioCol.TEMP_CASH_AMOUNT.value not in st.session_state:
-        st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value] = float(AccountLimit.DEFAULT_GLOBAL)
+    temp_key = PortfolioCol.TEMP_CASH_AMOUNT.value
+    if temp_key not in st.session_state:
+        st.session_state[temp_key] = float(AccountLimit.DEFAULT_GLOBAL)
 
     # 快捷金額按鈕
     st.caption("⚡ 快捷輸入")
     btn_cols = st.columns(4)
     if btn_cols[0].button("+ 10 萬", use_container_width=True):
-        st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value] += 100_000
+        st.session_state[temp_key] += 100_000.0
     if btn_cols[1].button("+ 100 萬", use_container_width=True):
-        st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value] += 1_000_000
+        st.session_state[temp_key] += 1_000_000.0
     if btn_cols[2].button("+ 1000 萬", use_container_width=True):
-        st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value] += 10_000_000
+        st.session_state[temp_key] += 10_000_000.0
     if btn_cols[3].button("歸零", use_container_width=True):
-        st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value] = 0
+        st.session_state[temp_key] = 0.0
 
-    # 實際的輸入框 (綁定 session_state)
+    # 實際的輸入框
     amount = st.number_input(
         "金額 (NTD)",
-        min_value=0,
+        min_value=0.0,
         max_value=float(AccountLimit.MAX_MONEY),
-        step=10_000,
+        step=10_000.0,
         format="%.0f",
-        key=PortfolioCol.TEMP_CASH_AMOUNT.value
+        key=temp_key
     )
 
     # 即時千分位預覽
-    # 將數字轉為 "1,000,000" 的格式
     amount_str = f"${amount:,.0f}"
     if amount >= 1_000_000_000:
-        amount_str += f" ({amount / 1_000_000_000:.2f})"
+        amount_str += f" ({amount / 1_000_000_000:.2f} 億)"
     elif amount >= 10_000:
-        amount_str += f" ({amount / 10_000:.0f})"
+        amount_str += f" ({amount / 10_000:.0f} 萬)"
 
     st.info(f"💡 目前設定金額： **{amount_str}**")
 
@@ -359,7 +358,7 @@ def cash_operation_dialog():
         st.session_state[SessionKey.PORTFOLIO.value] = account
 
         # 執行完畢後清理 temp 變數，避免下次點開 Dialog 時殘留
-        del st.session_state[PortfolioCol.TEMP_CASH_AMOUNT.value]
+        del st.session_state[temp_key]
         time.sleep(0.5)
         st.rerun()
 
