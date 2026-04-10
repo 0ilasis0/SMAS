@@ -68,8 +68,11 @@ def save_portfolio(account: Account):
         st.error(f"❌ 資金檔存檔失敗: {e}")
 
 def recalculate_position(history: list) -> tuple[int, float]:
-    """動態帳務重算引擎"""
+    """
+    動態帳務重算引擎 (嚴格平均成本法)
+    """
     current_shares = 0
+    # 在會計上，我們追蹤「總投入本金(不含已實現損益)」，以便計算平均成本
     current_total_cost = 0.0
 
     STANDARD_BUY = TradeDecision.BUY.value
@@ -78,23 +81,29 @@ def recalculate_position(history: list) -> tuple[int, float]:
     for r in history:
         action = str(r.get(HistoryKey.ACTION.value, STANDARD_BUY)).lower()
         shares = int(r.get(HistoryKey.SHARES.value, 0))
-        total = float(r.get(HistoryKey.TOTAL.value, 0.0))
+        total_settlement = float(r.get(HistoryKey.TOTAL.value, 0.0))
 
         if action == STANDARD_BUY:
             current_shares += shares
-            current_total_cost += total
+            current_total_cost += total_settlement
+
         elif action == STANDARD_SELL:
             if current_shares > 0:
+                # 賣出時，先算出當前的平均成本
                 avg_cost = current_total_cost / current_shares
+
+                # 扣除股數
                 current_shares -= shares
+
                 if current_shares <= 0:
                     current_shares = 0
                     current_total_cost = 0.0
                 else:
-                    current_total_cost = avg_cost * current_shares
+                    current_total_cost = current_shares * avg_cost
 
-    avg_cost = current_total_cost / current_shares if current_shares > 0 else 0.0
-    return current_shares, avg_cost
+    # 最終防呆計算
+    final_avg_cost = current_total_cost / current_shares if current_shares > 0 else 0.0
+    return current_shares, final_avg_cost
 
 def get_active_buys(history: list) -> list:
     """找出構成「當前庫存均價」的所有有效買進批次"""
@@ -304,7 +313,7 @@ def cash_operation_dialog():
 
     temp_key = PortfolioCol.TEMP_CASH_AMOUNT.value
     if temp_key not in st.session_state:
-        st.session_state[temp_key] = float(AccountLimit.DEFAULT_GLOBAL)
+        st.session_state[temp_key] = float(AccountLimit.MIN_MONEY)
 
     # 快捷金額按鈕
     st.caption("⚡ 快捷輸入")

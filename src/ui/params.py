@@ -13,7 +13,7 @@ class BacktestParams:
 @dataclass(frozen=True)
 class AccountLimit:
     """帳戶資金 UI 控制項的預設範圍"""
-    MAX_MONEY: int = 100_000_000
+    MAX_MONEY: int = 10_000_000_000
     MIN_MONEY: int = 0
     STEP_MONEY: int = 10000
     DEFAULT_SINGLE: int = 300_000
