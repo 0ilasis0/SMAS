@@ -2,12 +2,13 @@ import time
 
 import streamlit as st
 
+from bt.account import Account
 from bt.strategy_config import TradingPersona
 from ml.const import TradingMode
 from ui.base import is_valid_ticker
 from ui.const import Page, SessionKey
-from ui.state import (on_ticker_change, reset_result, save_settings,
-                      save_watchlist)
+from ui.portfolio import save_portfolio
+from ui.state import on_ticker_change, reset_result, save_watchlist
 from ui.stock_names import get_tw_stock_mapping
 
 
@@ -162,12 +163,9 @@ def system_settings_dialog():
     st.markdown("#### ⚠️ 危險操作區")
     st.caption("注意：此操作將清空所有的「持股紀錄」，並將資金重置為初始狀態。")
     if st.button("🗑️ 帳戶一鍵清零 (初始化)", type="primary", use_container_width=True):
-        # 確保這裡有 import get_default_portfolio 和 save_portfolio
-        from ui.portfolio import get_default_portfolio, save_portfolio
-
-        clean_portfolio = get_default_portfolio()
-        st.session_state[SessionKey.PORTFOLIO.value] = clean_portfolio
-        save_portfolio(clean_portfolio) # 同步抹除 JSON 檔案
+        empty_account = Account()
+        save_portfolio(empty_account)
+        st.session_state[SessionKey.PORTFOLIO.value] = empty_account
         st.toast("✅ 帳戶資產與 JSON 存檔已成功初始化！", icon="🗑️")
         time.sleep(0.5)
         st.rerun()

@@ -66,6 +66,7 @@ class PortfolioCol(StrEnum):
     SHARES = "shares"
     AVG_COST = "avg_cost"
     HISTORY = "history"
+    TEMP_CASH_AMOUNT = "temp_cash_amount"
 
 
 class UIFormat(StrEnum):
