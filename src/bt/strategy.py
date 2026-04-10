@@ -41,7 +41,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
 
             # 級別 2：AI 預警 -> 勝率低迷，先減碼降風險
             Sequence("勝率低迷_戰術減碼", [
-                CheckSellSignalNode(threshold=config.sell_signal_threshold)] +
+                CheckSellSignalNode(threshold=config.sell_signal_threshold, sell_risk=config.sell_risk)] +
                 ai_sell_conditions +
                 [ExecuteSellNode(position_ratio=config.warning_sell_ratio),
                 # ForceSuccess(GenerateGeminiReportNode())
@@ -51,7 +51,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
             Sequence("極端獲利_部分停利", [
                 CheckTakeProfitNode(profit_target=config.take_profit_target),
                 CheckNotPartialTakenNode(),
-                Inverter("非強烈看漲", CheckBuySignalNode(threshold=config.strong_buy_threshold)),
+                Inverter("非強烈看漲", CheckBuySignalNode(threshold=config.strong_buy_threshold, buy_risk=config.buy_risk)),
                 ExecuteSellNode(position_ratio=config.take_profit_sell_ratio),
                 # ForceSuccess(GenerateGeminiReportNode())
             ])
@@ -75,7 +75,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
 
             # 狀況 A：極度看漲 -> 強烈買進
             Sequence("強烈買進", [
-                CheckBuySignalNode(threshold=config.strong_buy_threshold),
+                CheckBuySignalNode(threshold=config.strong_buy_threshold, buy_risk=config.buy_risk),
                 CheckEntryCountLimitNode(max_entries=config.max_entries),
                 CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
                 ExecuteBuyNode(capital_ratio=config.strong_buy_capital_ratio),
@@ -84,7 +84,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
 
             # 狀況 B：普通看漲 -> 保守買進試水溫
             Sequence("保守買進", [
-                CheckBuySignalNode(threshold=config.conservative_buy_threshold),
+                CheckBuySignalNode(threshold=config.conservative_buy_threshold, buy_risk=config.buy_risk),
                 CheckEntryCountLimitNode(max_entries=config.max_entries),
                 CheckGapLimitNode(max_gap_ratio=config.max_gap_ratio),
                 ExecuteBuyNode(capital_ratio=config.conservative_buy_capital_ratio),

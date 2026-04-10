@@ -1,10 +1,14 @@
+from typing import TYPE_CHECKING
+
 from bt.blackboard import Blackboard
-from bt.const import BTCondition, TradeDecision
+from bt.const import BTCondition
 from bt.core import ConditionNode, NodeState
 from bt.params import ConsiderConfig, LLMParams, TaxRate
 from debug import dbg
 from ml.const import FeatureCol, OracleCol
 
+if TYPE_CHECKING:
+    from bt.strategy_config import RiskWeights
 
 # ==========================================
 # 防守與獲利了結 (Sell / Defensive Conditions)
@@ -104,17 +108,32 @@ class CheckTrailingStopNode(ConditionNode):
 
 class CheckSellSignalNode(ConditionNode):
     """
-    檢查綜合勝率是否跌破「賣出門檻」（例如模型極度看空）。
+    檢查綜合勝率是否跌破「賣出門檻」。
+    具備動態防禦功能：持倉比例越高，賣出的敏感度越高（提高門檻，使其更容易觸發賣出），以保護重倉利潤。
     """
-    def __init__(self, threshold: float = ConsiderConfig.SELL_THRESHOLD, name: str = BTCondition.SELL_SIGNAL):
+    def __init__(self, threshold: float, sell_risk: "RiskWeights", name: str = BTCondition.SELL_SIGNAL):
         super().__init__(name)
-        self.threshold = threshold
+        self.base_threshold: float = threshold
+        self.sell_risk = sell_risk
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         prob = blackboard.prob_final
-        # 如果勝率小於等於賣出門檻，代表模型看跌，產生賣出訊號
-        if prob <= self.threshold:
-            dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} <= 賣出門檻 {self.threshold:.2%} ➔ 允許賣出 (SUCCESS)")
+
+        # 預設使用基礎門檻
+        dynamic_threshold = self.base_threshold
+        holding_ratio = blackboard.holding_ratio
+
+        if not blackboard.is_backtest:
+            if holding_ratio >= 0.5:
+                dynamic_threshold += holding_ratio * self.sell_risk.heavy
+            elif holding_ratio >= 0.2:
+                dynamic_threshold += holding_ratio * self.sell_risk.light
+
+            dynamic_threshold = min(dynamic_threshold, ConsiderConfig.MAX_SELL_THRESHOLD)
+
+        # 如果勝率小於等於動態賣出門檻，代表模型看跌或動能衰退，產生賣出訊號
+        if prob <= dynamic_threshold:
+            dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} <= 動態賣出門檻 {dynamic_threshold:.2%} (持股佔比: {holding_ratio:.1%}) ➔ 允許賣出 (SUCCESS)")
             return NodeState.SUCCESS
 
         return NodeState.FAILURE
@@ -271,14 +290,30 @@ class CheckNotOverheatedNode(ConditionNode):
 class CheckBuySignalNode(ConditionNode):
     """
     檢查綜合勝率是否達到「買進門檻」。
+    具備動態風控功能：若持股比例過高，自動提高買進標準，防止過度集中曝險。
     """
-    def __init__(self, threshold: float = ConsiderConfig.BUY_THRESHOLD, name: str = BTCondition.BUY_SIGNAL):
+    def __init__(self, threshold: float, buy_risk: "RiskWeights", name: str = BTCondition.BUY_SIGNAL):
         super().__init__(name)
-        self.threshold = threshold
+        self.base_threshold = threshold
+        self.buy_risk = buy_risk
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         prob = blackboard.prob_final
-        if prob >= self.threshold:
-            dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} >= 買進門檻 ➔ 允許買進 (SUCCESS)")
+
+        # 預設使用基礎門檻
+        dynamic_threshold = self.base_threshold
+        holding_ratio = blackboard.holding_ratio
+
+        if not blackboard.is_backtest:
+            if holding_ratio >= 0.5:
+                dynamic_threshold += holding_ratio * self.buy_risk.heavy
+            elif holding_ratio >= 0.2:
+                dynamic_threshold += holding_ratio * self.buy_risk.light
+
+            dynamic_threshold = min(dynamic_threshold, ConsiderConfig.MAX_BUY_THRESHOLD)
+
+        if prob >= dynamic_threshold:
+            dbg.log(f"🔎 [條件檢查] 勝率 {prob:.2%} >= 動態買進門檻 {dynamic_threshold:.2%} (持股佔比: {holding_ratio:.1%}) ➔ 允許買進 (SUCCESS)")
             return NodeState.SUCCESS
+
         return NodeState.FAILURE

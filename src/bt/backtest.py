@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from bt.account import Account
+from bt.account import Account, Position
 from bt.blackboard import Blackboard
 from bt.const import BlackboardKey, TradeDecision
 from bt.strategy import build_trading_tree
@@ -28,6 +28,10 @@ class HistoryCol(StrEnum):
     ACTION = "Action"
     PROB_FINAL = "prob_final"
     PROB_MARKET = "prob_market_safe"
+    # 績效分析相關
+    PEAK = "Peak"
+    DRAWDOWN = "Drawdown"
+    DAILY_RETURN = "Daily_Return"
 
 @dataclass(frozen=True)
 class BacktestRecord:
@@ -51,15 +55,15 @@ class BacktestEngine:
     IDSS 行為樹專用回測引擎。
     結合歷史 K 線與 AI 預測勝率，逐日進行沙盤推演，並計算最終績效。
     """
-
-    PEAK = 'peak'
-    DRAWDOWN = 'Drawdown'
-    DAILY_RETURN = 'Daily_Return'
-
     def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
+        self.ticker = ticker
         self.account = Account(cash=initial_cash)
+        # 初始化時，為這檔股票建立一個空的持倉紀錄
+        self.account.positions[self.ticker] = Position()
+
         self.bb = Blackboard(ticker=ticker, account=self.account)
+
         self.tree = build_trading_tree(strategy)
 
         self.history_records = []
@@ -73,6 +77,7 @@ class BacktestEngine:
 
         # 將帳戶與黑板狀態重置為初始狀態
         self.account.cash = self.initial_cash
+        self.account.positions[self.ticker] = Position()
         self.bb.clear_trade_memory()
 
         dbg.log(f"🚀 開始執行行為樹回測，初始資金: {self.initial_cash:,.0f} 元，共 {len(df)} 個交易日...")
@@ -83,6 +88,9 @@ class BacktestEngine:
 
             date = df.index[i]
             current_close = row[StockCol.CLOSE.value]
+
+            # 確保帳戶知道最新的收盤價，以計算真實的 total_equity
+            self.account.update_price(self.ticker, current_close)
 
             # 將今天的收盤資訊與明天的「開盤價」、「成交量」傳給黑板
             self.bb.current_date = str(date)
@@ -117,11 +125,18 @@ class BacktestEngine:
             stock_value = self.bb.position * current_close
             total_equity = self.bb.cash + stock_value
 
+            # 確保動作執行後，將黑板的持倉狀態同步回 Account
+            # (雖然在 action.py 裡面你可能是扣 account.cash，但 position 的同步非常重要)
+            self.account.positions[self.ticker].shares = self.bb.position
+            self.account.positions[self.ticker].avg_cost = self.bb.avg_cost
+
+            total_equity = self.account.total_equity
+
             # 紀錄歷史
             record = BacktestRecord(
                 Date=date,
                 Close=current_close,
-                Cash=self.bb.cash,
+                Cash=self.account.cash,
                 Position=self.bb.position,
                 Total_Equity=total_equity,
                 Action=self.bb.action_decision,
@@ -134,12 +149,14 @@ class BacktestEngine:
             last_date = df.index[-1]
             last_row = df.iloc[-1]
             last_close = last_row[StockCol.CLOSE.value]
-            last_equity = self.bb.cash + (self.bb.position * last_close)
+
+            self.account.update_price(self.ticker, last_close)
+            last_equity = self.account.total_equity
 
             final_record = BacktestRecord(
                 Date=last_date,
                 Close=last_close,
-                Cash=self.bb.cash,
+                Cash=self.account.cash,
                 Position=self.bb.position,
                 Total_Equity=last_equity,
                 Action=TradeDecision.HOLD, # 最後一天不動作
@@ -168,14 +185,14 @@ class BacktestEngine:
         cagr = (final_equity / self.initial_cash) ** (252 / trading_days) - 1 if trading_days > 0 else 0
 
         # 計算 MDD
-        df_res[self.PEAK] = df_res[HistoryCol.TOTAL_EQUITY].cummax()
-        df_res[self.DRAWDOWN] = (df_res[HistoryCol.TOTAL_EQUITY] - df_res[self.PEAK]) / df_res[self.PEAK]
-        max_drawdown = df_res[self.DRAWDOWN].min()
+        df_res[HistoryCol.PEAK] = df_res[HistoryCol.TOTAL_EQUITY].cummax()
+        df_res[HistoryCol.DRAWDOWN] = (df_res[HistoryCol.TOTAL_EQUITY] - df_res[HistoryCol.PEAK]) / df_res[HistoryCol.PEAK]
+        max_drawdown = df_res[HistoryCol.DRAWDOWN].min()
 
         # 計算夏普值 (Sharpe Ratio)
-        df_res[self.DAILY_RETURN] = df_res[HistoryCol.TOTAL_EQUITY].pct_change().fillna(0)
-        daily_volatility = df_res[self.DAILY_RETURN].std()
-        sharpe_ratio = (df_res[self.DAILY_RETURN].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
+        df_res[HistoryCol.DAILY_RETURN] = df_res[HistoryCol.TOTAL_EQUITY].pct_change().fillna(0)
+        daily_volatility = df_res[HistoryCol.DAILY_RETURN].std()
+        sharpe_ratio = (df_res[HistoryCol.DAILY_RETURN].mean() - (0.01 / 252)) / daily_volatility * np.sqrt(252) if daily_volatility > 0 else 0.0
 
         buy_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY])
         sell_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL])
@@ -204,8 +221,8 @@ class BacktestEngine:
         ax1.grid(True, alpha=0.3)
 
         ax1_dd = ax1.twinx()
-        ax1_dd.fill_between(df_res.index, df_res[self.DRAWDOWN], 0, color=Color.RED, alpha=0.2, label=self.DRAWDOWN)
-        ax1_dd.set_ylabel(f'{self.DRAWDOWN} (%)', color=Color.RED)
+        ax1_dd.fill_between(df_res.index, df_res[HistoryCol.DRAWDOWN], 0, color=Color.RED, alpha=0.2, label=HistoryCol.DRAWDOWN)
+        ax1_dd.set_ylabel(f'{HistoryCol.DRAWDOWN} (%)', color=Color.RED)
         ax1_dd.tick_params(axis='y', labelcolor=Color.RED)
 
         lines_1, labels_1 = ax1.get_legend_handles_labels()

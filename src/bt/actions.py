@@ -30,7 +30,21 @@ class ExecuteBuyNode(ActionNode):
     def tick(self, blackboard: Blackboard) -> NodeState:
         # 使用明天的開盤價 (executable_price) 進行扣款
         price = blackboard.executable_price
-        usable_cash = blackboard.cash * self.capital_ratio
+        # 取得總資產 (包含現金與所有股票市值)
+        total_equity = blackboard.account.total_equity
+        # 目標曝險金額 = 總資產 * 預設比例 (例如：總資產 100萬 * 0.3 = 目標要買 30萬)
+        target_exposure = total_equity * self.capital_ratio
+        # 減去已經持有的市值，才是「這次需要買進的預算」
+        current_position_value = blackboard.position * blackboard.current_price
+        usable_cash = target_exposure - current_position_value
+
+        # 確保不要超過手邊實際還有的現金
+        usable_cash = min(usable_cash, blackboard.cash)
+
+        # 防呆：如果算出要買的預算小於 0 (代表已經買超過目標權重了)
+        if usable_cash <= 0:
+            dbg.war(f"買進取消: 該檔股票當前曝險已達目標比例 ({self.capital_ratio:.0%})")
+            return NodeState.FAILURE
 
         if price <= 0 or pd.isna(price):
             dbg.war(f"買進失敗: 執行價異常 (price={price})")

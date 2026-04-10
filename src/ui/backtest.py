@@ -1,3 +1,5 @@
+from enum import StrEnum
+
 import streamlit as st
 
 from bt.backtest import BacktestEngine
@@ -8,20 +10,69 @@ from ui.const import SessionKey
 from ui.params import AccountLimit, BacktestParams
 
 
+class AssetSource(StrEnum):
+    GLOBAL = "global"
+    CUSTOM = "custom"
+
+class RiskMode(StrEnum):
+    REALISTIC = "realistic"
+    SINGLE_STOCK = "single_stock"
+
+DISPLAY_ASSET_SOURCE = {
+    AssetSource.GLOBAL: f"全域預設資金 ({AccountLimit.DEFAULT_GLOBAL:,} 元)",
+    AssetSource.CUSTOM: "自訂單檔投入預算"
+}
+
+DISPLAY_RISK_MODE = {
+    RiskMode.REALISTIC: "實戰模擬 (動態水位風控)",
+    RiskMode.SINGLE_STOCK: "個股模擬 (純粹訊號極限)"
+}
+
 def render_backtest_tab(selected_persona):
     """渲染歷史回測模擬介面 (支援動態載入 OOS=240 大腦)"""
     st.markdown("### ⚙️ 回測參數設定")
 
     col1, col2 = st.columns(2)
-    with col1:
-        test_days = st.slider("📅 模擬時間線 (交易日)", min_value=BacktestParams.MIN_DAYS, max_value=BacktestParams.MAX_DAYS, value=BacktestParams.MAX_DAYS, step=BacktestParams.STEP_DAYS)
-    with col2:
-        asset_option = st.radio("💰 模擬資金來源", [f"使用當前設定資金 (預設 {AccountLimit.DEFAULT_MONEY:,} 元)", "自訂暫時資金"])
 
-        if asset_option == "自訂暫時資金":
-            sim_cash = st.number_input("請輸入自訂資金 (NTD)", min_value=AccountLimit.MIN_MONEY, max_value=AccountLimit.MAX_MONEY, value=AccountLimit.DEFAULT_MONEY, step=AccountLimit.STEP_MONEY)
+    with col1:
+        test_days = st.slider(
+            "📅 模擬時間線 (交易日)",
+            min_value=BacktestParams.MIN_DAYS,
+            max_value=BacktestParams.MAX_DAYS,
+            value=BacktestParams.DEFAULT_DAYS,
+            step=BacktestParams.STEP_DAYS
+        )
+
+    with col2:
+        asset_option = st.radio(
+            "💰 模擬資金來源",
+            options=[AssetSource.GLOBAL, AssetSource.CUSTOM],
+            format_func=lambda x: DISPLAY_ASSET_SOURCE.get(x, x),
+            help="建議為該股票建立一個獨立的虛擬子帳戶，避免閒置現金拖累回測績效。"
+        )
+
+        if asset_option == AssetSource.CUSTOM:
+            sim_cash = st.number_input(
+                "請輸入投入預算 (NTD)",
+                min_value=AccountLimit.MIN_MONEY,
+                max_value=AccountLimit.MAX_MONEY,
+                value=AccountLimit.DEFAULT_SINGLE,
+                step=AccountLimit.STEP_MONEY,
+                format="%d"
+            )
         else:
-            sim_cash = float(AccountLimit.DEFAULT_MONEY)
+            sim_cash = float(AccountLimit.DEFAULT_GLOBAL)
+
+    st.markdown("#### 🛡️ 風險控制系統設定")
+    risk_mode_label = st.radio(
+        "行為樹風控層級",
+        options=[RiskMode.REALISTIC, RiskMode.SINGLE_STOCK],
+        format_func=lambda x: DISPLAY_RISK_MODE.get(x, x),
+        horizontal=True,
+        help="【實戰模擬】會根據庫存比例動態調整買賣門檻。\n【個股模擬】則可能產生極端操作。"
+    )
+
+    is_pure_signal_test = (risk_mode_label == RiskMode.SINGLE_STOCK)
 
     st.markdown("---")
 
@@ -52,6 +103,10 @@ def render_backtest_tab(selected_persona):
                 strategy_config.enable_llm_oracle = False
 
                 bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=current_ticker, strategy=strategy_config)
+
+                # 將 UI 的風控模式選擇，注入到引擎的黑板中
+                bt_engine.bb.is_backtest = is_pure_signal_test
+
                 stats = bt_engine.run(df_test)
 
                 if stats:

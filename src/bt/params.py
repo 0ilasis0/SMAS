@@ -10,9 +10,9 @@ class TaxRate:
 
 @dataclass(frozen=True)
 class ConsiderConfig:
-    # 勝率
-    BUY_THRESHOLD: float = 0.6
-    SELL_THRESHOLD: float = 0.4
+    # 限制買入與賣出的最大勝率
+    MAX_SELL_THRESHOLD: float = 0.5
+    MAX_BUY_THRESHOLD: float = 0.9
 
 @dataclass(frozen=True)
 class LLMParams:

@@ -7,6 +7,13 @@ class TradingPersona(StrEnum):
     MODERATE = "moderate"         # 穩健型 (風險報酬平衡)
     CONSERVATIVE = "conservative" # 保守型 (極度厭惡風險，寧可少賺)
 
+
+@dataclass(frozen=True)
+class RiskWeights:
+    """定義不同水位下的風險懲罰/敏感係數"""
+    heavy: float
+    light: float
+
 @dataclass
 class StrategyConfig:
     """行為樹策略的基礎超參數容器"""
@@ -37,6 +44,11 @@ class StrategyConfig:
     max_return_5d: float = 0.3
     max_bias_20: float = 0.25
 
+    # ================= 動態水位風控參數 (New) =================
+    # 數值越高，持股比例對門檻的「懲罰」就越重
+    buy_risk: RiskWeights = RiskWeights(heavy=0.2, light=0.1)       # 買進時的倉位懲罰係數
+    sell_risk: RiskWeights = RiskWeights(heavy=0.1, light=0.05)     # 賣出時的倉位敏感係數 (放寬門檻)
+
     # LLM 總開關
     enable_llm_oracle: bool = False
     min_sentiment_score: int = 4
@@ -55,11 +67,12 @@ class PersonaFactory:
                 trailing_stop_drawdown=-0.08,     # 回落 8% 才跑
                 take_profit_target=0.10,          # 賺 10% 才開始停利
                 strong_buy_threshold=0.55,        # 稍微看漲就 All-in
-                conservative_buy_threshold=0.52,  # 勝率 52% 就敢試水溫
+                conservative_buy_threshold=0.53,  # 勝率 52% 就敢試水溫
                 safe_threshold=0.35,              # 幾乎無視大盤
                 cooldown_days=1,
                 min_sentiment_score=3,
-                max_return_5d = 0.4
+                max_return_5d = 0.4,
+                buy_risk = RiskWeights(heavy=0.07, light=0.04)
             )
 
         elif persona == TradingPersona.CONSERVATIVE:
@@ -70,10 +83,10 @@ class PersonaFactory:
                 take_profit_target=0.03,          # 賺 3% 就跑
                 take_profit_sell_ratio=1.0,       # 停利直接全賣，不留戀
                 strong_buy_threshold=0.6,        # 要求極高勝率才 All-in
-                conservative_buy_threshold=0.60,
+                conservative_buy_threshold=0.63,
                 safe_threshold=0.65,              # 大盤安全度必須大於 65% 才准買！
                 cooldown_days=4,
-                min_sentiment_score=5
+                min_sentiment_score=5,
             )
 
         else:

@@ -14,6 +14,7 @@ class Blackboard:
     行為樹中所有節點共享的記憶體中心，用來存放環境狀態、預測機率、帳戶資金與交易紀錄。
     """
     # 基本資訊
+    is_backtest: bool = False
     ticker: str = ""
     current_date: str = ""
     current_price: float = 0.0
@@ -90,6 +91,21 @@ class Blackboard:
     def has_position(self) -> bool:
         """判斷目前是否持有該檔股票"""
         return self.position > 0
+
+    @property
+    def holding_ratio(self) -> float:
+        """
+        計算當前此檔股票的曝險比例 (持倉市值 / 總資產)
+        此屬性供「動態風控節點」評估是否過度集中。
+        """
+        if self.account is None or self.position <= 0: return 0.0
+
+        # 取得當前這檔股票的市值
+        position_value = self.position * self.current_price
+        # Account 的總資產！
+        total_equity = self.account.total_equity
+
+        return position_value / total_equity
 
     @property
     def estimated_return_rate(self) -> float:

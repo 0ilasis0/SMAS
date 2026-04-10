@@ -7,13 +7,14 @@ class BacktestParams:
     MAX_DAYS: int = 240
     MIN_DAYS: int = 60
     STEP_DAYS: int = 10
-    DEFAULT_DAYS: int = 120 # 預留一個預設值給 Slider
+    DEFAULT_DAYS: int = 240
 
 
 @dataclass(frozen=True)
 class AccountLimit:
     """帳戶資金 UI 控制項的預設範圍"""
-    MAX_MONEY: int = 100000000
+    MAX_MONEY: int = 100_000_000
     MIN_MONEY: int = 0
     STEP_MONEY: int = 10000
-    DEFAULT_MONEY: int = 2000000
+    DEFAULT_SINGLE: int = 2_000_000
+    DEFAULT_GLOBAL: int = 300_000

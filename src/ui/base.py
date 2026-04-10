@@ -19,7 +19,8 @@ class UIActionMapper:
     """UI 動作顯示對映表管理器 (中英雙向轉換)"""
     _FORWARD = {
         TradeDecision.BUY.value: "🟢 買進",
-        TradeDecision.SELL.value: "🔴 賣出"
+        TradeDecision.SELL.value: "🔴 賣出",
+        TradeDecision.HOLD.value: "⚪ 觀望 (HOLD)"
     }
     _REVERSE = {v: k for k, v in _FORWARD.items()}
 

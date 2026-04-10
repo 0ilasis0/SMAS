@@ -5,6 +5,7 @@ from datetime import datetime
 import pandas as pd
 import streamlit as st
 
+from bt.account import Account, Position
 from bt.const import TradeDecision
 from bt.params import TaxRate
 from data.const import StockCol
@@ -345,36 +346,33 @@ def render_portfolio_page(db_manager=None):
     st.markdown("---")
 
     portfolio_key = SessionKey.PORTFOLIO.value
-    pf = st.session_state.get(portfolio_key, load_portfolio())
+    raw_portfolio_data = st.session_state.get(portfolio_key, load_portfolio())
 
-    total_market_value = 0.0
-    total_cost_value = 0.0
-    current_prices = {}
-
-    for ticker, pos_data in pf[PortfolioCol.POSITIONS.value].items():
+    # 1. 建立 Account 實體以計算總資產與管理最新價格
+    account = Account(cash=raw_portfolio_data[PortfolioCol.GLOBAL_CASH.value])
+    for ticker, pos_data in raw_portfolio_data[PortfolioCol.POSITIONS.value].items():
         shares = pos_data.get(PortfolioCol.SHARES.value, 0)
         avg_cost = pos_data.get(PortfolioCol.AVG_COST.value, 0.0)
 
         if shares > 0:
-            current_price = avg_cost
+            # 建立 Position 物件並塞入 Account
+            account.positions[ticker] = Position(shares=shares, avg_cost=avg_cost, current_price=avg_cost)
+
+            # 若有資料庫，順便更新最新報價
             if db_manager:
                 try:
                     df_latest = db_manager.get_daily_data(ticker)
                     if not df_latest.empty:
-                        current_price = float(df_latest[StockCol.CLOSE.value].iloc[-1])
+                        latest_price = float(df_latest[StockCol.CLOSE.value].iloc[-1])
+                        account.update_price(ticker, latest_price)
                 except Exception:
                     pass
 
-            current_prices[ticker] = current_price
-            total_market_value += (shares * current_price)
-            total_cost_value += (shares * avg_cost)
-
-    total_assets = pf[PortfolioCol.GLOBAL_CASH.value] + total_market_value
-
+    # 2. 渲染頂部總計指標 (乾乾淨淨！)
     col1, col2, col3, col4 = st.columns([2, 2, 2, 1.5])
-    col1.metric("👑 預估總資產", f"${total_assets:,.0f}")
-    col2.metric("🎯 總成本", f"${total_cost_value:,.0f}")
-    col3.metric("💵 可用現金", f"${pf[PortfolioCol.GLOBAL_CASH.value]:,.0f}")
+    col1.metric("👑 預估總資產", f"${account.total_equity:,.0f}")
+    col2.metric("🎯 總成本", f"${account.total_cost_value:,.0f}")
+    col3.metric("💵 可用現金", f"${account.cash:,.0f}")
 
     with col4:
         st.markdown("<br>", unsafe_allow_html=True)
@@ -388,8 +386,9 @@ def render_portfolio_page(db_manager=None):
 
     st.markdown("---")
 
+    # 3. 渲染庫存明細清單
     st.subheader("📦 目前庫存明細")
-    active_positions = {t: p for t, p in pf[PortfolioCol.POSITIONS.value].items() if p.get(PortfolioCol.SHARES.value, 0) > 0}
+    active_positions = {t: p for t, p in raw_portfolio_data[PortfolioCol.POSITIONS.value].items() if p.get(PortfolioCol.SHARES.value, 0) > 0}
 
     if not active_positions:
         st.info("目前尚無持有庫存。點擊上方「⚖️ 新增交易」開始第一筆買進！")
@@ -406,13 +405,16 @@ def render_portfolio_page(db_manager=None):
 
     name_map = get_tw_stock_mapping()
     for ticker in sorted(active_positions.keys()):
-        pos_data = active_positions[ticker]
-        shares = pos_data[PortfolioCol.SHARES.value]
-        avg_cost = pos_data[PortfolioCol.AVG_COST.value]
-        c_price = current_prices.get(ticker, avg_cost)
+        # 從我們剛建好的 account 物件中拿出最新算好的 Position 資料
+        pos_obj = account.get_position(ticker)
 
-        market_val = shares * c_price
-        cost_val = shares * avg_cost
+        shares = pos_obj.shares
+        avg_cost = pos_obj.avg_cost
+        c_price = pos_obj.current_price  # 🌟 直接拿剛剛已經去 db_manager 更新過的最即時價格！
+
+        market_val = pos_obj.market_value
+        cost_val = pos_obj.cost_value
+
         pnl = market_val - cost_val
         pnl_pct = (pnl / cost_val) if cost_val > 0 else 0.0
 
