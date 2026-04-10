@@ -2,17 +2,14 @@ import pandas as pd
 
 from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
-from data.manager import DataManager
 from debug import dbg
-from ml.const import FeatureCol, SignalCol
+from ml.engine import QuantAIEngine
 
-# 為了在終端機顯示乾淨的結果，關閉一些過於冗長的 Log
 dbg.toggle()
 
 def fetch_backtest_data(ticker: str, oos_days: int = 240) -> pd.DataFrame:
     """模擬 IDSSController 獲取回測資料的流程"""
     try:
-        from ml.engine import QuantAIEngine
         engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
         # 嘗試載入模型，如果失敗則直接回傳空 DataFrame
         if not engine.load_inference_models():
@@ -50,9 +47,7 @@ def run_multi_stock_backtest():
     for ticker in test_tickers:
         print(f"\n📥 正在準備 {ticker} 的回測資料...")
         df_test = fetch_backtest_data(ticker, oos_days=OOS_DAYS)
-
-        if df_test.empty:
-            continue
+        if df_test.empty: continue
 
         print(f"📊 開始對 {ticker} 進行三種性格交叉測試：")
         for persona in [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]:

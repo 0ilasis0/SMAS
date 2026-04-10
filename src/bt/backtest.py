@@ -72,104 +72,102 @@ class BacktestEngine:
         """
         執行回測
         """
-        if silence: dbg.toggle()
-        self.history_records.clear()
+        with dbg.silence(active=silence):
+            self.history_records.clear()
 
-        # 將帳戶與黑板狀態重置為初始狀態
-        self.account.cash = self.initial_cash
-        self.account.positions[self.ticker] = Position()
-        self.bb.clear_trade_memory()
+            # 將帳戶與黑板狀態重置為初始狀態
+            self.account.cash = self.initial_cash
+            self.account.positions[self.ticker] = Position()
+            self.bb.clear_trade_memory()
 
-        dbg.log(f"🚀 開始執行行為樹回測，初始資金: {self.initial_cash:,.0f} 元，共 {len(df)} 個交易日...")
+            dbg.log(f"🚀 開始執行行為樹回測，初始資金: {self.initial_cash:,.0f} 元，共 {len(df)} 個交易日...")
 
-        for i in range(len(df) - 1):
-            row = df.iloc[i]
-            next_row = df.iloc[i + 1]
+            for i in range(len(df) - 1):
+                row = df.iloc[i]
+                next_row = df.iloc[i + 1]
 
-            date = df.index[i]
-            current_close = row[StockCol.CLOSE.value]
+                date = df.index[i]
+                current_close = row[StockCol.CLOSE.value]
 
-            # 確保帳戶知道最新的收盤價，以計算真實的 total_equity
-            self.account.update_price(self.ticker, current_close)
+                # 確保帳戶知道最新的收盤價，以計算真實的 total_equity
+                self.account.update_price(self.ticker, current_close)
 
-            # 將今天的收盤資訊與明天的「開盤價」、「成交量」傳給黑板
-            self.bb.current_date = str(date)
+                # 將今天的收盤資訊與明天的「開盤價」、「成交量」傳給黑板
+                self.bb.current_date = str(date)
 
-            self.bb.update_price(
-                current_price=current_close,
-                high_price=row[StockCol.HIGH.value],
-                executable_price=next_row[StockCol.OPEN.value],  # 實際執行交易的價格
-                daily_volume=next_row[StockCol.VOLUME.value]     # 流動性上限
-            )
+                self.bb.update_price(
+                    current_price=current_close,
+                    high_price=row[StockCol.HIGH.value],
+                    executable_price=next_row[StockCol.OPEN.value],  # 實際執行交易的價格
+                    daily_volume=next_row[StockCol.VOLUME.value]     # 流動性上限
+                )
 
-            self.bb.prob_market_safe = row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
-            self.bb.prob_final = row[SignalCol.PROB_FINAL.value]
-            self.bb.prob_xgb = row[SignalCol.PROB_XGB.value]
-            self.bb.prob_dl = row[SignalCol.PROB_DL.value]
+                self.bb.prob_market_safe = row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
+                self.bb.prob_final = row[SignalCol.PROB_FINAL.value]
+                self.bb.prob_xgb = row[SignalCol.PROB_XGB.value]
+                self.bb.prob_dl = row[SignalCol.PROB_DL.value]
 
-            self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH.value, 0.0)
-            self.bb.return_5d = row.get(FeatureCol.RETURN_5D.value, 0.0)
+                self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH.value, 0.0)
+                self.bb.return_5d = row.get(FeatureCol.RETURN_5D.value, 0.0)
 
-            # 清空前一天的決策紀錄
-            self.bb.action_decision = TradeDecision.HOLD
+                # 清空前一天的決策紀錄
+                self.bb.action_decision = TradeDecision.HOLD
 
-            # 全域時鐘，每天確實扣減冷卻期
-            current_cd = getattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, 0)
-            if current_cd > 0:
-                setattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, current_cd - 1)
+                # 全域時鐘，每天確實扣減冷卻期
+                current_cd = getattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, 0)
+                if current_cd > 0:
+                    setattr(self.bb, BlackboardKey.COOLDOWN_TIMER.value, current_cd - 1)
 
-            # 執行行為樹心跳 (Tick)
-            self.tree.tick(self.bb)
+                # 執行行為樹心跳 (Tick)
+                self.tree.tick(self.bb)
 
-            # 計算當日總淨值
-            stock_value = self.bb.position * current_close
-            total_equity = self.bb.cash + stock_value
+                # 計算當日總淨值
+                stock_value = self.bb.position * current_close
+                total_equity = self.bb.cash + stock_value
 
-            # 確保動作執行後，將黑板的持倉狀態同步回 Account
-            # (雖然在 action.py 裡面你可能是扣 account.cash，但 position 的同步非常重要)
-            self.account.positions[self.ticker].shares = self.bb.position
-            self.account.positions[self.ticker].avg_cost = self.bb.avg_cost
+                # 確保動作執行後，將黑板的持倉狀態同步回 Account
+                # (雖然在 action.py 裡面你可能是扣 account.cash，但 position 的同步非常重要)
+                self.account.positions[self.ticker].shares = self.bb.position
+                self.account.positions[self.ticker].avg_cost = self.bb.avg_cost
 
-            total_equity = self.account.total_equity
+                total_equity = self.account.total_equity
 
-            # 紀錄歷史
-            record = BacktestRecord(
-                Date=date,
-                Close=current_close,
-                Cash=self.account.cash,
-                Position=self.bb.position,
-                Total_Equity=total_equity,
-                Action=self.bb.action_decision,
-                prob_final=self.bb.prob_final,
-                prob_market_safe=self.bb.prob_market_safe
-            )
-            self.history_records.append(record.to_dict())
+                # 紀錄歷史
+                record = BacktestRecord(
+                    Date=date,
+                    Close=current_close,
+                    Cash=self.account.cash,
+                    Position=self.bb.position,
+                    Total_Equity=total_equity,
+                    Action=self.bb.action_decision,
+                    prob_final=self.bb.prob_final,
+                    prob_market_safe=self.bb.prob_market_safe
+                )
+                self.history_records.append(record.to_dict())
 
-        if not df.empty:
-            last_date = df.index[-1]
-            last_row = df.iloc[-1]
-            last_close = last_row[StockCol.CLOSE.value]
+            if not df.empty:
+                last_date = df.index[-1]
+                last_row = df.iloc[-1]
+                last_close = last_row[StockCol.CLOSE.value]
 
-            self.account.update_price(self.ticker, last_close)
-            last_equity = self.account.total_equity
+                self.account.update_price(self.ticker, last_close)
+                last_equity = self.account.total_equity
 
-            final_record = BacktestRecord(
-                Date=last_date,
-                Close=last_close,
-                Cash=self.account.cash,
-                Position=self.bb.position,
-                Total_Equity=last_equity,
-                Action=TradeDecision.HOLD, # 最後一天不動作
-                prob_final=last_row.get(SignalCol.PROB_FINAL.value, 0.5),
-                prob_market_safe=last_row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
-            )
-            self.history_records.append(final_record.to_dict())
+                final_record = BacktestRecord(
+                    Date=last_date,
+                    Close=last_close,
+                    Cash=self.account.cash,
+                    Position=self.bb.position,
+                    Total_Equity=last_equity,
+                    Action=TradeDecision.HOLD, # 最後一天不動作
+                    prob_final=last_row.get(SignalCol.PROB_FINAL.value, 0.5),
+                    prob_market_safe=last_row.get(SignalCol.PROB_MARKET_SAFE.value, 1.0)
+                )
+                self.history_records.append(final_record.to_dict())
 
-        report_stats = self._generate_report()
+            report_stats = self._generate_report()
 
-        if silence: dbg.toggle()
-
-        return report_stats
+            return report_stats
 
     def _generate_report(self):
         """計算績效指標並繪製三層量化儀表板"""

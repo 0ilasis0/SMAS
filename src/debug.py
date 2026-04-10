@@ -6,6 +6,7 @@ import datetime
 import inspect
 import os
 import pprint
+from contextlib import contextmanager
 
 
 class Debug:
@@ -109,7 +110,29 @@ class Debug:
         time = datetime.datetime.now().strftime("%H:%M:%S")
         print(f"\033[91m[ERROR {time} {trace_str}]\033[0m", *args)
 
-    def toggle(self):
-        self.enable = not self.enable
+    def toggle(self, forced: bool | None = None):
+        if forced is not None:
+            self.enable = forced
+        else:
+            self.enable = not self.enable
+
+        print(f"\033[92m[DEBUG MODE: {self.enable}]\033[0m")
+
+    @contextmanager
+    def silence(self, active=True):
+        """
+        active=True: 執行靜音邏輯
+        active=False: 什麼都不做，直接執行區塊內容
+        """
+        if not active:
+            yield
+            return
+
+        previous_state = self.enable
+        self.enable = False
+        try:
+            yield
+        finally:
+            self.enable = previous_state
 
 dbg = Debug()
