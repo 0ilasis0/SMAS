@@ -92,30 +92,39 @@ def render_chart():
                 padding = amplitude * 0.10 if amplitude != 0 else local_max * 0.05
                 y_range = [local_min - padding, local_max + padding]
 
+                # 計算資料的絕對邊界 (給予前後各 2 天的緩衝)
+                min_date = df_recent.index.min() - pd.Timedelta(days=2)
+                max_date = df_recent.index.max() + pd.Timedelta(days=2)
+
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=10, b=0),
                     height=550,
                     xaxis_rangeslider_visible=True,
                     xaxis_rangeslider_thickness=0.08,
                     legend=dict(orientation="h", yanchor="top", y=0.98, xanchor="left", x=0.01, bgcolor="rgba(255, 255, 255, 0.6)"),
+                    dragmode='pan',
                     xaxis=dict(
                         rangebreaks=[dict(values=missing_dates_str)],
-                        range=[initial_start_date, end_date], # 初始視野鎖定在對焦區間
-                        showgrid=True, gridcolor="rgba(200, 200, 200, 0.2)"
+                        range=[initial_start_date, end_date],
+                        showgrid=True,
+                        gridcolor="rgba(200, 200, 200, 0.2)"
                     ),
                     yaxis=dict(
-                        range=y_range, # Y 軸鎖定在對焦區間的最佳高度
-                        fixedrange=False, # 允許手動微調 Y 軸
+                        range=y_range,
+                        fixedrange=True, # 鎖定 Y 軸，只能在 X 軸平移
                         showgrid=True,
                         gridcolor="rgba(200, 200, 200, 0.2)",
                         zeroline=False
                     )
                 )
 
+                fig.update_xaxes(minallowed=min_date, maxallowed=max_date)
+
                 st.plotly_chart(
                     fig,
                     use_container_width=True,
-                    config={'scrollZoom': True, 'displayModeBar': False, 'displaylogo': False}
+                    config={'scrollZoom': False, 'displayModeBar': False, 'displaylogo': False}
                 )
+
         except Exception as e:
             st.caption(f"無法渲染 K 線圖: {e}")
