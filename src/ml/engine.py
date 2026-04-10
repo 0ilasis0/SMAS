@@ -347,7 +347,8 @@ class QuantAIEngine:
             return None
 
         latest_market_features = df_market_clean.loc[[target_date], MarketFeatureCol.get_features()]
-        prob_danger = self.market_model.predict_proba(latest_market_features)[0, 1]
+        features_array = latest_market_features.astype(float).values
+        prob_danger = self.market_model.predict_proba(features_array)[0, 1]
         prob_market_safe = 1.0 - prob_danger
 
         # 總指揮 (Meta-Learner) 融合

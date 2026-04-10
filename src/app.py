@@ -1,3 +1,9 @@
+import sys
+import warnings
+
+if 'warnings' not in sys.modules:
+    sys.modules['warnings'] = warnings
+
 import time
 
 import streamlit as st
