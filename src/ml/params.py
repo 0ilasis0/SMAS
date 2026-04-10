@@ -10,7 +10,7 @@ class SessionConfig:
     ticker: str
     dl_model_type: DLModelType = DLModelType.HYBRID
     rnn_type: RNNType = RNNType.LSTM
-    lookahead: int = 10
+    lookahead: int = 20
 
 
 @dataclass(frozen=True)
