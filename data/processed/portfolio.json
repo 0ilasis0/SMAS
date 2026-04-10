@@ -1,7 +1,17 @@
 {
-    "global_cash": 90000.0,
+    "global_cash": 9953200.0,
     "positions": {
         "3006.TW": {
+            "shares": 0,
+            "avg_cost": 0.0,
+            "history": []
+        },
+        "3481.TW": {
+            "shares": 0,
+            "avg_cost": 0.0,
+            "history": []
+        },
+        "0052.TW": {
             "shares": 0,
             "avg_cost": 0.0,
             "history": []

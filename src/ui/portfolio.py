@@ -129,67 +129,116 @@ def get_active_buys(history: list) -> list:
     return active_buys
 
 # ==========================================
-# 2. UI 層：歷史資料編輯器
+# 2. UI 層：歷史資料編輯器 (導入庫存鎖定與時光機機制)
 # ==========================================
-@st.dialog("📜 歷史資料與帳務編修", width="large")
+@st.dialog("📜 歷史資料與帳務檢視", width="large")
 def history_dialog(ticker: str):
-    st.markdown(f"管理 **{ticker}** 的歷史交易紀錄。您可以直接在表格中點選該列並按 `Delete` 來刪除錯誤的紀錄。")
-    st.warning("⚠️ 刪除歷史紀錄將會**自動重新計算**您的庫存數量與平均成本，但**不會**退還/扣除可用現金。")
-
     account: Account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
     pos_obj = account.get_position(ticker)
 
-    if not pos_obj.history:
+    st.markdown(f"檢視 **{ticker}** 的歷史交易明細。")
+
+    # 1. 檢查歷史紀錄是否為空
+    is_empty_history = len(pos_obj.history) == 0
+    has_active_shares = pos_obj.shares > 0
+
+    if is_empty_history:
         st.info("尚無任何歷史紀錄。")
-        return
+    else:
+        # 動態提示 UI
+        if has_active_shares:
+            st.warning("⚠️ **【會計安全鎖】**：為確保現有庫存數量與平均成本之正確性，歷史交易紀錄已鎖定。")
+        else:
+            st.success("✅ **【已清倉標的】**：您目前已無持有該檔股票。清除歷史紀錄僅會隱藏明細，**不會影響您已結算入帳的真實現金餘額**。")
 
-    df = pd.DataFrame(pos_obj.history)
-    for col in [HistoryKey.FEE.value, HistoryKey.TAX.value]:
-        if col not in df.columns:
-            df[col] = 0
+        # 準備顯示用的 DataFrame
+        df = pd.DataFrame(pos_obj.history)
+        for col in [HistoryKey.FEE.value, HistoryKey.TAX.value]:
+            if col not in df.columns:
+                df[col] = 0
 
-    if HistoryKey.ACTION.value in df.columns:
-        df[HistoryKey.ACTION.value] = df[HistoryKey.ACTION.value].astype(str).str.lower().map(UIActionMapper.get_map()).fillna(df[HistoryKey.ACTION.value])
+        if HistoryKey.ACTION.value in df.columns:
+            df[HistoryKey.ACTION.value] = df[HistoryKey.ACTION.value].astype(str).str.lower().map(UIActionMapper.get_map()).fillna(df[HistoryKey.ACTION.value])
 
-    df_display = df[[HistoryKey.DATE.value, HistoryKey.ACTION.value, HistoryKey.PRICE.value,
-                     HistoryKey.SHARES.value, HistoryKey.FEE.value, HistoryKey.TAX.value, HistoryKey.TOTAL.value]].copy()
-    df_display.columns = ["時間", "動作", "單價", "股數", "手續費", "交易稅", "交割淨額"]
+        df_display = df[[HistoryKey.DATE.value, HistoryKey.ACTION.value, HistoryKey.PRICE.value,
+                         HistoryKey.SHARES.value, HistoryKey.FEE.value, HistoryKey.TAX.value, HistoryKey.TOTAL.value]].copy()
+        df_display.columns = ["時間", "動作", "單價", "股數", "手續費", "交易稅", "交割淨額"]
 
-    edited_df = st.data_editor(
-        df_display,
-        num_rows="dynamic",
-        use_container_width=True,
-        hide_index=True,
-        column_config={
-            "動作": st.column_config.SelectboxColumn(
-                "動作", options=UIActionMapper.get_options(), required=True
-            )
-        }
-    )
+        # 顯示資料 (永遠使用唯讀模式)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
-    if st.button("💾 儲存歷史變更並重新結算庫存", type="primary", use_container_width=True):
-        new_history = []
-        for _, row in edited_df.iterrows():
-            new_history.append({
-                HistoryKey.DATE.value: str(row["時間"]),
-                HistoryKey.ACTION.value: UIActionMapper.to_core(str(row["動作"])),
-                HistoryKey.PRICE.value: float(row["單價"]),
-                HistoryKey.SHARES.value: int(row["股數"]),
-                HistoryKey.FEE.value: int(row["手續費"]),
-                HistoryKey.TAX.value: int(row["交易稅"]),
-                HistoryKey.TOTAL.value: float(row["交割淨額"])
-            })
+    st.markdown("---")
 
-        new_shares, new_avg_cost = recalculate_position(new_history)
+    # 底部操作區按鈕
+    col1, col2 = st.columns(2)
 
-        pos_obj.history = new_history
-        pos_obj.shares = new_shares
-        pos_obj.avg_cost = new_avg_cost
+    # 撤銷機制 (加入「僅限當日」的安全鎖)
+    with col1:
+        if is_empty_history:
+            st.button("↩️ 撤銷最新一筆交易 (防呆救援)", disabled=True, use_container_width=True)
+        else:
+            # 取得最後一筆交易的日期
+            last_trade = pos_obj.history[-1]
+            last_trade_date_str = last_trade.get(HistoryKey.DATE.value, "").split(" ")[0]
+            today_str = datetime.now().strftime("%Y-%m-%d")
 
-        save_portfolio(account)
-        st.session_state[SessionKey.PORTFOLIO.value] = account
-        st.success(f"✅ 重算完成！目前庫存: {new_shares} 股 / 均價: {new_avg_cost:.2f} 元")
-        st.rerun()
+            # 判斷是否為今日交易
+            is_today_trade = (last_trade_date_str == today_str)
+
+            if not is_today_trade:
+                st.button("↩️ 撤銷最新一筆交易", disabled=True, use_container_width=True, help="基於帳務安全，僅允許撤銷「今日」發生之交易紀錄。過往歷史已被會計鎖定。")
+            else:
+                if st.button("↩️ 撤銷最新一筆交易", help="可退回上一步，並自動退還/扣除現金。"):
+                    action = str(last_trade.get(HistoryKey.ACTION.value)).lower()
+                    total_settlement = float(last_trade.get(HistoryKey.TOTAL.value, 0.0))
+
+                    # 🚨 防呆檢查：如果撤銷賣出會導致現金變負數，則阻止！
+                    if action == TradeDecision.SELL.value and account.cash < total_settlement:
+                        st.error(f"❌ 撤銷失敗！帳戶現金不足以扣回當初賣出的款項 (${total_settlement:,.0f})。")
+                    else:
+                        # 安全通過，正式彈出紀錄
+                        pos_obj.history.pop()
+
+                        # 現金還原
+                        if action == TradeDecision.BUY.value:
+                            account.cash += total_settlement
+                        else:
+                            account.cash -= total_settlement
+
+                        # 重新結算該檔股票
+                        new_shares, new_avg_cost = recalculate_position(pos_obj.history)
+                        pos_obj.shares = new_shares
+                        pos_obj.avg_cost = new_avg_cost
+
+                        # 如果連同歷史都被清空了，一併從資產表移除
+                        if new_shares == 0 and len(pos_obj.history) == 0:
+                            if ticker in account.positions:
+                                del account.positions[ticker]
+                            st.toast("✅ 已撤銷該筆交易，標的已從庫存移除。", icon="↩️")
+                        else:
+                            st.toast("✅ 已撤銷最新一筆交易，並自動校正現金與庫存。", icon="↩️")
+
+                        save_portfolio(account)
+                        st.session_state[SessionKey.PORTFOLIO.value] = account
+                        time.sleep(0.5)
+                        st.rerun()
+
+    # 安全的徹底刪除機制 (允許在空歷史時按下，以確保可以徹底清除幽靈標的)
+    with col2:
+        if has_active_shares:
+            st.button("🗑️ 徹底隱藏並刪除此標的", disabled=True, use_container_width=True, help="必須先賣出所有庫存，才能徹底清除歷史紀錄。")
+        else:
+            if st.button("🗑️ 徹底隱藏並刪除此標的", type="primary", use_container_width=True):
+                # 從 Account 中移除這檔股票
+                if ticker in account.positions:
+                    del account.positions[ticker]
+
+                save_portfolio(account)
+                st.session_state[SessionKey.PORTFOLIO.value] = account
+
+                st.toast(f"✅ {ticker} 歷史紀錄已成功清除！", icon="🗑️")
+                time.sleep(0.5)
+                st.rerun()
 
 # ==========================================
 # 3. 交易引擎：彈出式手動買賣視窗
@@ -410,8 +459,8 @@ def render_portfolio_page(db_manager=None):
     st.markdown("---")
     st.subheader("📦 目前庫存明細")
 
-    # 過濾出有持股的標的
-    active_tickers = [t for t, p in account.positions.items() if p.shares > 0]
+    # 只要有庫存，或者「有歷史紀錄」，就顯示出來
+    active_tickers = [t for t, p in account.positions.items() if p.shares > 0 or len(p.history) > 0]
 
     if not active_tickers:
         st.info("目前尚無持有庫存。點擊上方「⚖️ 新增交易」開始第一筆買進！")
