@@ -41,6 +41,7 @@ class PathConfig:
     CACHE_FILE = PathBase.processed / "update_cache.json"
     IDSS_DATA = PathBase.processed / "idss_data.db"
     LLM_CACHE = PathBase.processed / "llm_cache.db"
+    IDSS_OPTUNA_STUDY = PathBase.processed / "idss_optuna_study.db"
     GEMINI_KEY = PathBase.raw / "key.env"
     MODEL_DIR = PathBase.model
 
