@@ -185,14 +185,17 @@ class QuantAIEngine:
         if save_models:
             final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, self.paths[ModelCol.DL])
 
-            joblib.dump(final_dl_scaler, self.paths[ModelCol.SCALAR])
-            dbg.log(f"DL Scaler 已儲存至: {self.paths[ModelCol.SCALAR]}")
+            scaler_path_obj = Path(self.paths[ModelCol.SCALAR])
+            scaler_path_obj.parent.mkdir(parents=True, exist_ok=True)
+            joblib.dump(final_dl_scaler, str(scaler_path_obj))
+
+            dbg.log(f"DL Scaler 已儲存至: {scaler_path_obj}")
 
         # Market Brain 大盤防禦處理管線
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
 
         market_path = self.paths[ModelCol.MARKET]
-        if not market_path.exists():
+        if not Path(market_path).exists():
             dbg.log(f"未發現 OOS={self.oos_days} 的大盤防禦模型，開始進行全局訓練...")
 
             # 給第三腦專屬的「純淨大盤資料」，以 ^TWII 為主體！
@@ -266,7 +269,13 @@ class QuantAIEngine:
         try:
             self.xgb_model = XGBTrainer.load_inference_model(self.paths[ModelCol.XGB])
 
-            self.dl_scaler = joblib.load(self.paths[ModelCol.SCALAR])
+            # 讀取前先確認檔案是否存在
+            scaler_path_obj = Path(self.paths[ModelCol.SCALAR])
+            if not scaler_path_obj.exists():
+                dbg.error(f"DL Scaler 載入失敗: 找不到檔案 {scaler_path_obj}")
+                return False
+
+            self.dl_scaler = joblib.load(str(scaler_path_obj))
 
             dl_input_size = DLHyperParams.INPUT_SIZE
             self.dl_model = DLTrainer(self.config.ticker, self.config.dl_model_type, self.config.rnn_type).load_inference_model(dl_input_size, self.paths[ModelCol.DL])
