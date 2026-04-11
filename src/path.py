@@ -33,6 +33,8 @@ class PathConfig:
     RESULT_REPORT = PathBase.processed / "report"
     EXPERIMENT_DETAILS = PathBase.processed / "report" / "experiment_detail.csv"
     EXPERIMENT_SUMMARY = PathBase.processed / "report" / "experiment_summary.csv"
+    ALL_STOCKS_PERSONA_REPORT = PathBase.processed / "report" / "all_stocks_persona_report.csv"
+    SUMMARY_PERSONA = PathBase.processed / "report" / "summary_persona.csv"
     WATCHLIST = PathBase.processed / "watchlist.json"
     SETTINGS = PathBase.processed / "settings.json"
     PORTFOLIO = PathBase.processed / "portfolio.json"

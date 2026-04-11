@@ -1,9 +1,12 @@
+import time
+
 import pandas as pd
 
 from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
 from debug import dbg
 from ml.engine import QuantAIEngine
+from path import PathConfig
 
 dbg.toggle()
 
@@ -28,33 +31,18 @@ def run_multi_stock_backtest():
     print("🚀 IDSS 混合制批量回測系統啟動")
     print("="*60)
 
-    # 1. 定義測試池 (建議涵蓋不同股性)
+    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
+
+    # 1. 定義測試池
     test_tickers = [
-        "2330.TW",
-        "2409.TW",
-        "2388.TW",
-        "2324.TW",
-        "0050.TW",
-        "3481.TW",
-        "0052.TW",
-        "2481.TW",
-        "2603.TW",
-        "2881.TW",
-        "2344.TW",
-        "4919.TW",
-        "3231.TW",
-        "2455.TW",
-        "9958.TW",
-        "3006.TW",
-        "2301.TW",
-        "4916.TW",
-        "2317.TW"
+        "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
+        "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
+        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+        "3006.TW", "2301.TW", "4916.TW", "2317.TW"
     ]
 
-    # 設定每次回測的初始資金與天數
     INITIAL_CASH = 300_000
     OOS_DAYS = 240
-
     all_results = []
 
     # 2. 執行雙層迴圈 (股票 x 個性)
@@ -64,16 +52,12 @@ def run_multi_stock_backtest():
         if df_test.empty: continue
 
         print(f"📊 開始對 {ticker} 進行三種性格交叉測試：")
+
         for persona in [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]:
-
-            # 取得對應性格的參數
             strategy_config = PersonaFactory.get_config(persona)
-            strategy_config.enable_llm_oracle = False # 盲測關閉 LLM
+            strategy_config.enable_llm_oracle = False
 
-            # 初始化回測引擎
             engine = BacktestEngine(initial_cash=INITIAL_CASH, ticker=ticker, strategy=strategy_config)
-
-            # 為了單純看數據，我們在 backtest engine 裡面不要印出每一天的 log
             stats = engine.run(df_test, silence=True)
 
             if stats:
@@ -88,23 +72,39 @@ def run_multi_stock_backtest():
                 all_results.append(result_row)
                 print(f"   [{persona.value.upper()}] 報酬: {result_row['Return (%)']:>6}%, MDD: {result_row['MDD (%)']:>6}%, Sharpe: {result_row['Sharpe']:>4}")
 
-    # 3. 彙整與分析報告
+    # 3. 彙整與分析總報告
     if not all_results:
-        print("\n❌ 所有測試皆失敗，請確認模型是否已訓練。")
+        print("\n❌ 所有測試皆失敗，無法產生報告。")
         return
 
     df_report = pd.DataFrame(all_results)
 
+    # 利用 Pandas 的排序功能，讓同一個股的性格緊密靠在一起
+    persona_order = [TradingPersona.AGGRESSIVE.value, TradingPersona.MODERATE.value, TradingPersona.CONSERVATIVE.value]
+    df_report['Persona'] = pd.Categorical(df_report['Persona'], categories=persona_order, ordered=True)
+
+    # 先依據股票代碼排序，再依據我們定義的性格順序排序
+    df_report = df_report.sort_values(by=['Ticker', 'Persona'])
+
     print("\n\n" + "="*60)
     print("🏆 多標的批量回測完整報告")
     print("="*60)
-    # 將 Pandas 輸出格式化，對齊好看
     print(df_report.to_string(index=False))
-    print("\n")
 
-    # 4. 計算每種性格在「所有股票」上的平均表現 (尋找真正 Robust 的參數)
-    print("🎯 【綜合性格評比 (平均表現)】")
-    summary = df_report.groupby("Persona").agg({
+    all_details_path = PathConfig.ALL_STOCKS_PERSONA_REPORT
+    try:
+        df_report.to_csv(all_details_path, index=False, encoding='utf-8-sig')
+        print(f"\n💾 所有股票詳細回測明細已儲存至: {all_details_path}")
+    except PermissionError:
+        fallback_name = f"all_stocks_persona_report_{int(time.time())}.csv"
+        fallback_path = all_details_path.parent / fallback_name
+        df_report.to_csv(fallback_path, index=False, encoding='utf-8-sig')
+        print(f"\n⚠️ 警告：原檔案被鎖定 (可能正用 Excel 開啟)。")
+        print(f"💾 已自動轉存至備用檔案: {fallback_path}")
+
+    # 4. 計算平均表現
+    print("\n🎯 【綜合性格評比 (平均表現)】")
+    summary = df_report.groupby("Persona", observed=False).agg({
         "Return (%)": "mean",
         "MDD (%)": "mean",
         "Sharpe": "mean",
@@ -112,6 +112,17 @@ def run_multi_stock_backtest():
     }).reset_index()
 
     print(summary.to_string(index=False))
+
+    summary_path = PathConfig.SUMMARY_PERSONA
+    try:
+        summary.to_csv(summary_path, index=False, encoding='utf-8-sig')
+        print(f"💾 綜合評比平均報告已儲存至: {summary_path}")
+    except PermissionError:
+        fallback_name = f"summary_persona_{int(time.time())}.csv"
+        fallback_path = summary_path.parent / fallback_name
+        summary.to_csv(fallback_path, index=False, encoding='utf-8-sig')
+        print(f"⚠️ 警告：原檔案被鎖定。已自動轉存至: {fallback_path}")
+
     print("="*60)
 
 if __name__ == "__main__":
