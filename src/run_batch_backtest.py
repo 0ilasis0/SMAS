@@ -41,7 +41,7 @@ def run_multi_stock_backtest():
         "3006.TW", "2301.TW", "4916.TW", "2317.TW"
     ]
 
-    INITIAL_CASH = 4_000_000
+    INITIAL_CASH = 5_000_000
     OOS_DAYS = 240
     all_results = []
 
@@ -91,7 +91,7 @@ def run_multi_stock_backtest():
     print("="*60)
     print(df_report.to_string(index=False))
 
-    all_details_path = PathConfig.ALL_STOCKS_PERSONA_REPORT
+    all_details_path = PathConfig.ALL_STOCKS_PERSONA
     try:
         df_report.to_csv(all_details_path, index=False, encoding='utf-8-sig')
         print(f"\n💾 所有股票詳細回測明細已儲存至: {all_details_path}")
