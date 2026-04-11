@@ -139,15 +139,17 @@ def run_optimization():
     # 隱藏 Optuna 預設的日誌
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
+    # 🌟 1. 設定 SQLite 資料庫存檔路徑
     # 這裡我們將 db 檔存在您的報告資料夾中
     PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-    db_path = PathConfig.IDSS_OPTUNA_STUDY
+    db_path = PathConfig.RESULT_REPORT / "idss_optuna_study.db"
 
     # 將 Path 物件轉為 SQLAlchemy 支援的絕對路徑格式
     db_url = f"sqlite:///{db_path.absolute().as_posix()}"
 
     print(f"📁 尋優資料庫連結至: {db_path.name}")
 
+    # 🌟 2. 建立或載入實驗 (Study)
     # storage: 指定存入資料庫
     # load_if_exists=True: 如果資料庫已經有這個專案，就接續跑；沒有就建立新的
     study_name = "IDSS_Moderate_Baseline"
@@ -161,7 +163,7 @@ def run_optimization():
     TARGET_TOTAL_TRIALS = 2000
     initial_cash = 2_000_000
 
-    # 計算還需要跑幾次 (斷點續傳邏輯)
+    # 🌟 3. 計算還需要跑幾次 (斷點續傳邏輯)
     completed_trials = len(study.trials)
     remaining_trials = max(0, TARGET_TOTAL_TRIALS - completed_trials)
 
