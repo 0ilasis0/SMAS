@@ -257,18 +257,18 @@ class BacktestEngine:
 
         plt.tight_layout()
 
-        try:
-            report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
-            report_img_path.parent.mkdir(parents=True, exist_ok=True)
+        # try:
+        #     report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
+        #     report_img_path.parent.mkdir(parents=True, exist_ok=True)
 
-            fig.savefig(str(report_img_path), dpi=300, bbox_inches='tight')
-            dbg.log(f"📸 儀表板圖片已自動儲存至: {report_img_path}")
+        #     fig.savefig(str(report_img_path), dpi=300, bbox_inches='tight')
+        #     dbg.log(f"📸 儀表板圖片已自動儲存至: {report_img_path}")
 
-        except Exception as e:
-            dbg.error(f"圖片存檔失敗: {e}")
+        # except Exception as e:
+        #     dbg.error(f"圖片存檔失敗: {e}")
 
-        finally:
-            plt.close(fig)
+        # finally:
+        #     plt.close(fig)
 
         stats = {
             "initial_cash": self.initial_cash,
