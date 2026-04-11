@@ -41,7 +41,7 @@ def run_multi_stock_backtest():
         "3006.TW", "2301.TW", "4916.TW", "2317.TW"
     ]
 
-    INITIAL_CASH = 300_000
+    INITIAL_CASH = 4_000_000
     OOS_DAYS = 240
     all_results = []
 
