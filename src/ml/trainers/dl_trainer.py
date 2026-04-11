@@ -212,10 +212,12 @@ class DLTrainer:
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
-        save_path = Path(save_path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        torch.save(model.state_dict(), save_path)
-        dbg.log(f"最終模型權重已儲存至: {save_path}")
+        save_path_obj = Path(save_path)
+        save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        torch.save(model.state_dict(), str(save_path_obj))
+
+        dbg.log(f"最終模型權重已儲存至: {save_path_obj}")
         return final_scaler
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:

@@ -122,9 +122,11 @@ class XGBTrainer:
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        # 使用傳入的路徑儲存
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        final_model.save_model(save_path)
+        # 先轉成 Path 物件來建立資料夾
+        save_path_obj = Path(save_path)
+        save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        final_model.save_model(str(save_path_obj))
+
         dbg.log(f"最終模型已成功儲存至: {save_path}")
 
     @staticmethod

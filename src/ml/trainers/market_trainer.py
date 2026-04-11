@@ -125,9 +125,9 @@ class MarketTrainer:
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        save_path = Path(save_path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(final_model, save_path)
+        save_path_obj = Path(save_path)
+        save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+        joblib.dump(final_model, str(save_path_obj))
         dbg.log(f"大盤防禦模型已成功儲存至: {save_path}")
 
     @staticmethod

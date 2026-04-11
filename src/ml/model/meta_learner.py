@@ -88,9 +88,11 @@ class MetaLearner:
         dbg.log(f" ➔ 基礎截距 (偏誤): {intercept:.4f}")
 
         # 使用外部傳入的路徑儲存
-        save_path = Path(save_path)
-        save_path.parent.mkdir(parents=True, exist_ok=True)
-        joblib.dump(self.model, save_path)
+        save_path_obj = Path(save_path)
+        save_path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        # 寫入檔案時，強制轉回字串交給 joblib
+        joblib.dump(self.model, str(save_path_obj))
         dbg.log(f"Meta-Learner 權重已儲存至: {save_path}")
 
     def load_inference_model(self, model_path: Path | str) -> bool:

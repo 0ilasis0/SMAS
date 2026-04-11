@@ -58,11 +58,11 @@ class QuantAIEngine:
             self.oracle = None
 
         self.paths = {
-            ModelCol.XGB: PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days),
-            ModelCol.DL: PathConfig.get_dl_model_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days),
-            ModelCol.META: PathConfig.get_meta_model_path(self.config.ticker, self.oos_days),
-            ModelCol.MARKET: PathConfig.get_market_model_path(self.oos_days),
-            ModelCol.SCALAR: PathConfig.get_dl_scalar_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days)
+            ModelCol.XGB: str(PathConfig.get_xgboost_model_path(self.config.ticker, self.oos_days)),
+            ModelCol.DL: str(PathConfig.get_dl_model_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days)),
+            ModelCol.META: str(PathConfig.get_meta_model_path(self.config.ticker, self.oos_days)),
+            ModelCol.MARKET: str(PathConfig.get_market_model_path(self.oos_days)),
+            ModelCol.SCALAR: str(PathConfig.get_dl_scalar_path(self.config.ticker, self.config.dl_model_type, self.config.rnn_type, self.oos_days))
         }
 
         self.cache_file = Path(PathConfig.CACHE_FILE)
