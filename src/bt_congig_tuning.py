@@ -145,7 +145,6 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     avg_return = np.mean(returns)
     avg_trades = np.mean(trades_counts)
 
-    # 🌟 升級 1：計算「真實平均回撤」與「最慘回撤」
     # 只拿有交易 (MDD < 0) 的數據來算風險，排除掉 0 的稀釋效應
     real_mdds = [m for m in mdds if m < 0]
     if real_mdds:
@@ -161,15 +160,22 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     # ---------------- 評分邏輯分支 ----------------
     if persona_mode == "aggressive":
-        # 🔥 激進型：追求絕對報酬為主
-        # 升級：使用「真實平均回撤」進行微小懲罰，確保獲利是建立在可控風險上
-        final_score = avg_return - (abs(avg_real_mdd) * 0.2)
+        # 🔥 激進型：追求絕對報酬為主，但加上「破產防護底線」
+        base_score = avg_return - (abs(avg_real_mdd) * 0.2)
+
+        bankruptcy_penalty = 0.0
+        # 假設您的極限是無法忍受單檔股票虧損超過 30%
+        if worst_mdd < -0.30:
+            excess = abs(worst_mdd) - 0.30
+            # 超過底線的懲罰倍率，確保 AI 絕對不敢跨越雷池
+            bankruptcy_penalty = (excess * 15.0) ** 2
+
+        final_score = base_score - bankruptcy_penalty
 
     elif persona_mode == "conservative":
         # 🛡️ 保守型：極端風險厭惡
         mdd_penalty = 0.0
 
-        # 🌟 升級 2：保守型不能只看平均，必須盯著「最慘的那一檔 (Worst Case)」
         # 只要有任何一檔股票的回撤超過 -10%，就啟動指數型平滑懲罰
         if worst_mdd < -0.10:
             excess = abs(worst_mdd) - 0.10
@@ -191,13 +197,9 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     return final_score
 
-def run_optimization():
-    # 🌟 這裡設定您這次想要找哪一種性格！
-    # 可以填入: "aggressive", "moderate", 或 "conservative"
-    TARGET_PERSONA = "conservative"
-
+def run_optimization(target_persona: str):
     print("="*60)
-    print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{TARGET_PERSONA.upper()}]")
+    print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{target_persona.upper()}]")
     print("="*60)
 
     test_tickers = [
@@ -206,8 +208,7 @@ def run_optimization():
     ]
 
     data_dict = fetch_data_for_optuna(test_tickers, oos_days=240)
-    if not data_dict:
-        return
+    if not data_dict: return
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
@@ -217,8 +218,8 @@ def run_optimization():
 
     print(f"📁 尋優資料庫連結至: {db_path.name}")
 
-    # 🌟 根據選擇的性格，建立不同的 Study Name，這樣資料庫才不會混在一起
-    study_name = f"IDSS_{TARGET_PERSONA.capitalize()}_Baseline"
+    # 根據選擇的性格，建立不同的 Study Name，這樣資料庫才不會混在一起
+    study_name = f"IDSS_{target_persona.capitalize()}_Baseline"
 
     study = optuna.create_study(
         direction="maximize",
@@ -234,26 +235,26 @@ def run_optimization():
     remaining_trials = max(0, TARGET_TOTAL_TRIALS - completed_trials)
 
     if remaining_trials == 0:
-        print(f"✅ [{TARGET_PERSONA.upper()}] 尋優專案已完成 {TARGET_TOTAL_TRIALS} 次測試！")
+        print(f"✅ [{target_persona.upper()}] 尋優專案已完成 {TARGET_TOTAL_TRIALS} 次測試！")
     else:
         print(f"⏳ 目前已完成 {completed_trials} 次，剩餘 {remaining_trials} 次測試即將開始...")
         print(f"⚡ 啟動多核心平行加速運算模式 (進度條關閉中，請耐心等候)....")
 
-        # 🌟 啟動多核心 (n_jobs=-1)。移除了 tqdm 迴圈與 callbacks
+        # 啟動多核心 (n_jobs=-1)
         study.optimize(
-            lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=TARGET_PERSONA),
+            lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=target_persona),
             n_trials=remaining_trials,
             n_jobs=-1  # -1 代表使用電腦所有 CPU 核心全力衝刺
         )
 
     # ================= 輸出最終結果 =================
     print("\n\n" + "="*60)
-    print(f"🏆 【尋優完成】最強 {TARGET_PERSONA.upper()} 參數誕生！")
+    print(f"🏆 【尋優完成】最強 {target_persona.upper()} 參數誕生！")
     print("="*60)
 
     if len(study.trials) > 0 and study.best_trial:
         print(f"🥇 最高綜合評分: {study.best_value:.4f} (在第 {study.best_trial.number} 次尋優找到)")
-        print(f"\n📝 請將以下參數寫入 PersonaFactory ({TARGET_PERSONA.upper()})：")
+        print(f"\n📝 請將以下參數寫入 PersonaFactory ({target_persona.upper()})：")
 
         best_params = study.best_params
 
@@ -268,4 +269,7 @@ def run_optimization():
     print("="*60)
 
 if __name__ == "__main__":
-    run_optimization()
+    # 這裡設定您這次想要找哪一種性格！
+    # 可以填入: "aggressive", "moderate", 或 "conservative"
+    target_persona = "aggressive"
+    run_optimization(target_persona = target_persona)
