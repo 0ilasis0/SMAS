@@ -64,17 +64,35 @@ class PersonaFactory:
         if persona == TradingPersona.AGGRESSIVE:
             # 🚀 激進型：關閉防護罩，放寬買進門檻，拉開停利損空間
             return StrategyConfig(
-                stop_loss_tolerance=-0.15,        # 容忍 15% 虧損
-                trailing_stop_drawdown=-0.10,     # 回落 10% 才跑 (給予更高震盪空間)
-                take_profit_target=0.20,          # 賺 20% 才開始停利
-                take_profit_sell_ratio=0.30,      # 停利只賣 30%，剩下讓利潤奔跑
-                strong_buy_threshold=0.57,        # 稍微看漲就 All-in
-                conservative_buy_threshold=0.52,  # 勝率 52% 就敢試水溫
-                safe_threshold=0.4,               # 幾乎無視大盤
-                cooldown_days=1,
+                # [防守參數]
+                stop_loss_tolerance=-0.20,         # 容忍 20% 虧損 (原: -0.15)
+                trailing_stop_drawdown=-0.18,      # 回落 18% 才跑，給予極大震盪空間 (原: -0.10)
+                take_profit_target=0.22,           # 賺 22% 才開始停利 (原: 0.20)
+                take_profit_sell_ratio=1.0,        # 停利時一次全賣 (原: 0.30)
+                stop_loss_sell_ratio=1.0,          # 停損時一次全賣 (原: 未設定，吃預設)
+                sell_signal_threshold=0.32,        # AI 預警門檻 (原: 未設定，吃預設)
+                warning_sell_ratio=0.70,           # AI 預警時賣出 70% (原: 未設定，吃預設)
+
+                # [進攻參數]
+                max_entries=3,                     # 允許加碼 3 次 (原: 預設即為 3)
+                max_gap_ratio=0.02,                # 跳空容忍度 (原: 未設定，吃預設)
+                strong_buy_threshold=0.49,         # 勝率 49% 就敢重壓 All-in (原: 0.57)
+                strong_buy_capital_ratio=1.0,      # 重壓 100% 資金 (原: 未設定，吃預設)
+                conservative_buy_threshold=0.48,   # 勝率 48% 就敢試水溫 (原: 0.52)
+                conservative_buy_capital_ratio=0.3,# 試水溫只用 30% 資金 (原: 未設定，吃預設)
+
+                # [大盤防禦參數]
+                safe_threshold=0.34,               # 幾乎無視大盤，34% 安全度就上 (原: 0.40)
+                cooldown_days=3,                   # 停損後冷卻 3 天 (原: 1)
+                max_return_5d=0.30,                # 5日漲幅過熱門檻 (原: 0.40)
+                max_bias_20=0.20,                  # 20日乖離過熱門檻 (原: 未設定，吃預設)
+
+                # [動態風控水位參數]
+                buy_risk=RiskWeights(heavy=0.10, light=0.05), # 倉位重時的買進懲罰 (原: heavy=0.07, light=0.04)
+                sell_risk=RiskWeights(heavy=0.11, light=0.10),# 倉位重時的賣出敏感度 (原: 未設定，吃預設)
+
+                # [LLM 參數保留手動設定]
                 min_sentiment_score=3,
-                max_return_5d=0.4,
-                buy_risk=RiskWeights(heavy=0.07, light=0.04)
             )
 
         elif persona == TradingPersona.CONSERVATIVE:

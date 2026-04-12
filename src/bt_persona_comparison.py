@@ -49,8 +49,7 @@ def run_multi_stock_backtest():
 
     INITIAL_CASH = 5_000_000
     OOS_DAYS = 240
-    Persona = [TradingPersona.MODERATE]
-    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
+    Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
     all_results = []
 
     # 2. 執行雙層迴圈 (股票 x 個性)
@@ -59,7 +58,7 @@ def run_multi_stock_backtest():
         df_test = fetch_backtest_data(ticker, oos_days=OOS_DAYS)
         if df_test.empty: continue
 
-        print(f"📊 開始對 {ticker} 進行三種性格交叉測試：")
+        print(f"📊 開始對 {ticker} 進行不同種性格交叉測試：")
 
         for persona in Persona:
             strategy_config = PersonaFactory.get_config(persona)
