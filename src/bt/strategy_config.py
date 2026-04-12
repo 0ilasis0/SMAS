@@ -98,14 +98,34 @@ class PersonaFactory:
         elif persona == TradingPersona.CONSERVATIVE:
             # 🛡️ 保守型：草木皆兵，極度要求大盤環境安全
             return StrategyConfig(
-                stop_loss_tolerance=-0.05,        # 跌 5% 立刻砍倉
-                trailing_stop_drawdown=-0.05,     # 回落 5% 立刻閃人
-                take_profit_target=0.05,          # 賺 5% 就跑
-                take_profit_sell_ratio=0.75,      # 停利直接賣掉 75%
-                strong_buy_threshold=0.63,        # 要求極高勝率才 All-in
-                conservative_buy_threshold=0.58,
-                safe_threshold=0.50,              # 大盤必須過半安全才出手
-                cooldown_days=3,                  # 頻繁休息
+                # [防守參數]
+                stop_loss_tolerance=-0.08,         # 跌 8% 停損 (原: -0.05，Optuna 認為給予稍微多一點空間較佳)
+                trailing_stop_drawdown=-0.07,      # 回落 7% 停損 (原: -0.05)
+                take_profit_target=0.09,           # 賺 9% 開始停利 (原: 0.05)
+                take_profit_sell_ratio=0.70,       # 停利時賣掉 70% (原: 0.75)
+                stop_loss_sell_ratio=1.0,          # 停損時一次全賣 (新增)
+                sell_signal_threshold=0.44,        # AI 勝率低於 44% 預警 (新增)
+                warning_sell_ratio=0.70,           # 預警時戰術減碼 70% (新增)
+
+                # [進攻參數]
+                max_entries=3,                     # 允許加碼 3 次 (新增)
+                max_gap_ratio=0.10,                # 較大的跳空容忍度 (新增)
+                strong_buy_threshold=0.61,         # 要求 61% 勝率才 All-in (原: 0.63)
+                strong_buy_capital_ratio=1.0,      # 強烈買進動用 100% (新增)
+                conservative_buy_threshold=0.57,   # 要求 57% 勝率試水溫 (原: 0.58)
+                conservative_buy_capital_ratio=0.5,# 保守買進動用 50% (新增)
+
+                # [大盤防禦參數]
+                safe_threshold=0.51,               # 大盤安全度大於 51% 才出手 (原: 0.50)
+                cooldown_days=1,                   # 冷卻天數縮短為 1 天 (原: 3，增加出手機會)
+                max_return_5d=0.38,                # 5日漲幅過熱門檻 (新增)
+                max_bias_20=0.29,                  # 20日乖離過熱門檻 (新增)
+
+                # [動態風控水位參數]
+                buy_risk=RiskWeights(heavy=0.25, light=0.08),  # 買進風險權重 (新增)
+                sell_risk=RiskWeights(heavy=0.09, light=0.01), # 賣出風險權重 (新增)
+
+                # [LLM 參數保留手動設定]
                 min_sentiment_score=5,
             )
 

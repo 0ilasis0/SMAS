@@ -1,6 +1,8 @@
+import matplotlib
+
+matplotlib.use('Agg')
 import numpy as np
 import optuna
-from tqdm import tqdm
 
 from bt.backtest import BacktestEngine
 from bt.strategy_config import RiskWeights, StrategyConfig
@@ -117,40 +119,75 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     # ================= 3. 多檔股票聯合評測 =================
     sharpes = []
     returns = []
-    mdds = [] # 🌟 新增：收集最大回撤
+    mdds = []
+    trades_counts = [] # 🌟 新增：收集交易次數
 
     for ticker, df in data_dict.items():
         engine = BacktestEngine(initial_cash=initial_cash, ticker=ticker, strategy=config)
         stats = engine.run(df, silence=True)
 
-        if stats and (stats['buy_count'] + stats['sell_count']) > 2:
+        total_trades = stats['buy_count'] + stats['sell_count'] if stats else 0
+
+        if stats and total_trades > 0:
             sharpes.append(stats['sharpe'])
             returns.append(stats['total_return'])
-            mdds.append(stats['mdd']) # 收集 MDD
+            mdds.append(stats['mdd'])
+            trades_counts.append(total_trades)
         else:
-            sharpes.append(-2.0)
-            returns.append(-1.0)
-            mdds.append(-1.0) # 極端懲罰
+            # 不交易的平滑基準值
+            sharpes.append(-0.5)
+            returns.append(0.0)
+            mdds.append(0.0)
+            trades_counts.append(0)
 
-    # ================= 4. 定義最終分數 (根據不同性格) =================
+    # ================= 4. 定義最終分數 (多維度平滑計分) =================
     avg_sharpe = np.mean(sharpes)
     avg_return = np.mean(returns)
-    avg_mdd = np.mean(mdds)
+    avg_trades = np.mean(trades_counts)
 
+    # 🌟 升級 1：計算「真實平均回撤」與「最慘回撤」
+    # 只拿有交易 (MDD < 0) 的數據來算風險，排除掉 0 的稀釋效應
+    real_mdds = [m for m in mdds if m < 0]
+    if real_mdds:
+        avg_real_mdd = np.mean(real_mdds)
+        worst_mdd = min(real_mdds) # 找出回撤最深的那一檔
+    else:
+        avg_real_mdd = 0.0
+        worst_mdd = 0.0
+
+    # 避免分母為零，並使用真實平均回撤來算卡瑪比率
+    safe_mdd = max(abs(avg_real_mdd), 0.01)
+    calmar_ratio = avg_return / safe_mdd
+
+    # ---------------- 評分邏輯分支 ----------------
     if persona_mode == "aggressive":
-        # 🔥 激進型：追求絕對報酬，給予報酬率極高權重，甚至稍微容忍回撤
-        final_score = avg_return
+        # 🔥 激進型：追求絕對報酬為主
+        # 升級：使用「真實平均回撤」進行微小懲罰，確保獲利是建立在可控風險上
+        final_score = avg_return - (abs(avg_real_mdd) * 0.2)
 
     elif persona_mode == "conservative":
-        # 🛡️ 保守型：極度厭惡風險。若平均回撤大於 10% (-0.1)，直接淘汰
-        if avg_mdd < -0.1:
-            return -999.0
-        # 如果活下來了，主要看夏普值 (穩定性)
-        final_score = avg_sharpe
+        # 🛡️ 保守型：極端風險厭惡
+        mdd_penalty = 0.0
+
+        # 🌟 升級 2：保守型不能只看平均，必須盯著「最慘的那一檔 (Worst Case)」
+        # 只要有任何一檔股票的回撤超過 -10%，就啟動指數型平滑懲罰
+        if worst_mdd < -0.10:
+            excess = abs(worst_mdd) - 0.10
+            # 平方懲罰：超過越多，扣分越恐怖
+            mdd_penalty = (excess * 20.0) ** 2
+
+        # 交易頻率懲罰 (如果 7 檔股票平均交易不到 3 次，平滑扣分)
+        trade_penalty = 0.0
+        if avg_trades < 3.0:
+            trade_penalty = (3.0 - avg_trades) * 0.5
+
+        # 最終分數：夏普值 - 雙重平滑懲罰
+        final_score = avg_sharpe - mdd_penalty - trade_penalty
 
     else:
-        # ⚖️ 穩健型 (moderate)：兼顧風險與報酬
-        final_score = avg_sharpe + (avg_return * 2)
+        # ⚖️ 穩健型 (moderate)
+        # 結合夏普 (穩定度) + 卡瑪 (風險報酬比) + 絕對報酬
+        final_score = avg_sharpe + (calmar_ratio * 0.5) + (avg_return * 2)
 
     return final_score
 
@@ -176,7 +213,7 @@ def run_optimization():
 
     PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
     db_path = PathConfig.RESULT_REPORT / "idss_optuna_study.db"
-    db_url = f"sqlite:///{db_path.absolute().as_posix()}"
+    db_url = f"sqlite:///{db_path.absolute().as_posix()}?timeout=60"
 
     print(f"📁 尋優資料庫連結至: {db_path.name}")
 
@@ -200,19 +237,14 @@ def run_optimization():
         print(f"✅ [{TARGET_PERSONA.upper()}] 尋優專案已完成 {TARGET_TOTAL_TRIALS} 次測試！")
     else:
         print(f"⏳ 目前已完成 {completed_trials} 次，剩餘 {remaining_trials} 次測試即將開始...")
+        print(f"⚡ 啟動多核心平行加速運算模式 (進度條關閉中，請耐心等候)....")
 
-        with tqdm(total=remaining_trials, desc="🎯 尋優進度", unit="trial") as pbar:
-
-            def update_tqdm_callback(study, trial):
-                pbar.set_postfix({"Best Score": f"{study.best_value:.4f}"})
-                pbar.update(1)
-
-            # 🌟 記得把 persona_mode 傳給 objective 函數
-            study.optimize(
-                lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=TARGET_PERSONA),
-                n_trials=remaining_trials,
-                callbacks=[update_tqdm_callback]
-            )
+        # 🌟 啟動多核心 (n_jobs=-1)。移除了 tqdm 迴圈與 callbacks
+        study.optimize(
+            lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=TARGET_PERSONA),
+            n_trials=remaining_trials,
+            n_jobs=-1  # -1 代表使用電腦所有 CPU 核心全力衝刺
+        )
 
     # ================= 輸出最終結果 =================
     print("\n\n" + "="*60)
