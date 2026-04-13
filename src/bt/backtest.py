@@ -169,7 +169,7 @@ class BacktestEngine:
 
             return report_stats
 
-    def _generate_report(self, disable_plot: bool):
+    def _generate_report(self):
         """計算績效指標並繪製三層量化儀表板"""
         if not self.history_records: return {}
 
@@ -195,78 +195,77 @@ class BacktestEngine:
         buy_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY])
         sell_count = len(df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL])
 
-        if not disable_plot:
-            dbg.log("\n" + "="*40)
-            dbg.log("📊 IDSS 行為樹回測績效報告")
-            dbg.log("="*40)
-            dbg.log(f"💰 初始資金: \t{self.initial_cash:,.0f} 元")
-            dbg.log(f"🏦 最終淨值: \t{final_equity:,.0f} 元")
-            dbg.log(f"📈 總報酬率: \t{total_return:.2%}")
-            dbg.log(f"🚀 年化報酬(CAGR): \t{cagr:.2%}")
-            dbg.log(f"📉 最大回撤(MDD): \t{max_drawdown:.2%}")
-            dbg.log(f"⚖️ 夏普值(Sharpe): \t{sharpe_ratio:.2f}")
-            dbg.log(f"🛒 買進次數: \t{buy_count} 次")
-            dbg.log(f"💸 賣出次數: \t{sell_count} 次")
-            dbg.log("="*40)
+        # dbg.log("\n" + "="*40)
+        # dbg.log("📊 IDSS 行為樹回測績效報告")
+        # dbg.log("="*40)
+        # dbg.log(f"💰 初始資金: \t{self.initial_cash:,.0f} 元")
+        # dbg.log(f"🏦 最終淨值: \t{final_equity:,.0f} 元")
+        # dbg.log(f"📈 總報酬率: \t{total_return:.2%}")
+        # dbg.log(f"🚀 年化報酬(CAGR): \t{cagr:.2%}")
+        # dbg.log(f"📉 最大回撤(MDD): \t{max_drawdown:.2%}")
+        # dbg.log(f"⚖️ 夏普值(Sharpe): \t{sharpe_ratio:.2f}")
+        # dbg.log(f"🛒 買進次數: \t{buy_count} 次")
+        # dbg.log(f"💸 賣出次數: \t{sell_count} 次")
+        # dbg.log("="*40)
 
-            fig = plt.figure(figsize=(14, 10))
+        # fig = plt.figure(figsize=(14, 10))
 
-            # 第一層：資金曲線與回撤
-            ax1 = plt.subplot(3, 1, 1)
-            ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color=Color.BLUE, linewidth=2)
-            ax1.set_title(f'IDSS Quant Strategy Dashboard - {self.bb.ticker}', fontsize=14, fontweight='bold')
-            ax1.set_ylabel('Total Equity (NTD)')
-            ax1.grid(True, alpha=0.3)
+        # # 第一層：資金曲線與回撤
+        # ax1 = plt.subplot(3, 1, 1)
+        # ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color=Color.BLUE, linewidth=2)
+        # ax1.set_title(f'IDSS Quant Strategy Dashboard - {self.bb.ticker}', fontsize=14, fontweight='bold')
+        # ax1.set_ylabel('Total Equity (NTD)')
+        # ax1.grid(True, alpha=0.3)
 
-            ax1_dd = ax1.twinx()
-            ax1_dd.fill_between(df_res.index, df_res[HistoryCol.DRAWDOWN], 0, color=Color.RED, alpha=0.2, label=HistoryCol.DRAWDOWN)
-            ax1_dd.set_ylabel(f'{HistoryCol.DRAWDOWN} (%)', color=Color.RED)
-            ax1_dd.tick_params(axis='y', labelcolor=Color.RED)
+        # ax1_dd = ax1.twinx()
+        # ax1_dd.fill_between(df_res.index, df_res[HistoryCol.DRAWDOWN], 0, color=Color.RED, alpha=0.2, label=HistoryCol.DRAWDOWN)
+        # ax1_dd.set_ylabel(f'{HistoryCol.DRAWDOWN} (%)', color=Color.RED)
+        # ax1_dd.tick_params(axis='y', labelcolor=Color.RED)
 
-            lines_1, labels_1 = ax1.get_legend_handles_labels()
-            lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
-            ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
+        # lines_1, labels_1 = ax1.get_legend_handles_labels()
+        # lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
+        # ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
 
-            # 第二層：股價走勢與買賣點
-            ax2 = plt.subplot(3, 1, 2, sharex=ax1)
-            ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.7)
-            buys = df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY]
-            sells = df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL]
-            ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color=Color.GREEN, s=100, label='Buy', zorder=5)
-            ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color=Color.RED, s=100, label='Sell', zorder=5)
-            ax2.set_ylabel('Stock Price')
-            ax2.grid(True, alpha=0.3)
-            ax2.legend(loc='upper left')
+        # # 第二層：股價走勢與買賣點
+        # ax2 = plt.subplot(3, 1, 2, sharex=ax1)
+        # ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.7)
+        # buys = df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY]
+        # sells = df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL]
+        # ax2.scatter(buys.index, buys[HistoryCol.CLOSE], marker='^', color=Color.GREEN, s=100, label='Buy', zorder=5)
+        # ax2.scatter(sells.index, sells[HistoryCol.CLOSE], marker='v', color=Color.RED, s=100, label='Sell', zorder=5)
+        # ax2.set_ylabel('Stock Price')
+        # ax2.grid(True, alpha=0.3)
+        # ax2.legend(loc='upper left')
 
-            # 第三層：AI 勝率與大盤防禦雷達
-            ax3 = plt.subplot(3, 1, 3, sharex=ax1)
-            ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
-            ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
-            ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
+        # # 第三層：AI 勝率與大盤防禦雷達
+        # ax3 = plt.subplot(3, 1, 3, sharex=ax1)
+        # ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
+        # ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
+        # ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
 
-            ax3.fill_between(
-                df_res.index, 0, 1,
-                where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
-                color=Color.RED, alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
-            )
+        # ax3.fill_between(
+        #     df_res.index, 0, 1,
+        #     where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
+        #     color=Color.RED, alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
+        # )
 
-            ax3.set_ylabel('Probability')
-            ax3.set_xlabel('Date')
-            ax3.grid(True, alpha=0.3)
-            ax3.legend(loc='upper left')
+        # ax3.set_ylabel('Probability')
+        # ax3.set_xlabel('Date')
+        # ax3.grid(True, alpha=0.3)
+        # ax3.legend(loc='upper left')
 
-            plt.tight_layout()
+        # plt.tight_layout()
 
-            # --- 若之後要存檔，可以解開註解 ---
-            # try:
-            #     report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
-            #     report_img_path.parent.mkdir(parents=True, exist_ok=True)
-            #     fig.savefig(str(report_img_path), dpi=300, bbox_inches='tight')
-            # except Exception as e:
-            #     dbg.error(f"圖片存檔失敗: {e}")
+        # --- 若之後要存檔，可以解開註解 ---
+        # try:
+        #     report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
+        #     report_img_path.parent.mkdir(parents=True, exist_ok=True)
+        #     fig.savefig(str(report_img_path), dpi=300, bbox_inches='tight')
+        # except Exception as e:
+        #     dbg.error(f"圖片存檔失敗: {e}")
 
-            # 關閉畫布釋放記憶體
-            plt.close(fig)
+        # 關閉畫布釋放記憶體
+        # plt.close(fig)
 
         # 無論有沒有畫圖，都回傳純數字字典
         stats = {

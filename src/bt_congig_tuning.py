@@ -41,19 +41,19 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
         safe_bounds = (0.20, 0.40)
         profit_bounds = (0.15, 0.30)
 
+    elif persona_mode == "moderate":
+        # 穩健型 (MODERATE)
+        sl_bounds = (-0.12, -0.05)
+        buy_bounds = (0.45, 0.60)
+        safe_bounds = (0.30, 0.50)
+        profit_bounds = (0.08, 0.20)
+
     elif persona_mode == "conservative":
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
         buy_bounds = (0.55, 0.65)
         safe_bounds = (0.45, 0.70)
         profit_bounds = (0.03, 0.10)
-
-    else:
-        # 穩健型 (MODERATE)
-        sl_bounds = (-0.12, -0.05)
-        buy_bounds = (0.45, 0.60)
-        safe_bounds = (0.30, 0.50)
-        profit_bounds = (0.08, 0.20)
 
     # [防守參數]
     stop_loss_tolerance = trial.suggest_float('stop_loss_tolerance', sl_bounds[0], sl_bounds[1], step=0.01)

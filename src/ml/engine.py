@@ -101,6 +101,36 @@ class QuantAIEngine:
         except Exception as e:
             dbg.war(f"無法寫入更新快取檔: {e}")
 
+    def _are_models_up_to_date(self) -> bool:
+        """
+        檢查該標的的所有核心模型 (XGB, DL, Market, Meta) 是否在「今天」已經被訓練並存檔。
+        若全部都是今天建立/修改的，回傳 True。
+        """
+        today = datetime.now().date()
+
+        # 建立要檢查的模型路徑清單
+        model_paths_to_check = [
+            Path(self.paths[ModelCol.XGB]),
+            Path(self.paths[ModelCol.DL]),
+            Path(self.paths[ModelCol.SCALAR]),
+            Path(self.paths[ModelCol.META]),
+            Path(self.paths[ModelCol.MARKET])
+        ]
+
+        for p in model_paths_to_check:
+            if not p.exists():
+                # 只要有一個模型不存在，代表未完成訓練
+                return False
+
+            # 取得檔案的最後修改日期
+            last_modified_date = datetime.fromtimestamp(p.stat().st_mtime).date()
+            if last_modified_date != today:
+                # 只要有一個模型不是今天訓練的，代表需要重新訓練
+                return False
+
+        return True
+
+
     def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False) -> bool:
         """供 UI 觸發：從網路抓取最新歷史資料並寫入資料庫"""
         if force_wipe:
@@ -147,6 +177,10 @@ class QuantAIEngine:
         """
         供 UI 或開發者觸發：執行完整的 Stacking 訓練管線。
         """
+        if save_models and self._are_models_up_to_date():
+            dbg.log(f"⚡ [{self.config.ticker}] 系統偵測到所有模型 (XGB/DL/Meta/Market) 均已是今日最新版本，跳過重複訓練！")
+            return
+
         dbg.log(f"開始執行 {self.config.ticker} 訓練管線 (保留 {self.oos_days} 天做為純淨測試集)")
 
         self.run_data_watchdog(self.config.ticker)
