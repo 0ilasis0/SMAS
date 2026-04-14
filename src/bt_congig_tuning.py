@@ -37,23 +37,23 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     if persona_mode == "aggressive":
         # 激進型：容忍深跌、買進門檻極低、無視大盤
         sl_bounds = (-0.20, -0.08)
-        buy_bounds = (0.40, 0.6)
+        buy_bounds = (0.45, 0.6)
         safe_bounds = (0.30, 0.55)
-        profit_bounds = (0.15, 0.30)
+        profit_bounds = (0.15, 0.35)
 
     elif persona_mode == "moderate":
         # 穩健型 (MODERATE)
         sl_bounds = (-0.12, -0.05)
-        buy_bounds = (0.45, 0.65)
+        buy_bounds = (0.5, 0.65)
         safe_bounds = (0.40, 0.60)
-        profit_bounds = (0.08, 0.20)
+        profit_bounds = (0.1, 0.25)
 
     elif persona_mode == "conservative":
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
-        buy_bounds = (0.52, 0.65)
+        buy_bounds = (0.55, 0.7)
         safe_bounds = (0.45, 0.65)
-        profit_bounds = (0.03, 0.10)
+        profit_bounds = (0.03, 0.15)
 
     # [防守參數]
     stop_loss_tolerance = trial.suggest_float('stop_loss_tolerance', sl_bounds[0], sl_bounds[1], step=0.01)
@@ -160,14 +160,15 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     # ---------------- 評分邏輯分支 ----------------
     if persona_mode == "aggressive":
-        # 🔥 激進型：追求絕對報酬為主，但加上「破產防護底線」
-        base_score = avg_return - (abs(avg_real_mdd) * 0.2)
+        trade_penalty = 0.0
+        if avg_trades > 15.0:
+            trade_penalty = (avg_trades - 15.0) * 0.05
+
+        base_score = avg_return + (avg_sharpe * 0.5) - (abs(avg_real_mdd) * 0.3) - trade_penalty
 
         bankruptcy_penalty = 0.0
-        # 假設您的極限是無法忍受單檔股票虧損超過 30%
         if worst_mdd < -0.30:
             excess = abs(worst_mdd) - 0.30
-            # 超過底線的懲罰倍率，確保 AI 絕對不敢跨越雷池
             bankruptcy_penalty = (excess * 15.0) ** 2
 
         final_score = base_score - bankruptcy_penalty
@@ -269,6 +270,6 @@ if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
     target_persona = "aggressive"
-    target_total_trials = 2000
+    target_total_trials = 1500
     initial_cash: int = 2_000_000
     run_optimization(target_persona = target_persona, target_total_trials=target_total_trials, initial_cash=initial_cash)

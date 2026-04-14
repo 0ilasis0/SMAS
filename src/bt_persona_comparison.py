@@ -50,6 +50,7 @@ def run_multi_stock_backtest():
     INITIAL_CASH = 5_000_000
     OOS_DAYS = 240
     Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
+    # Persona = [TradingPersona.AGGRESSIVE]
     all_results = []
 
     # 2. 執行雙層迴圈 (股票 x 個性)

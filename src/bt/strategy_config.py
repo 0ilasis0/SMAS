@@ -53,7 +53,7 @@ class StrategyConfig:
 
     # ================= LLM 總開關 =================
     enable_llm_oracle: bool = False
-    min_sentiment_score: int = 4
+    min_sentiment_score: int = 5
     block_sell_sentiment_score: int = 8
 
 class PersonaFactory:
@@ -92,7 +92,7 @@ class PersonaFactory:
                 sell_risk=RiskWeights(heavy=0.11, light=0.10),# 倉位重時的賣出敏感度 (原: 未設定，吃預設)
 
                 # [LLM 參數保留手動設定]
-                min_sentiment_score=3,
+                min_sentiment_score=4,
             )
 
         elif persona == TradingPersona.CONSERVATIVE:
@@ -126,7 +126,7 @@ class PersonaFactory:
                 sell_risk=RiskWeights(heavy=0.09, light=0.01), # 賣出風險權重 (新增)
 
                 # [LLM 參數保留手動設定]
-                min_sentiment_score=5,
+                min_sentiment_score=6,
             )
 
         else:
