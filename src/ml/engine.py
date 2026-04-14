@@ -345,7 +345,7 @@ class QuantAIEngine:
             dbg.error(f"模型載入失敗，請確認是否已經執行過訓練管線: {e}")
             return False
 
-    def predict_today(self, mode: TradingMode = TradingMode.SWING) -> dict | None:
+    def predict_today(self, mode: TradingMode = TradingMode.SWING, is_t_minus_1_sim: bool = False) -> dict | None:
         """
         供 UI 或行為樹呼叫：預測今天的最終勝率與大盤安全度。
         回傳: 結構化的字典
@@ -361,6 +361,13 @@ class QuantAIEngine:
         macro_tickers = [e.value for e in MacroTicker]
         df_raw = self.db.get_aligned_market_data(self.config.ticker, macro_tickers)
         if df_raw.empty: return None
+
+        real_latest_price = float(df_raw[StockCol.CLOSE].iloc[-1])
+
+        # 🕒 啟動時光機機制：強制把最後一天 (今天) 的資料砍掉
+        if is_t_minus_1_sim and len(df_raw) > 1:
+            df_raw = df_raw.iloc[:-1]
+            dbg.log(f"🕒 [時光機模式啟動] 系統已退回至 T-1 日，準備預測: {df_raw.index[-1].strftime('%Y-%m-%d')} 的隔日走勢。")
 
         df_recent = df_raw.tail(MLConst.MAX_LOOKBACK).copy()
         target_date = df_recent.index[-1]
@@ -442,6 +449,7 @@ class QuantAIEngine:
             OracleCol.SCORE.value: sentiment_score,
             OracleCol.REASON.value: sentiment_reason,
             QuoteCol.CURRENT_PRICE.value: float(current_price),
+            "REAL_LATEST_PRICE": real_latest_price,
             QuoteCol.AVG_5D_VOL.value: float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
             FeatureCol.BIAS_MONTH.value: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
             FeatureCol.RETURN_5D.value: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
