@@ -19,8 +19,8 @@ class RiskMode(StrEnum):
     SINGLE_STOCK = "single_stock"
 
 DISPLAY_ASSET_SOURCE = {
-    AssetSource.GLOBAL: f"總預算預設資金 ({AccountLimit.DEFAULT_GLOBAL:,} 元)",
-    AssetSource.CUSTOM: "自訂單檔投入預算"
+    AssetSource.GLOBAL.value: f"總預算預設資金 ({AccountLimit.DEFAULT_GLOBAL:,} 元)",
+    AssetSource.CUSTOM.value: "自訂單檔投入預算"
 }
 
 DISPLAY_RISK_MODE = {
@@ -46,12 +46,12 @@ def render_backtest_tab(selected_persona):
     with col2:
         asset_option = st.radio(
             "💰 模擬資金來源",
-            options=[AssetSource.GLOBAL, AssetSource.CUSTOM],
+            options=[AssetSource.GLOBAL.value, AssetSource.CUSTOM.value],
             format_func=lambda x: DISPLAY_ASSET_SOURCE.get(x, x),
             help="建議為該股票建立一個獨立的虛擬子帳戶，避免閒置現金拖累回測績效。"
         )
 
-        if asset_option == AssetSource.CUSTOM:
+        if asset_option == AssetSource.CUSTOM.value:
             sim_cash = st.number_input(
                 "請輸入投入預算 (NTD)",
                 min_value=AccountLimit.MIN_MONEY,
