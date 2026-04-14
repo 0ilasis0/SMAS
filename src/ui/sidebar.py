@@ -8,7 +8,8 @@ from ml.const import TradingMode
 from ui.base import is_valid_ticker
 from ui.const import Page, SessionKey
 from ui.portfolio import save_portfolio
-from ui.state import on_ticker_change, reset_result, save_watchlist
+from ui.state import (on_ticker_change, reset_result, save_settings,
+                      save_watchlist)
 from ui.stock_names import get_tw_stock_mapping
 
 
@@ -127,7 +128,14 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
             def on_setting_change():
                 ui_p = st.session_state.get(SessionKey.UI_PERSONA.value)
-                st.session_state[SessionKey.USER_SETTINGS.value] = {"persona": ui_p}
+
+                # 1. 更新記憶體狀態
+                st.session_state[SessionKey.USER_SETTINGS.value] = {"persona": ui_p, "mode": "波段模式 (SWING)"}
+
+                # 2. 呼叫您寫好的 save_settings，把性格存入硬碟 (.json)！
+                save_settings(persona=ui_p, mode="波段模式 (SWING)")
+
+                # 3. 清空舊的預測結果
                 reset_result()
 
             selected_persona_str = st.selectbox(
