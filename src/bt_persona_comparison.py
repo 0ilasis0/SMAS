@@ -10,7 +10,7 @@ from path import PathConfig
 
 dbg.toggle()
 
-def fetch_backtest_data(ticker: str, oos_days: int = 240) -> pd.DataFrame:
+def fetch_backtest_data(ticker: str, oos_days: int) -> pd.DataFrame:
     """模擬 IDSSController 獲取回測資料的流程"""
     try:
         engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
@@ -26,37 +26,19 @@ def fetch_backtest_data(ticker: str, oos_days: int = 240) -> pd.DataFrame:
         print(f"⚠️ {ticker} 獲取資料失敗: {e}")
         return pd.DataFrame()
 
-def run_multi_stock_backtest():
+def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: int, oos_days: int = 240):
     print("="*60)
     print("🚀 IDSS 混合制批量回測系統啟動")
     print("="*60)
 
     PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
 
-    # 1. 定義測試池
-    # test_tickers = [
-    #     "2324.TW",
-    #     "3481.TW", "0052.TW", "2481.TW",
-    #     "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-    #     "3006.TW", "2301.TW", "4916.TW"
-    # ]
-    test_tickers = [
-        "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
-        "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
-        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-        "3006.TW", "2301.TW", "4916.TW", "2317.TW"
-    ]
-
-    INITIAL_CASH = 2_000_000
-    OOS_DAYS = 240
-    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
-    Persona = [TradingPersona.AGGRESSIVE]
     all_results = []
 
-    # 2. 執行雙層迴圈 (股票 x 個性)
+    # 執行雙層迴圈 (股票 x 個性)
     for ticker in test_tickers:
         print(f"\n📥 正在準備 {ticker} 的回測資料...")
-        df_test = fetch_backtest_data(ticker, oos_days=OOS_DAYS)
+        df_test = fetch_backtest_data(ticker, oos_days=oos_days)
         if df_test.empty: continue
 
         print(f"📊 開始對 {ticker} 進行不同種性格交叉測試：")
@@ -65,7 +47,7 @@ def run_multi_stock_backtest():
             strategy_config = PersonaFactory.get_config(persona)
             strategy_config.enable_llm_oracle = False
 
-            engine = BacktestEngine(initial_cash=INITIAL_CASH, ticker=ticker, strategy=strategy_config)
+            engine = BacktestEngine(initial_cash=initial_cash, ticker=ticker, strategy=strategy_config)
             stats = engine.run(df_test, silence=True)
 
             if stats:
@@ -80,7 +62,7 @@ def run_multi_stock_backtest():
                 all_results.append(result_row)
                 print(f"   [{persona.value.upper()}] 報酬: {result_row['Return (%)']:>6}%, MDD: {result_row['MDD (%)']:>6}%, Sharpe: {result_row['Sharpe']:>4}")
 
-    # 3. 彙整與分析總報告
+    # 彙整與分析總報告
     if not all_results:
         print("\n❌ 所有測試皆失敗，無法產生報告。")
         return
@@ -110,7 +92,7 @@ def run_multi_stock_backtest():
         print(f"\n⚠️ 警告：原檔案被鎖定 (可能正用 Excel 開啟)。")
         print(f"💾 已自動轉存至備用檔案: {fallback_path}")
 
-    # 4. 計算平均表現
+    # 計算平均表現
     print("\n🎯 【綜合性格評比 (平均表現)】")
     summary = df_report.groupby("Persona", observed=False).agg({
         "Return (%)": "mean",
@@ -134,4 +116,22 @@ def run_multi_stock_backtest():
     print("="*60)
 
 if __name__ == "__main__":
-    run_multi_stock_backtest()
+    initial_cash = 2_000_000
+
+    test_tickers = [
+        "2324.TW",
+        "3481.TW", "0052.TW", "2481.TW",
+        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+        "3006.TW", "2301.TW", "4916.TW", "3563.TW"
+    ]
+    # test_tickers = [
+    #     "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
+    #     "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
+    #     "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+    #     "3006.TW", "2301.TW", "4916.TW", "2317.TW", "3563.TW"
+    # ]
+
+    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
+    Persona = [TradingPersona.CONSERVATIVE]
+
+    run_multi_stock_backtest(Persona=Persona, test_tickers=test_tickers, initial_cash=initial_cash)

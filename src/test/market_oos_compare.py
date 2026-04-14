@@ -24,13 +24,10 @@ class LGBMLoggerProxy:
 
 lgb.register_logger(LGBMLoggerProxy())
 
-def run_market_comparison():
+def run_market_comparison(lookahead: int, oos_days: int = 240):
     print("="*70)
     print("🕵️‍♂️ LightGBM 大盤崩盤防禦模型 (OOS) 盲測對照引擎")
     print("="*70)
-
-    oos_days = 240
-    lookahead = 5
 
     # ================= 1. 定義對照組與實驗組參數 =================
     # 🔴 對照組 (Baseline)：預設參數，不使用 early_stopping，固定跑 100 棵樹
@@ -88,7 +85,7 @@ def run_market_comparison():
             print("❌ 無法取得大盤資料，請檢查資料庫。")
             return
 
-        # 🌟 防堵資料洩漏的「時空隔離帶 (Purge Gap)」
+        # 防堵資料洩漏的「時空隔離帶 (Purge Gap)」
         df_train_full = df_clean.iloc[: -(oos_days + lookahead)]
         df_oos = df_clean.iloc[-oos_days:]
 
@@ -97,7 +94,7 @@ def run_market_comparison():
         X_oos, y_oos = df_oos[features], df_oos[MarketFeatureCol.TARGET_DANGER].astype(int)
 
         if len(np.unique(y_oos)) < 2:
-            print("⚠️ 警告：在最近的 240 天盲測期內，大盤從未發生過 '崩盤(Danger=1)' 條件。")
+            print(f"⚠️ 警告：在最近的 {oos_days} 天盲測期內，大盤從未發生過 '崩盤(Danger=1)' 條件。")
             print("這將導致無法計算 AUC 與 Recall (因為沒有真實崩盤可以捕捉)。")
             # 視情況看您是否要繼續執行，這裡我們讓它繼續，但指標會是 0
 
@@ -187,11 +184,13 @@ def run_market_comparison():
         print(f"   調整後 Optuna:   {prec_o:.2%}")
         print("="*70)
 
-        print(f"🚨 OOS 期間 (過去 240 天) 實際發生崩盤的天數: {sum(y_oos == 1)} 天")
+        print(f"🚨 OOS 期間 (過去 {oos_days} 天) 實際發生崩盤的天數: {sum(y_oos == 1)} 天")
         print(f"📁 詳細對照 CSV 已儲存至: {csv_path}")
 
     except Exception as e:
         print(f"\n⚠️ 評估失敗: {e}")
 
 if __name__ == "__main__":
-    run_market_comparison()
+    lookahead = 20
+
+    run_market_comparison(lookahead=lookahead)

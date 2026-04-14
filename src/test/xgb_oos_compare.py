@@ -15,22 +15,12 @@ from path import PathConfig
 
 dbg.toggle()
 
-def run_xgb_comparison():
+def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
     print("="*70)
     print("🕵️‍♂️ XGBoost 樣本外盲測 (OOS) 效能對照引擎啟動")
     print("="*70)
 
-    # 🌟 1. 定義測試標的 (強烈建議使用「未參與 Optuna 尋優」的個股來做盲測)
-    test_tickers = [
-        "2324.TW",
-        "3481.TW", "0052.TW", "2481.TW",
-        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-        "3006.TW", "2301.TW", "4916.TW"
-    ]
-    oos_days = 240
-    lookahead = 5 # 預測未來 5 天
-
-    # ================= 2. 定義對照組與實驗組參數 =================
+    # ================= 定義對照組與實驗組參數 =================
     # 🔴 對照組：原本的 XGBHyperParams 預設值
     BASELINE_PARAMS = {
         'objective': 'binary:logistic',
@@ -81,7 +71,6 @@ def run_xgb_comparison():
             df_with_features = xgb_engine.process_pipeline(df_raw, lookahead=lookahead, is_training=True)
             df_clean = df_with_features.dropna(subset=[FeatureCol.TARGET]).copy()
 
-            # 🌟 修正漏洞 2：防堵資料洩漏的「時空隔離帶 (Purge Gap)」
             # 訓練集只取到倒數 (oos_days + lookahead) 天
             df_train_full = df_clean.iloc[: -(oos_days + lookahead)]
             df_oos = df_clean.iloc[-oos_days:]
@@ -111,7 +100,7 @@ def run_xgb_comparison():
             prec_base = precision_score(y_oos, preds_label_base, zero_division=0)
 
             # --- C. 訓練與評估：Optimized (調整後) ---
-            # 🌟 修正漏洞 3：給實驗組發揮全力的空間，但絕不偷看盲測集！
+
             # 從訓練集內部再切出最後 20% 當作 Valid Set 供 Early Stopping 使用
             val_split_idx = int(len(X_train_full) * 0.8)
             X_tr, y_tr = X_train_full.iloc[:val_split_idx], y_train_full.iloc[:val_split_idx]
@@ -161,7 +150,7 @@ def run_xgb_comparison():
     csv_path = PathConfig.RESULT_REPORT / "xgb_model_comparison_report.csv"
     df_report.to_csv(csv_path, index=False)
 
-    # ================= 5. 印出終極總結 =================
+    # ================= 印出終極總結 =================
     print("\n" + "="*70)
     print("🏆 XGBoost 盲測績效總結")
     print("="*70)
@@ -180,4 +169,12 @@ def run_xgb_comparison():
     print(f"📁 詳細個股對照 CSV 已儲存至: {csv_path}")
 
 if __name__ == "__main__":
-    run_xgb_comparison()
+    test_tickers = [
+        "2324.TW",
+        "3481.TW", "0052.TW", "2481.TW",
+        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+        "3006.TW", "2301.TW", "4916.TW"
+    ]
+
+    lookahead = 20 # 預測未來 20 天
+    run_xgb_comparison(test_tickers=test_tickers, lookahead=lookahead)

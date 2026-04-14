@@ -1,5 +1,3 @@
-import warnings
-
 import lightgbm as lgb
 import numpy as np
 import optuna
@@ -18,7 +16,7 @@ from ml.params import TrainConfig
 from path import PathConfig
 
 
-# 1. 定義一個簡單的代理類別
+# 定義一個簡單的代理類別
 class LGBMLoggerProxy:
     def info(self, msg):
         pass
@@ -27,7 +25,7 @@ class LGBMLoggerProxy:
     def error(self, msg):
         dbg.error(f"[LGBM] {msg}")
 
-# 2. 註冊這個代理物件
+# 註冊這個代理物件
 lgb.register_logger(LGBMLoggerProxy())
 
 dbg.toggle()

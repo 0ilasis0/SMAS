@@ -15,11 +15,8 @@ from path import PathConfig
 MAX_CONSECUTIVE_FAILURES = 3
 consecutive_failures = 0
 
-def tune_global_hyperparameters():
+def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
     global consecutive_failures
-
-    test_tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
-    oos_days = 240
 
     dbg.log("\n" + "="*60)
     dbg.log("🎯 啟動 Optuna 全域超參數尋優 (Global Hyperparameter Tuning)")
@@ -166,4 +163,6 @@ def tune_global_hyperparameters():
     dbg.log("="*60)
 
 if __name__ == "__main__":
-    tune_global_hyperparameters()
+    test_tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
+
+    tune_global_hyperparameters(test_tickers=test_tickers)

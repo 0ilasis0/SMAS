@@ -114,17 +114,10 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
 # ==============================================================================
 # 2. 尋優主程式
 # ==============================================================================
-def run_optimization(target_total_trials: int):
+def run_optimization(target_total_trials: int, test_tickers: list, oos_days: int = 240):
     print("="*60)
     print("🚀 XGBoost 金融防過擬合尋優引擎啟動 (支援斷點續傳/多核並發)")
     print("="*60)
-
-    # 1. 定義測試標的
-    test_tickers = [
-        "2330.TW", "0050.TW", "2603.TW", "2317.TW",
-        "2881.TW", "2409.TW", "2388.TW"
-    ]
-    oos_days = 240
 
     # 2. 全域資料萃取與合併
     print(f"⏳ 正在從資料庫萃取 {len(test_tickers)} 檔標的特徵資料...")
@@ -246,4 +239,12 @@ def run_optimization(target_total_trials: int):
     print("="*60)
 
 if __name__ == "__main__":
-    run_optimization(target_total_trials=2000)
+    # 1. 定義測試標的
+    test_tickers = [
+        "2330.TW", "0050.TW", "2603.TW", "2317.TW",
+        "2881.TW", "2409.TW", "2388.TW"
+    ]
+
+    target_total_trials = 2000
+
+    run_optimization(target_total_trials=target_total_trials, test_tickers=test_tickers)

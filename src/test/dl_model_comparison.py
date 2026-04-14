@@ -30,10 +30,8 @@ def set_seed(seed=42):
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
 
-def run_model_comparison():
+def run_model_comparison(tickers: list, init_cash: int, oos_days: int = 240):
     set_seed(42)
-
-    tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
 
     model_configs = [
         {"name": "Pure_1D_CNN", "dl_type": DLModelType.PURE_CNN, "rnn": None},
@@ -41,8 +39,6 @@ def run_model_comparison():
         {"name": "Hybrid_GRU",  "dl_type": DLModelType.HYBRID, "rnn": RNNType.GRU}
     ]
 
-    test_days = 240
-    user_cash = 2000000
     strategy = PersonaFactory.get_config(TradingPersona.MODERATE)
 
     experiment_results = []
@@ -74,7 +70,7 @@ def run_model_comparison():
             try:
                 ai_engine = QuantAIEngine(
                     ticker=ticker,
-                    oos_days=test_days,
+                    oos_days=oos_days,
                     api_keys=None,
                     dl_model_type=dl_type,
                     rnn_type=rnn_type
@@ -91,7 +87,7 @@ def run_model_comparison():
                 df_real_data = ai_engine.generate_backtest_data()
                 if df_real_data.empty:
                     continue
-                df_test = df_real_data.tail(test_days).copy()
+                df_test = df_real_data.tail(oos_days).copy()
 
                 macro_tickers = [e.value for e in MacroTicker]
                 df_raw = ai_engine.db.get_aligned_market_data(ticker, macro_tickers)
@@ -115,7 +111,7 @@ def run_model_comparison():
                     final_auc = roc_auc_score(y_true, y_final_prob)
                     final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 
-                bt_engine = BacktestEngine(initial_cash=user_cash, ticker=ticker, strategy=strategy)
+                bt_engine = BacktestEngine(initial_cash=init_cash, ticker=ticker, strategy=strategy)
                 stats = bt_engine.run(df=df_test, silence=True)
                 train_time = time.time() - start_time
 
@@ -181,4 +177,7 @@ def run_model_comparison():
     dbg.log(f"🏆 模型綜合戰力總結已輸出至: {summary_path}")
 
 if __name__ == "__main__":
-    run_model_comparison()
+    tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
+    init_cash = 2_000_000
+
+    run_model_comparison(tickers=tickers, init_cash=init_cash)

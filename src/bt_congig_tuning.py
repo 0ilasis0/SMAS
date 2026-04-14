@@ -12,7 +12,7 @@ from path import PathConfig
 
 dbg.toggle()
 
-def fetch_data_for_optuna(tickers: list[str], oos_days: int = 240) -> dict:
+def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
     """預先抓好所有股票的測試資料，放進記憶體，避免尋優過程中重複讀取"""
     data_dict = {}
     print("📥 正在預載回測資料，請稍候...")
@@ -214,17 +214,12 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     return final_score
 
-def run_optimization(target_persona: str, target_total_trials: int, initial_cash: int = 2_000_000):
+def run_optimization(test_tickers: list, target_persona: str, target_total_trials: int, initial_cash: int = 2_000_000, oos_days: int = 240):
     print("="*60)
     print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{target_persona.upper()}]")
     print("="*60)
 
-    test_tickers = [
-        "2330.TW", "0050.TW", "2603.TW", "2317.TW",
-        "2881.TW", "2409.TW", "2388.TW"
-    ]
-
-    data_dict = fetch_data_for_optuna(test_tickers, oos_days=240)
+    data_dict = fetch_data_for_optuna(test_tickers, oos_days=oos_days)
     if not data_dict: return
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -254,7 +249,7 @@ def run_optimization(target_persona: str, target_total_trials: int, initial_cash
         print(f"⏳ 目前已完成 {completed_trials} 次，剩餘 {remaining_trials} 次測試即將開始...")
         print(f"⚡ 啟動多核心平行加速運算模式 (進度條關閉中，請耐心等候)....")
 
-        # 啟動多核心 (n_jobs=-1)
+        # 啟動多核心
         study.optimize(
             lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=target_persona),
             n_trials=remaining_trials,
@@ -285,7 +280,18 @@ def run_optimization(target_persona: str, target_total_trials: int, initial_cash
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
-    target_persona = "moderate"
+    target_persona = "conservative"
     target_total_trials = 1500
     initial_cash: int = 2_000_000
-    run_optimization(target_persona = target_persona, target_total_trials=target_total_trials, initial_cash=initial_cash)
+
+    test_tickers = [
+        "2330.TW", "0050.TW", "2603.TW", "2317.TW",
+        "2881.TW", "2409.TW", "2388.TW"
+    ]
+
+    run_optimization(
+        test_tickers=test_tickers,
+        target_persona = target_persona,
+        target_total_trials=target_total_trials,
+        initial_cash=initial_cash
+    )
