@@ -38,7 +38,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
         # 激進型：容忍深跌、買進門檻極低、無視大盤
         sl_bounds = (-0.20, -0.08)
         buy_bounds = (0.45, 0.6)
-        safe_bounds = (0.30, 0.55)
+        safe_bounds = (0.35, 0.55)
         profit_bounds = (0.15, 0.35)
 
     elif persona_mode == "moderate":
@@ -51,8 +51,8 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     elif persona_mode == "conservative":
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
-        buy_bounds = (0.55, 0.7)
-        safe_bounds = (0.45, 0.65)
+        buy_bounds = (0.52, 0.62)
+        safe_bounds = (0.45, 0.55)
         profit_bounds = (0.03, 0.15)
 
     # [防守參數]
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
     target_persona = "conservative"
-    target_total_trials = 1500
+    target_total_trials = 2000
     initial_cash: int = 2_000_000
 
     test_tickers = [
