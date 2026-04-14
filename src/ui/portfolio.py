@@ -172,56 +172,47 @@ def history_dialog(ticker: str):
     # 底部操作區按鈕
     col1, col2 = st.columns(2)
 
-    # 撤銷機制 (加入「僅限當日」的安全鎖)
+    # 撤銷機制
     with col1:
         if is_empty_history:
-            st.button("↩️ 撤銷最新一筆交易 (防呆救援)", disabled=True, use_container_width=True)
+            st.button("↩️ 撤銷最新一筆交易 (無紀錄)", disabled=True, use_container_width=True)
         else:
-            # 取得最後一筆交易的日期
-            last_trade = pos_obj.history[-1]
-            last_trade_date_str = last_trade.get(HistoryKey.DATE.value, "").split(" ")[0]
-            today_str = datetime.now().strftime("%Y-%m-%d")
+            if st.button("↩️ 撤銷最新一筆交易", help="可退回上一步，並自動退還/扣除現金。", use_container_width=True):
+                # 取得最後一筆交易
+                last_trade = pos_obj.history[-1]
+                action = str(last_trade.get(HistoryKey.ACTION.value)).lower()
+                total_settlement = float(last_trade.get(HistoryKey.TOTAL.value, 0.0))
 
-            # 判斷是否為今日交易
-            is_today_trade = (last_trade_date_str == today_str)
+                # 如果撤銷賣出會導致現金變負數，則阻止！
+                if action == TradeDecision.SELL.value and account.cash < total_settlement:
+                    st.error(f"❌ 撤銷失敗！帳戶現金不足以扣回當初賣出的款項 (${total_settlement:,.0f})。")
+                else:
+                    # 安全通過，正式彈出紀錄
+                    pos_obj.history.pop()
 
-            if not is_today_trade:
-                st.button("↩️ 撤銷最新一筆交易", disabled=True, use_container_width=True, help="基於帳務安全，僅允許撤銷「今日」發生之交易紀錄。過往歷史已被會計鎖定。")
-            else:
-                if st.button("↩️ 撤銷最新一筆交易", help="可退回上一步，並自動退還/扣除現金。"):
-                    action = str(last_trade.get(HistoryKey.ACTION.value)).lower()
-                    total_settlement = float(last_trade.get(HistoryKey.TOTAL.value, 0.0))
-
-                    # 🚨 防呆檢查：如果撤銷賣出會導致現金變負數，則阻止！
-                    if action == TradeDecision.SELL.value and account.cash < total_settlement:
-                        st.error(f"❌ 撤銷失敗！帳戶現金不足以扣回當初賣出的款項 (${total_settlement:,.0f})。")
+                    # 現金還原
+                    if action == TradeDecision.BUY.value:
+                        account.cash += total_settlement
                     else:
-                        # 安全通過，正式彈出紀錄
-                        pos_obj.history.pop()
+                        account.cash -= total_settlement
 
-                        # 現金還原
-                        if action == TradeDecision.BUY.value:
-                            account.cash += total_settlement
-                        else:
-                            account.cash -= total_settlement
+                    # 重新結算該檔股票
+                    new_shares, new_avg_cost = recalculate_position(pos_obj.history)
+                    pos_obj.shares = new_shares
+                    pos_obj.avg_cost = new_avg_cost
 
-                        # 重新結算該檔股票
-                        new_shares, new_avg_cost = recalculate_position(pos_obj.history)
-                        pos_obj.shares = new_shares
-                        pos_obj.avg_cost = new_avg_cost
+                    # 如果連同歷史都被清空了，一併從資產表移除
+                    if new_shares == 0 and len(pos_obj.history) == 0:
+                        if ticker in account.positions:
+                            del account.positions[ticker]
+                        st.toast("✅ 已撤銷該筆交易，標的已從庫存移除。", icon="↩️")
+                    else:
+                        st.toast("✅ 已撤銷最新一筆交易，並自動校正現金與庫存。", icon="↩️")
 
-                        # 如果連同歷史都被清空了，一併從資產表移除
-                        if new_shares == 0 and len(pos_obj.history) == 0:
-                            if ticker in account.positions:
-                                del account.positions[ticker]
-                            st.toast("✅ 已撤銷該筆交易，標的已從庫存移除。", icon="↩️")
-                        else:
-                            st.toast("✅ 已撤銷最新一筆交易，並自動校正現金與庫存。", icon="↩️")
-
-                        save_portfolio(account)
-                        st.session_state[SessionKey.PORTFOLIO.value] = account
-                        time.sleep(0.5)
-                        st.rerun()
+                    save_portfolio(account)
+                    st.session_state[SessionKey.PORTFOLIO.value] = account
+                    time.sleep(0.5)
+                    st.rerun()
 
     # 安全的徹底刪除機制 (允許在空歷史時按下，以確保可以徹底清除幽靈標的)
     with col2:
