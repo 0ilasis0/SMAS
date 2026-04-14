@@ -37,22 +37,22 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     if persona_mode == "aggressive":
         # 激進型：容忍深跌、買進門檻極低、無視大盤
         sl_bounds = (-0.20, -0.08)
-        buy_bounds = (0.40, 0.55)
-        safe_bounds = (0.20, 0.40)
+        buy_bounds = (0.40, 0.6)
+        safe_bounds = (0.30, 0.55)
         profit_bounds = (0.15, 0.30)
 
     elif persona_mode == "moderate":
         # 穩健型 (MODERATE)
         sl_bounds = (-0.12, -0.05)
-        buy_bounds = (0.45, 0.60)
-        safe_bounds = (0.30, 0.50)
+        buy_bounds = (0.45, 0.65)
+        safe_bounds = (0.40, 0.60)
         profit_bounds = (0.08, 0.20)
 
     elif persona_mode == "conservative":
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
-        buy_bounds = (0.55, 0.65)
-        safe_bounds = (0.45, 0.70)
+        buy_bounds = (0.52, 0.65)
+        safe_bounds = (0.45, 0.65)
         profit_bounds = (0.03, 0.10)
 
     # [防守參數]
@@ -197,7 +197,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     return final_score
 
-def run_optimization(target_persona: str):
+def run_optimization(target_persona: str, target_total_trials: int, initial_cash: int = 2_000_000):
     print("="*60)
     print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{target_persona.upper()}]")
     print("="*60)
@@ -228,14 +228,11 @@ def run_optimization(target_persona: str):
         load_if_exists=True
     )
 
-    TARGET_TOTAL_TRIALS = 2000
-    initial_cash = 2_000_000
-
     completed_trials = len(study.trials)
-    remaining_trials = max(0, TARGET_TOTAL_TRIALS - completed_trials)
+    remaining_trials = max(0, target_total_trials - completed_trials)
 
     if remaining_trials == 0:
-        print(f"✅ [{target_persona.upper()}] 尋優專案已完成 {TARGET_TOTAL_TRIALS} 次測試！")
+        print(f"✅ [{target_persona.upper()}] 尋優專案已完成 {target_total_trials} 次測試！")
     else:
         print(f"⏳ 目前已完成 {completed_trials} 次，剩餘 {remaining_trials} 次測試即將開始...")
         print(f"⚡ 啟動多核心平行加速運算模式 (進度條關閉中，請耐心等候)....")
@@ -272,4 +269,6 @@ if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
     target_persona = "aggressive"
-    run_optimization(target_persona = target_persona)
+    target_total_trials = 100
+    initial_cash: int = 2_000_000
+    run_optimization(target_persona = target_persona, target_total_trials=target_total_trials, initial_cash=initial_cash)

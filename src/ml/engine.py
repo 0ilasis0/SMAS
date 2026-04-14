@@ -319,8 +319,24 @@ class QuantAIEngine:
 
             self.market_model = MarketTrainer.load_inference_model(self.paths[ModelCol.MARKET])
 
-            if None in (self.xgb_model, self.dl_model, self.dl_scaler, self.meta_learner.model, self.market_model):
-                raise ValueError("部分模型或 Scaler 回傳為 None")
+            loaded_status = {
+                "XGBoost": self.xgb_model,
+                "DL_Model": self.dl_model,
+                "DL_Scaler": self.dl_scaler,
+                "Meta_Learner": self.meta_learner.model,
+                "Market_Model": self.market_model
+            }
+
+            missing_components = [name for name, obj in loaded_status.items() if obj is None]
+            if missing_components:
+                error_msg = f"❌ 以下模型/Scaler 讀取後回傳為 None: {', '.join(missing_components)}"
+                dbg.error(error_msg)
+
+                dbg.war("--- 系統預期的檔案路徑如下 ---")
+                for k, path_str in self.paths.items():
+                    dbg.war(f"{k.name}: {path_str}")
+
+                raise ValueError(error_msg)
 
             dbg.log("✅ 四大元件與 DL Scaler 載入成功，系統已就緒！")
             return True

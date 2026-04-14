@@ -165,7 +165,7 @@ class BacktestEngine:
                 )
                 self.history_records.append(final_record.to_dict())
 
-            report_stats = self._generate_report(disable_plot=silence)
+            report_stats = self._generate_report()
 
             return report_stats
 
