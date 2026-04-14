@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from base import KeyManager
+from base import KeyManager, MathTool
 from bt.account import Account
 from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
@@ -148,13 +148,17 @@ class IDSSController:
 
             is_tech_stock = self.ticker.startswith(('23', '24', '3', '5', '6', '8'))
             beta = 0.4 if is_tech_stock else 0.1
-            expected_open_price = current_price * (1 + (sox_return * beta))
+            raw_expected_open = current_price * (1 + (sox_return * beta))
 
             market_safe = bb.prob_market_safe
             bias_20 = bb.bias_20
             limit_up = self._get_tw_tick_price(current_price * 1.099)
             limit_down = self._get_tw_tick_price(current_price * 0.901)
-            expected_open_price = min(limit_up, max(limit_down, expected_open_price))
+
+            # 上下限防呆
+            raw_expected_open = MathTool.clamp(raw_expected_open, limit_down, limit_up)
+            # 重點修改：將預期開盤價「強制收斂」到台股合法的跳動單位上！
+            expected_open_price = self._get_tw_tick_price(raw_expected_open)
 
             pricing_prefix = f"\n\n💡 **[智慧定價]** "
             if abs(sox_return) > 0.015:
