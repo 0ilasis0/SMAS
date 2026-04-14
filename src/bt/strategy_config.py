@@ -74,15 +74,15 @@ class PersonaFactory:
                 warning_sell_ratio=0.70,           # AI 預警時賣出 70% (原: 未設定，吃預設)
 
                 # [進攻參數]
-                max_entries=3,                     # 允許加碼 3 次 (原: 預設即為 3)
+                max_entries=2,                     # 允許加碼 3 次 (原: 預設即為 3)
                 max_gap_ratio=0.02,                # 跳空容忍度 (原: 未設定，吃預設)
-                strong_buy_threshold=0.49,         # 勝率 49% 就敢重壓 All-in (原: 0.57)
-                strong_buy_capital_ratio=1.0,      # 重壓 100% 資金 (原: 未設定，吃預設)
+                strong_buy_threshold=0.50,         # 勝率 49% 就敢重壓 All-in (原: 0.57)
+                strong_buy_capital_ratio=0.75,     # 重壓 100% 資金 (原: 未設定，吃預設)
                 conservative_buy_threshold=0.48,   # 勝率 48% 就敢試水溫 (原: 0.52)
                 conservative_buy_capital_ratio=0.3,# 試水溫只用 30% 資金 (原: 未設定，吃預設)
 
                 # [大盤防禦參數]
-                safe_threshold=0.34,               # 幾乎無視大盤，34% 安全度就上 (原: 0.40)
+                safe_threshold=0.44,               # 幾乎無視大盤，34% 安全度就上 (原: 0.40)
                 cooldown_days=3,                   # 停損後冷卻 3 天 (原: 1)
                 max_return_5d=0.30,                # 5日漲幅過熱門檻 (原: 0.40)
                 max_bias_20=0.20,                  # 20日乖離過熱門檻 (原: 未設定，吃預設)

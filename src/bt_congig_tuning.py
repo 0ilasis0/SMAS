@@ -44,8 +44,8 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     elif persona_mode == "moderate":
         # 穩健型 (MODERATE)
         sl_bounds = (-0.12, -0.05)
-        buy_bounds = (0.5, 0.65)
-        safe_bounds = (0.40, 0.60)
+        buy_bounds = (0.48, 0.58)
+        safe_bounds = (0.43, 0.51)
         profit_bounds = (0.1, 0.25)
 
     elif persona_mode == "conservative":
@@ -58,7 +58,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     # [防守參數]
     stop_loss_tolerance = trial.suggest_float('stop_loss_tolerance', sl_bounds[0], sl_bounds[1], step=0.01)
 
-    trailing_upper_bound = min(sl_bounds[1] + 0.03, -0.01)
+    trailing_upper_bound = round(min(sl_bounds[1] + 0.03, -0.01), 2)
     trailing_stop_drawdown = trial.suggest_float('trailing_stop_drawdown', sl_bounds[0], trailing_upper_bound, step=0.01)
     take_profit_target = trial.suggest_float('take_profit_target', profit_bounds[0], profit_bounds[1], step=0.01)
 
@@ -161,8 +161,8 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     # ---------------- 評分邏輯分支 ----------------
     if persona_mode == "aggressive":
         trade_penalty = 0.0
-        if avg_trades > 15.0:
-            trade_penalty = (avg_trades - 15.0) * 0.05
+        if avg_trades > 25.0:
+            trade_penalty = (avg_trades - 25.0) * 0.05
 
         base_score = avg_return + (avg_sharpe * 0.5) - (abs(avg_real_mdd) * 0.3) - trade_penalty
 
@@ -193,8 +193,24 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
     else:
         # ⚖️ 穩健型 (moderate)
-        # 結合夏普 (穩定度) + 卡瑪 (風險報酬比) + 絕對報酬
-        final_score = avg_sharpe + (calmar_ratio * 0.5) + (avg_return * 2)
+        # 目標：追求高夏普 (穩定度) + 卡瑪 (風險報酬比)，同時嚴格限制過度交易與深跌
+
+        # 1. 交易頻率平滑控制 (穩健型不該太頻繁，也不該都不動)
+        trade_penalty = 0.0
+        if avg_trades > 20.0:
+            trade_penalty += (avg_trades - 20.0) * 0.05  # 懲罰過度頻繁進出
+        elif avg_trades < 3.0:
+            trade_penalty += (3.0 - avg_trades) * 0.2    # 懲罰完全不交易 (冰凍效應)
+
+        # 2. 嚴格回撤懲罰 (穩健型的底線是單檔虧損不能超過 20%)
+        mdd_penalty = 0.0
+        if worst_mdd < -0.20:
+            excess = abs(worst_mdd) - 0.20
+            mdd_penalty = (excess * 2.0) ** 2  # 踩到底線就給予毀滅性扣分
+
+        # 3. 綜合計分：夏普(穩定) + 卡瑪(抗跌) + 絕對報酬 - 雙重懲罰
+        base_score = avg_sharpe + (calmar_ratio * 0.5) + (avg_return * 2.0)
+        final_score = base_score - trade_penalty - mdd_penalty
 
     return final_score
 
@@ -269,7 +285,7 @@ def run_optimization(target_persona: str, target_total_trials: int, initial_cash
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
-    target_persona = "aggressive"
+    target_persona = "moderate"
     target_total_trials = 1500
     initial_cash: int = 2_000_000
     run_optimization(target_persona = target_persona, target_total_trials=target_total_trials, initial_cash=initial_cash)

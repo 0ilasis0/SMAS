@@ -34,23 +34,23 @@ def run_multi_stock_backtest():
     PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
 
     # 1. 定義測試池
-    test_tickers = [
-        "2324.TW",
-        "3481.TW", "0052.TW", "2481.TW",
-        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-        "3006.TW", "2301.TW", "4916.TW"
-    ]
     # test_tickers = [
-    #     "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
-    #     "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
+    #     "2324.TW",
+    #     "3481.TW", "0052.TW", "2481.TW",
     #     "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-    #     "3006.TW", "2301.TW", "4916.TW", "2317.TW"
+    #     "3006.TW", "2301.TW", "4916.TW"
     # ]
+    test_tickers = [
+        "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
+        "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
+        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+        "3006.TW", "2301.TW", "4916.TW", "2317.TW"
+    ]
 
-    INITIAL_CASH = 5_000_000
+    INITIAL_CASH = 2_000_000
     OOS_DAYS = 240
-    Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
-    # Persona = [TradingPersona.AGGRESSIVE]
+    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
+    Persona = [TradingPersona.AGGRESSIVE]
     all_results = []
 
     # 2. 執行雙層迴圈 (股票 x 個性)
