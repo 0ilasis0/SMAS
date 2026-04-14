@@ -80,7 +80,10 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
             with st.container(height=250):
                 watch_list = st.session_state.get(SessionKey.WATCH_LIST.value, [])
-                for ticker in watch_list:
+
+                sorted_watch_list = sorted(watch_list)
+
+                for ticker in sorted_watch_list:
                     c1, c2 = st.columns([5, 1])
                     is_current = (ticker == st.session_state.get(SessionKey.CURRENT_TICKER.value))
 
@@ -94,12 +97,17 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                             st.rerun()
                     with c2:
                         if st.button("x", key=f"del_{ticker}", use_container_width=True, disabled=is_locked):
+                            # 刪除時仍從原始清單中移除
                             watch_list.remove(ticker)
                             st.session_state[SessionKey.WATCH_LIST.value] = watch_list
                             save_watchlist(watch_list)
+
+                            # 如果刪除的剛好是當前選中的股票
                             if is_current:
                                 if len(watch_list) > 0:
-                                    on_ticker_change(watch_list[0])
+                                    # 🌟 刪除後，自動跳轉到「排序後」的下一檔股票
+                                    sorted_remaining = sorted(watch_list)
+                                    on_ticker_change(sorted_remaining[0])
                                 else:
                                     st.session_state[SessionKey.CURRENT_TICKER.value] = None
                                     st.session_state[SessionKey.CTRL_LIVE.value] = None
