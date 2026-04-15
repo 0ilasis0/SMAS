@@ -22,23 +22,6 @@ def save_settings(persona: str, mode: str):
     with open(PathConfig.SETTINGS,  'w', encoding=EncodingConst.UTF8.value) as f:
         json.dump({"persona": persona, "mode": mode}, f, ensure_ascii=False, indent=4)
 
-def load_watchlist() -> list:
-    """從本地讀取自選股記憶，若無則回傳預設值"""
-    if os.path.exists(PathConfig.WATCHLIST):
-        try:
-            with open(PathConfig.WATCHLIST, 'r', encoding=EncodingConst.UTF8.value) as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return ["2330.TW"]
-
-# def save_watchlist(watchlist: list):
-#     """將自選股狀態寫入本地硬碟保存"""
-#     # 確保資料夾存在
-#     os.makedirs(os.path.dirname(PathConfig.WATCHLIST), exist_ok=True)
-#     with open(PathConfig.WATCHLIST, 'w', encoding=EncodingConst.UTF8.value) as f:
-#         json.dump(watchlist, f, ensure_ascii=False, indent=4)
-
 def reset_result():
     """清除前一次的預測結果"""
     st.session_state[SessionKey.LAST_RESULT.value] = None
@@ -52,19 +35,19 @@ def on_ticker_change(new_ticker: str):
 
 def init_session_state():
     """初始化系統的全域狀態 (支援本地記憶)"""
-    if SessionKey.WATCH_LIST.value not in st.session_state:
-        st.session_state[SessionKey.WATCH_LIST.value] = load_watchlist()
 
-    if SessionKey.CURRENT_TICKER.value not in st.session_state:
-        watch_list = st.session_state.get(SessionKey.WATCH_LIST.value, [])
-        st.session_state[SessionKey.CURRENT_TICKER.value] = watch_list[0] if watch_list else None
-
+    # 優先載入設定與帳戶資產 (因為後續判斷會用到)
     if SessionKey.USER_SETTINGS.value not in st.session_state:
         st.session_state[SessionKey.USER_SETTINGS.value] = load_settings()
 
     if SessionKey.PORTFOLIO.value not in st.session_state:
         st.session_state[SessionKey.PORTFOLIO.value] = load_portfolio()
 
+    # 預設為 None，讓 app.py 裡的「焦點防呆邏輯」自動去抓取組合包內的第一檔股票
+    if SessionKey.CURRENT_TICKER.value not in st.session_state:
+        st.session_state[SessionKey.CURRENT_TICKER.value] = None
+
+    # 基礎 UI 狀態
     if SessionKey.CURRENT_PAGE.value not in st.session_state:
         st.session_state[SessionKey.CURRENT_PAGE.value] = Page.DASHBOARD.value
 

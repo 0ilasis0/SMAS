@@ -68,17 +68,6 @@ class Account:
         allocated_sum = sum(p.allocated_cash for p in self.sub_portfolios.values() if not p.use_shared_cash)
         return max(0.0, self.total_cash - allocated_sum)
 
-    # def get_position(self, ticker: str) -> Position:
-    #     """取得特定標的的持倉，若無則回傳空持倉"""
-    #     if ticker not in self.positions:
-    #         self.positions[ticker] = Position()
-    #     return self.positions[ticker]
-
-    # def update_price(self, ticker: str, current_price: float):
-    #     """更新特定標的的最新報價 (供市值計算用)"""
-    #     pos = self.get_position(ticker)
-    #     pos.current_price = current_price
-
     @property
     def total_market_value(self) -> float:
         """計算所有組合包的總市值"""

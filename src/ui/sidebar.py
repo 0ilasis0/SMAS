@@ -102,7 +102,7 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                         with st.spinner(f"正在驗證 {clean_ticker} 是否存在..."):
                             if is_valid_ticker(clean_ticker):
                                 current_sp.watch_tickers.append(clean_ticker)
-                                save_portfolio(account) # 🌟 存檔！
+                                save_portfolio(account) # 存檔！
                                 st.session_state[SessionKey.PORTFOLIO.value] = account
 
                                 if st.session_state.get(SessionKey.CURRENT_TICKER.value) is None:

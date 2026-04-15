@@ -5,6 +5,7 @@ if 'warnings' not in sys.modules:
     sys.modules['warnings'] = warnings
 
 import time
+from typing import TYPE_CHECKING
 
 import streamlit as st
 
@@ -19,6 +20,9 @@ from ui.portfolio import load_portfolio, render_portfolio_page, trade_dialog
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
+
+if TYPE_CHECKING:
+    from bt.account import Account
 
 HAS_AUTO_UPDATED_KEY = "has_auto_updated"
 
@@ -58,11 +62,19 @@ def run_mlops_pipeline(ticker: str):
 
 def run_global_mlops_pipeline():
     """執行全域 MLOps：走訪自選股清單，全部重新抓資料並深度重訓"""
-    watch_list = st.session_state.get(SessionKey.WATCH_LIST.value, [])
+    # 從所有組合包中提取出不重複的股票清單 (聯集)
+    account: "Account" = st.session_state.get(SessionKey.PORTFOLIO.value)
+    if not account: return
+
+    all_tickers = set()
+    for sp in account.sub_portfolios.values():
+        all_tickers.update(sp.watch_tickers)
+
+    watch_list = sorted(list(all_tickers))
     total_stocks = len(watch_list)
 
     if not watch_list:
-        st.warning("⚠️ 自選股清單為空，無需訓練。")
+        st.warning("⚠️ 所有組合包皆無關注標的，無需訓練。")
         st.session_state[SessionKey.IS_GLOBAL_TRAINING.value] = False
         time.sleep(1)
         st.rerun()
@@ -121,7 +133,15 @@ def main():
         has_error = False
         with status_placeholder.container():
             with st.status("🔄 系統首次啟動：同步所有追蹤標的...", expanded=True) as status:
-                watch_list = st.session_state.get(SessionKey.WATCH_LIST.value, [])
+
+                # 🌟 改為從所有組合包收集股票
+                account = st.session_state.get(SessionKey.PORTFOLIO.value)
+                all_tickers = set()
+                if account:
+                    for sp in account.sub_portfolios.values():
+                        all_tickers.update(sp.watch_tickers)
+                watch_list = sorted(list(all_tickers))
+
                 for t in watch_list:
                     st.write(f"📥 正在檢查/同步 {t} 的最新 K 線與大盤資料...")
                     try:
@@ -189,11 +209,32 @@ def main():
             st.stop()
 
     account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
-
-    # 1. 確認當前正在操作哪一個組合包
     current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
     if not current_sp_name or current_sp_name not in account.sub_portfolios:
         st.warning("👈 尚未選擇投資組合包，請由左側邊欄選擇或建立。")
+        st.stop()
+
+    current_sp = account.get_sub_portfolio(current_sp_name)
+    current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
+
+    # 焦點防呆：確保畫面上的股票一定屬於現在的組合包
+    if current_ticker not in current_sp.watch_tickers:
+        if current_sp.watch_tickers:
+            # 如果組合包有股票，強制切換成第一檔
+            current_ticker = sorted(current_sp.watch_tickers)[0]
+            st.session_state[SessionKey.CURRENT_TICKER.value] = current_ticker
+            st.session_state[SessionKey.CTRL_LIVE.value] = None
+        else:
+            # 如果組合包是空的，強制變成 None
+            current_ticker = None
+            st.session_state[SessionKey.CURRENT_TICKER.value] = None
+            st.session_state[SessionKey.CTRL_LIVE.value] = None
+
+    # ==========================================
+    # 進入 IDSS 決策大廳 (Dashboard)
+    # ==========================================
+    if current_ticker is None:
+        st.warning(f"👈 您目前的組合包 **【{current_sp.name}】** 內尚無關注標的，請先從左側邊欄新增股票！")
         st.stop()
 
     current_sp = account.get_sub_portfolio(current_sp_name)

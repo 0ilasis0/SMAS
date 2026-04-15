@@ -69,8 +69,6 @@ def _migrate_legacy_to_v2(legacy_data: dict) -> Account:
         allocated_cash=0.0
     )
 
-    # 嘗試讀取舊版的 watchlist (如果有對應檔案的話)，這裡先給空清單，
-    # 稍後在 controller 或 state 初始化時，會把舊 watchlist 塞進來。
     legacy_sp.watch_tickers = []
 
     # 轉移庫存

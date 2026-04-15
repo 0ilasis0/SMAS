@@ -58,14 +58,16 @@ class BacktestEngine:
     def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
         self.ticker = ticker
+
         self.account = Account(total_cash=initial_cash)
-        # 初始化時，為這檔股票建立一個空的持倉紀錄
-        self.account.positions[self.ticker] = Position()
+
+        # 為回測建立專屬的「虛擬組合包」
+        self.sp_name = "Backtest_SP"
+        self.sp = self.account.get_sub_portfolio(self.sp_name)
+        self.sp.positions[self.ticker] = Position()
 
         self.bb = Blackboard(ticker=ticker, account=self.account)
-
         self.tree = build_trading_tree(strategy)
-
         self.history_records = []
 
     def run(self, df: pd.DataFrame, silence: bool = False):
@@ -75,9 +77,9 @@ class BacktestEngine:
         with dbg.silence(active=silence):
             self.history_records.clear()
 
-            # 將帳戶與黑板狀態重置為初始狀態
+            # 將帳戶與虛擬組合包狀態重置為初始狀態
             self.account.total_cash = self.initial_cash
-            self.account.positions[self.ticker] = Position()
+            self.sp.positions[self.ticker] = Position()
             self.bb.clear_trade_memory()
 
             dbg.log(f"🚀 開始執行行為樹回測，初始資金: {self.initial_cash:,.0f} 元，共 {len(df)} 個交易日...")
@@ -90,7 +92,7 @@ class BacktestEngine:
                 current_close = row[StockCol.CLOSE.value]
 
                 # 確保帳戶知道最新的收盤價，以計算真實的 total_equity
-                self.account.update_price(self.ticker, current_close)
+                self.sp.get_position(self.ticker).current_price = current_close
 
                 # 將今天的收盤資訊與明天的「開盤價」、「成交量」傳給黑板
                 self.bb.current_date = str(date)
@@ -121,18 +123,16 @@ class BacktestEngine:
                 # 執行行為樹心跳 (Tick)
                 self.tree.tick(self.bb)
 
-                # 計算當日總淨值
-                stock_value = self.bb.position * current_close
-                total_equity = self.bb.cash + stock_value
+                # 計算當日總淨值 (直接依賴新版 Account 的計算屬性)
+                total_equity = self.account.total_equity
 
-                # 確保動作執行後，將黑板的持倉狀態同步回 Account
-                # (雖然在 action.py 裡面你可能是扣 account.cash，但 position 的同步非常重要)
-                self.account.positions[self.ticker].shares = self.bb.position
-                self.account.positions[self.ticker].avg_cost = self.bb.avg_cost
+                # 確保動作執行後，將黑板的持倉狀態同步回虛擬組合包
+                self.sp.positions[self.ticker].shares = self.bb.position
+                self.sp.positions[self.ticker].avg_cost = self.bb.avg_cost
 
                 total_equity = self.account.total_equity
 
-                # 紀錄歷史
+                # 紀錄歷史 (現金改為 total_cash)
                 record = BacktestRecord(
                     Date=date,
                     Close=current_close,
@@ -150,7 +150,7 @@ class BacktestEngine:
                 last_row = df.iloc[-1]
                 last_close = last_row[StockCol.CLOSE.value]
 
-                self.account.update_price(self.ticker, last_close)
+                self.sp.get_position(self.ticker).current_price = last_close
                 last_equity = self.account.total_equity
 
                 final_record = BacktestRecord(
