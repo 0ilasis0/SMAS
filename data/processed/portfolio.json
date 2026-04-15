@@ -1,4 +1,13 @@
 {
-    "global_cash": 0.0,
-    "positions": {}
+    "version": "2.0",
+    "total_cash": 0.0,
+    "sub_portfolios": {
+        "AI": {
+            "name": "AI",
+            "use_shared_cash": true,
+            "allocated_cash": 0.0,
+            "watch_tickers": [],
+            "positions": {}
+        }
+    }
 }

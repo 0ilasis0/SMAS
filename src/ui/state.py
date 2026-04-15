@@ -32,12 +32,12 @@ def load_watchlist() -> list:
             pass
     return ["2330.TW"]
 
-def save_watchlist(watchlist: list):
-    """將自選股狀態寫入本地硬碟保存"""
-    # 確保資料夾存在
-    os.makedirs(os.path.dirname(PathConfig.WATCHLIST), exist_ok=True)
-    with open(PathConfig.WATCHLIST, 'w', encoding=EncodingConst.UTF8.value) as f:
-        json.dump(watchlist, f, ensure_ascii=False, indent=4)
+# def save_watchlist(watchlist: list):
+#     """將自選股狀態寫入本地硬碟保存"""
+#     # 確保資料夾存在
+#     os.makedirs(os.path.dirname(PathConfig.WATCHLIST), exist_ok=True)
+#     with open(PathConfig.WATCHLIST, 'w', encoding=EncodingConst.UTF8.value) as f:
+#         json.dump(watchlist, f, ensure_ascii=False, indent=4)
 
 def reset_result():
     """清除前一次的預測結果"""

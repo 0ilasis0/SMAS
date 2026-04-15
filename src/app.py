@@ -182,7 +182,6 @@ def main():
             st.session_state[SessionKey.CTRL_LIVE.value] = ctrl
             st.toast(f"{current_ticker} 實盤引擎就緒！", icon="🟢")
         else:
-            # 因為我們已經把 Portfolio 頁面提早上去了，這裡的 st.stop() 就不會再綁架導覽列了！
             st.warning(f"⚠️ 系統偵測到 **{current_ticker}** 缺乏完整的 AI 模型權重檔。")
             if st.button("🚀 立即啟動 AI 訓練管線", type="primary"):
                 st.session_state[SessionKey.IS_TRAINING.value] = True
@@ -190,15 +189,29 @@ def main():
             st.stop()
 
     account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
-    global_cash = account.cash
 
-    # 從 Account 提取當前股票的部位狀態
-    pos_obj = account.get_position(current_ticker)
+    # 1. 確認當前正在操作哪一個組合包
+    current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
+    if not current_sp_name or current_sp_name not in account.sub_portfolios:
+        st.warning("👈 尚未選擇投資組合包，請由左側邊欄選擇或建立。")
+        st.stop()
+
+    current_sp = account.get_sub_portfolio(current_sp_name)
+
+    # 2. 決定「可動用資金 (Usable Cash)」
+    if current_sp.use_shared_cash:
+        usable_cash = account.unallocated_cash  # 使用系統未分配流動資金
+    else:
+        usable_cash = current_sp.allocated_cash # 使用該組合包的專屬小水桶
+
+    # 3. 從「當前組合包」提取該股票的部位狀態
+    pos_obj = current_sp.get_position(current_ticker)
     my_shares = pos_obj.shares
     my_avg_cost = pos_obj.avg_cost
 
     st.markdown("---")
     st.title(f"📊 IDSS 決策大廳 - {current_ticker}")
+    st.caption(f"📂 目前操作組合包：**【{current_sp.name}】**")
     st.markdown("---")
 
     render_chart()
@@ -210,16 +223,19 @@ def main():
         is_training = st.session_state.get(SessionKey.IS_TRAINING.value, False)
 
         if my_shares > 0:
-            st.info(f"💼 **目前庫存**：持有 {my_shares:,} 股，均價 {my_avg_cost:,.2f} 元 (佔預估總資產 {pos_obj.market_value / account.total_equity:.1%} )")
+            st.info(f"💼 **目前庫存**：持有 {my_shares:,} 股，均價 {my_avg_cost:,.2f} 元 (佔系統總資產 {pos_obj.market_value / account.total_equity:.1%} )")
         else:
-            st.info(f"💼 **目前庫存**：空手觀望中。可用資金：{global_cash:,.0f} 元")
+            # 顯示當前可動用的真實資金
+            cash_source_str = "系統活資金" if current_sp.use_shared_cash else "組合包專屬資金"
+            st.info(f"💼 **目前庫存**：空手觀望中。可用 {cash_source_str}：{usable_cash:,.0f} 元")
 
         if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=is_training):
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
                 ctrl_live = st.session_state.get(SessionKey.CTRL_LIVE.value)
 
+                # 4. 餵給 AI 的資金變成 usable_cash
                 result = ctrl_live.execute_decision(
-                    current_cash=global_cash,
+                    available_cash=usable_cash,
                     current_position=my_shares,
                     avg_cost=my_avg_cost,
                     persona=selected_persona
@@ -246,6 +262,7 @@ def main():
                     db_mgr = ctrl_live.engine.db if ctrl_live else None
 
                     trade_dialog(
+                        sp_id=current_sp_name,
                         db_manager=db_mgr,
                         prefill_ticker=current_ticker,
                         prefill_action=action,

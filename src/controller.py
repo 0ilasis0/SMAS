@@ -3,10 +3,10 @@ from datetime import datetime
 import pandas as pd
 
 from base import KeyManager, MathTool
-from bt.account import Account, Position
+from bt.account import Account, Position, SubPortfolio
 from bt.actions import GenerateGeminiReportNode
 from bt.blackboard import Blackboard
-from bt.const import TradeDecision
+from bt.const import AccountCol, TradeDecision
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from const import GlobalParams
@@ -51,7 +51,7 @@ class IDSSController:
         return round(round(price / tick) * tick, 2)
 
     def execute_decision(self,
-        current_cash: float,
+        available_cash: float,
         current_position: int,
         avg_cost: float,
         persona: TradingPersona,
@@ -71,12 +71,14 @@ class IDSSController:
 
         tree = build_trading_tree(strategy_config)
 
-        # 3. 建立黑板與寫入「真實帳戶資料」
-        account = Account(cash=current_cash)
+        # 3. 建立黑板與寫入「真實帳戶資料」(虛擬推演用)
+        account = Account(total_cash=available_cash)
 
         real_display_price = prediction_result.get(QuoteCol.REAL_LATEST_PRICE.value, avg_cost)
 
-        account.positions[self.ticker] = Position(
+        # Account 沒有全域 positions 屬性，這裡我們手動建一個給黑板使用
+        account.sub_portfolios[AccountCol.DUMMY_SP.value] = SubPortfolio(name=AccountCol.DUMMY_SP.value)
+        account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker] = Position(
             shares=current_position,
             avg_cost=avg_cost,
             current_price=real_display_price
@@ -86,7 +88,7 @@ class IDSSController:
         bb = Blackboard(ticker=self.ticker, account=account)
         bb.is_backtest = False
 
-        # 寫入預測數據與環境變數
+        # ... (中間寫入黑板與行為樹的邏輯完全不動) ...
         bb.prob_final = prediction_result.get(SignalCol.PROB_FINAL.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_xgb = prediction_result.get(SignalCol.PROB_XGB.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_dl = prediction_result.get(SignalCol.PROB_DL.value, GlobalParams.DEFAULT_ERROR)
@@ -94,7 +96,6 @@ class IDSSController:
         bb.sentiment_score = prediction_result.get(OracleCol.SCORE.value, 5)
         bb.sentiment_reason = prediction_result.get(OracleCol.REASON.value, "無")
 
-        # 同步黑板的持倉快取
         bb.position = current_position
         bb.avg_cost = avg_cost
 
@@ -116,17 +117,15 @@ class IDSSController:
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (波段模式)...")
         tree.tick(bb)
 
-        # 動作結束後，將最新的持倉同步回 Account (因為 ActionNode 是改 bb.position)
-        account.positions[self.ticker].shares = bb.position
-        account.positions[self.ticker].avg_cost = bb.avg_cost
+        # 🌟 動作結束後，將最新的持倉同步回 Account
+        account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].shares = bb.position
+        account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].avg_cost = bb.avg_cost
 
+        # ... (智慧定價與 LLM 覆盤邏輯完全不動) ...
         bb.gemini_reasoning = ""
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
 
-        # ==========================================
-        # 整合美股跳空校正的智慧定價引擎 (這部分邏輯保留不變，寫得很棒！)
-        # ==========================================
         if action_str in [TradeDecision.BUY.value, TradeDecision.SELL.value] and current_price > 0:
             df_recent = self.engine.db.get_daily_data(self.ticker).tail(20)
 
@@ -155,9 +154,7 @@ class IDSSController:
             limit_up = self._get_tw_tick_price(current_price * 1.099)
             limit_down = self._get_tw_tick_price(current_price * 0.901)
 
-            # 上下限防呆
             raw_expected_open = MathTool.clamp(raw_expected_open, limit_down, limit_up)
-            # 重點修改：將預期開盤價「強制收斂」到台股合法的跳動單位上！
             expected_open_price = self._get_tw_tick_price(raw_expected_open)
 
             pricing_prefix = f"\n\n💡 **[智慧定價]** "
@@ -165,7 +162,6 @@ class IDSSController:
                 gap_dir = "大漲" if sox_return > 0 else "重挫"
                 pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預期今日開盤價位移至 {expected_open_price:.2f}。 "
 
-            # 決策定價樹 (BUY)
             if action_str == TradeDecision.BUY.value:
                 if market_safe < 0.35:
                     raw_price = expected_open_price - (1.2 * atr)
@@ -184,7 +180,6 @@ class IDSSController:
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"屬常規震盪格局，建議耐心掛「偏低價」等待盤中自然拉回成交 (建議買價: {trade_price:.2f})。"
 
-            # 決策定價樹 (SELL)
             elif action_str == TradeDecision.SELL.value:
                 if bb.prob_final <= 0.20 or market_safe < 0.3:
                     raw_price = expected_open_price - (0.5 * atr)
@@ -205,15 +200,11 @@ class IDSSController:
 
             bb.last_trade_price = trade_price
 
-        # ⚪ 觀望情境
         elif action_str == TradeDecision.HOLD.value:
             hold_reason = f"\n\n\n**[觀望判定]** "
-
             if bb.prob_market_safe < 0.4:
-                if current_position > 0:
-                    hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
-                else:
-                    hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
+                if current_position > 0: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
+                else: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
             elif bb.prob_final <= 0.3 and current_position == 0:
                 hold_reason += f"綜合技術面偏空 (勝率 {bb.prob_final:.0%})，具備下跌風險。因帳上無庫存，維持空手觀望。"
             elif bb.prob_final < 0.6 and current_position == 0:
@@ -232,10 +223,8 @@ class IDSSController:
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
             report_node.tick(bb)
 
-        # 免責聲明
         bb.gemini_reasoning += "\n\n---\n**【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
-        # 6. 打包結構化結果
         final_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
 
         return {
@@ -252,7 +241,7 @@ class IDSSController:
             },
 
             APIKey.ACCOUNT.value: {
-                APIKey.CASH_LEFT.value: account.cash,
+                APIKey.CASH_LEFT.value: account.total_cash, # AI 預估扣款後的剩餘資金
                 APIKey.POSITION_LEFT.value: bb.position,
                 APIKey.TOTAL_EQUITY: account.total_equity
             },
@@ -271,7 +260,6 @@ class IDSSController:
 
             APIKey.REPORT.value: bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
-
     def sync_market_data(self) -> bool:
         dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
         try:

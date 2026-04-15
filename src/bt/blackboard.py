@@ -133,10 +133,10 @@ class Blackboard:
     def cash(self) -> float:
         """提供一個捷徑屬性，方便原本的 Action 節點讀取"""
         if self.account is None: return 0.0
-        return self.account.cash
+        return self.account.total_cash
 
     @cash.setter
     def cash(self, value: float):
         """提供一個捷徑屬性，方便原本的 Action 節點扣款"""
         if self.account is not None:
-            self.account.cash = value
+            self.account.total_cash = value

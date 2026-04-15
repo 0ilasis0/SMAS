@@ -58,7 +58,7 @@ class BacktestEngine:
     def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
         self.ticker = ticker
-        self.account = Account(cash=initial_cash)
+        self.account = Account(total_cash=initial_cash)
         # 初始化時，為這檔股票建立一個空的持倉紀錄
         self.account.positions[self.ticker] = Position()
 
@@ -76,7 +76,7 @@ class BacktestEngine:
             self.history_records.clear()
 
             # 將帳戶與黑板狀態重置為初始狀態
-            self.account.cash = self.initial_cash
+            self.account.total_cash = self.initial_cash
             self.account.positions[self.ticker] = Position()
             self.bb.clear_trade_memory()
 
@@ -136,7 +136,7 @@ class BacktestEngine:
                 record = BacktestRecord(
                     Date=date,
                     Close=current_close,
-                    Cash=self.account.cash,
+                    Cash=self.account.total_cash,
                     Position=self.bb.position,
                     Total_Equity=total_equity,
                     Action=self.bb.action_decision,
@@ -156,7 +156,7 @@ class BacktestEngine:
                 final_record = BacktestRecord(
                     Date=last_date,
                     Close=last_close,
-                    Cash=self.account.cash,
+                    Cash=self.account.total_cash,
                     Position=self.bb.position,
                     Total_Equity=last_equity,
                     Action=TradeDecision.HOLD, # 最後一天不動作

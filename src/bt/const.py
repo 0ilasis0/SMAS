@@ -1,6 +1,9 @@
 from enum import StrEnum
 
 
+class AccountCol(StrEnum):
+    DUMMY_SP = "dummy_sp"
+
 # ==========================================
 # 黑板記憶體 (Blackboard) 變數定義
 # ==========================================
