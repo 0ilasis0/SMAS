@@ -182,8 +182,37 @@ def main():
     # ==========================================
     # 進入 IDSS 決策大廳 (Dashboard)
     # ==========================================
+    account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
+    current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
+    if not current_sp_name or current_sp_name not in account.sub_portfolios:
+        st.warning("👈 尚未選擇投資組合包，請由左側邊欄選擇或建立。")
+        st.stop()
+
+    current_sp = account.get_sub_portfolio(current_sp_name)
+    current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
+
+    active_tickers = list(set(current_sp.watch_tickers) | set(current_sp.positions.keys()))
+
+    if current_ticker not in active_tickers:
+        if active_tickers:
+            # 如果組合包有股票 (不管是自選還是庫存)，強制切換成第一檔
+            current_ticker = sorted(active_tickers)[0]
+            st.session_state[SessionKey.CURRENT_TICKER.value] = current_ticker
+            st.session_state[SessionKey.CTRL_LIVE.value] = None
+
+            # 如果這檔股票有庫存，卻不在自選單裡，順手幫您補回去並存檔
+            if current_ticker not in current_sp.watch_tickers:
+                current_sp.watch_tickers.append(current_ticker)
+                from ui.portfolio import save_portfolio
+                save_portfolio(account)
+        else:
+            # 如果組合包真的完全沒有自選股也沒有庫存，強制變成 None
+            current_ticker = None
+            st.session_state[SessionKey.CURRENT_TICKER.value] = None
+            st.session_state[SessionKey.CTRL_LIVE.value] = None
+
     if current_ticker is None:
-        st.warning("👈 請先從左側邊欄新增並選擇一檔股票！")
+        st.warning(f"👈 您目前的組合包 **【{current_sp.name}】** 內尚無關注標的，請先從左側邊欄新增股票！")
         st.stop()
 
     if st.session_state.get(SessionKey.IS_GLOBAL_TRAINING.value, False):
@@ -208,44 +237,13 @@ def main():
                 st.rerun()
             st.stop()
 
-    account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
-    current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
-    if not current_sp_name or current_sp_name not in account.sub_portfolios:
-        st.warning("👈 尚未選擇投資組合包，請由左側邊欄選擇或建立。")
-        st.stop()
-
-    current_sp = account.get_sub_portfolio(current_sp_name)
-    current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
-
-    # 焦點防呆：確保畫面上的股票一定屬於現在的組合包
-    if current_ticker not in current_sp.watch_tickers:
-        if current_sp.watch_tickers:
-            # 如果組合包有股票，強制切換成第一檔
-            current_ticker = sorted(current_sp.watch_tickers)[0]
-            st.session_state[SessionKey.CURRENT_TICKER.value] = current_ticker
-            st.session_state[SessionKey.CTRL_LIVE.value] = None
-        else:
-            # 如果組合包是空的，強制變成 None
-            current_ticker = None
-            st.session_state[SessionKey.CURRENT_TICKER.value] = None
-            st.session_state[SessionKey.CTRL_LIVE.value] = None
-
-    # ==========================================
-    # 進入 IDSS 決策大廳 (Dashboard)
-    # ==========================================
-    if current_ticker is None:
-        st.warning(f"👈 您目前的組合包 **【{current_sp.name}】** 內尚無關注標的，請先從左側邊欄新增股票！")
-        st.stop()
-
-    current_sp = account.get_sub_portfolio(current_sp_name)
-
-    # 2. 決定「可動用資金 (Usable Cash)」
+    # 決定「可動用資金 (Usable Cash)」
     if current_sp.use_shared_cash:
         usable_cash = account.unallocated_cash  # 使用系統未分配流動資金
     else:
         usable_cash = current_sp.allocated_cash # 使用該組合包的專屬小水桶
 
-    # 3. 從「當前組合包」提取該股票的部位狀態
+    # 從「當前組合包」提取該股票的部位狀態
     pos_obj = current_sp.get_position(current_ticker)
     my_shares = pos_obj.shares
     my_avg_cost = pos_obj.avg_cost
