@@ -250,7 +250,6 @@ def system_settings_dialog():
             save_portfolio(account)
             st.session_state[SessionKey.PORTFOLIO.value] = account
             st.toast(f"✅ 成功清除 {cleaned_count} 檔已出清標的紀錄！", icon="🧹")
-            import time
             time.sleep(0.5)
             st.rerun()
 
