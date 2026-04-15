@@ -1,0 +1,10 @@
+{
+    "exclude": [
+        "python",
+        "img",
+        "data",
+        "**/.git",
+        "**/__pycache__",
+        "**/.venv",
+    ]
+}

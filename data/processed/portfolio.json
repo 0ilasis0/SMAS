@@ -1,30 +1,4 @@
 {
-    "global_cash": 736826.0,
-    "positions": {
-        "9958.TW": {
-            "shares": 0,
-            "avg_cost": 0.0,
-            "history": []
-        },
-        "2603.TW": {
-            "shares": 0,
-            "avg_cost": 0.0,
-            "history": []
-        },
-        "2881.TW": {
-            "shares": 3000,
-            "avg_cost": 87.72466666666666,
-            "history": [
-                {
-                    "date": "2026-04-14 22:19:15",
-                    "action": "buy",
-                    "price": 87.6,
-                    "shares": 3000,
-                    "fee": 374,
-                    "tax": 0,
-                    "total": 263174.0
-                }
-            ]
-        }
-    }
+    "global_cash": 0.0,
+    "positions": {}
 }

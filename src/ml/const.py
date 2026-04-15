@@ -12,7 +12,7 @@ class ModelCol(StrEnum):
     DL = "dl"
     META = "meta"
     MARKET = "market"
-    SCALAR = "scalar"
+    DL_SCALAR = "dl_scalar"
 
 class RNNType(StrEnum):
     """RNN 架構類型"""
