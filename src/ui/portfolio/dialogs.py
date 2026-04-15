@@ -8,7 +8,7 @@ from bt.account import Account, SubPortfolio
 from bt.const import TradeDecision
 from bt.params import TaxRate
 from data.const import StockCol
-from ui.base import UIActionMapper, is_valid_ticker
+from ui.base import UIActionMapper, get_smart_tw_ticker, is_valid_ticker
 from ui.const import HistoryKey, PortfolioCol, SessionKey, UIFormat
 from ui.params import AccountLimit
 
@@ -126,7 +126,7 @@ def fund_transfer_dialog(sp_id: str):
     if temp_key not in st.session_state:
         st.session_state[temp_key] = 0.0
 
-    # 🌟 新增：快捷金額按鈕
+    # 快捷金額按鈕
     st.caption("⚡ 快捷輸入")
     btn_cols = st.columns(4)
     if btn_cols[0].button("+ 10 萬", key="f1", use_container_width=True): st.session_state[temp_key] += 100_000.0
@@ -136,7 +136,7 @@ def fund_transfer_dialog(sp_id: str):
 
     amount = st.number_input("金額 (NTD)", min_value=0.0, max_value=float(max_transfer), step=10_000.0, key=temp_key)
 
-    # 🌟 新增：即時千分位與中文單位預覽
+    # 即時千分位與中文單位預覽
     amount_str = f"${amount:,.0f}"
     if amount >= 1_000_000_000:
         amount_str += f" ({amount / 1_000_000_000:.2f} 億)"
@@ -227,11 +227,14 @@ def trade_dialog(sp_id: str, db_manager, prefill_ticker: str = "", prefill_actio
 
     st.caption(f"📂 目前操作組合包：**{sp.name}**")
 
-    raw_ticker = st.text_input("🔍 股票代號 (輸入後按 Enter 抓取現價)", value=prefill_ticker, placeholder="例如: 2330.TW")
+    raw_ticker = st.text_input("🔍 股票代號 (輸入後按 Enter 抓取現價)", value=prefill_ticker, placeholder="例如: 2330 或 3105.TWO")
     if not raw_ticker: return
 
-    ticker = raw_ticker.strip().upper()
-    if not ticker.endswith(".TW") and not ticker.endswith(".TWO"): ticker += ".TW"
+    # 使用智慧解析器找出真正的代號
+    ticker = get_smart_tw_ticker(raw_ticker)
+    if not ticker:
+        st.error(f"❌ 找不到標的 {raw_ticker}！(無論上市或上櫃皆無此代號)")
+        return
 
     pos_obj = sp.get_position(ticker)
 

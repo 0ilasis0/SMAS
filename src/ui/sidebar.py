@@ -5,7 +5,7 @@ import streamlit as st
 from bt.account import Account
 from bt.strategy_config import TradingPersona
 from ml.const import TradingMode
-from ui.base import is_valid_ticker
+from ui.base import get_smart_tw_ticker, is_valid_ticker
 from ui.const import Page, SessionKey
 from ui.portfolio import load_portfolio, save_portfolio
 from ui.state import on_ticker_change, reset_result, save_settings
@@ -85,25 +85,23 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 submitted = cols[1].form_submit_button("新增", disabled=is_locked)
 
                 if submitted and new_ticker:
-                    clean_ticker = new_ticker.strip().upper()
-                    if not clean_ticker.endswith(".TW") and not clean_ticker.endswith(".TWO"):
-                        clean_ticker += ".TW"
+                    with st.spinner(f"正在驗證 {new_ticker} 是否存在..."):
+                        smart_ticker = get_smart_tw_ticker(new_ticker)
 
-                    # 存取 current_sp.watch_tickers
-                    if clean_ticker in current_sp.watch_tickers:
-                        msg_placeholder.warning(f"⚠️ {clean_ticker} 已經在此組合包中了！")
+                    if smart_ticker:
+                        if smart_ticker in current_sp.watch_tickers:
+                            msg_placeholder.warning(f"⚠️ {smart_ticker} 已經在此組合包中了！")
+                        else:
+                            current_sp.watch_tickers.append(smart_ticker)
+                            save_portfolio(account) # 存檔！
+                            st.session_state[SessionKey.PORTFOLIO.value] = account
+
+                            if st.session_state.get(SessionKey.CURRENT_TICKER.value) is None:
+                                on_ticker_change(smart_ticker)
+
+                            st.rerun()
                     else:
-                        with st.spinner(f"正在驗證 {clean_ticker} 是否存在..."):
-                            if is_valid_ticker(clean_ticker):
-                                current_sp.watch_tickers.append(clean_ticker)
-                                save_portfolio(account) # 存檔！
-                                st.session_state[SessionKey.PORTFOLIO.value] = account
-
-                                if st.session_state.get(SessionKey.CURRENT_TICKER.value) is None:
-                                    on_ticker_change(clean_ticker)
-                                st.rerun()
-                            else:
-                                msg_placeholder.error(f"❌ 找不到標的 {clean_ticker}！")
+                        msg_placeholder.error(f"❌ 找不到標的 {new_ticker}！(無論上市或上櫃皆無此代號)")
 
             # 3. 渲染該組合包的自選股按鈕
             with st.container(height=250):

@@ -1,5 +1,13 @@
 {
     "version": "2.0",
-    "total_cash": 0.0,
-    "sub_portfolios": {}
+    "total_cash": 3000000.0,
+    "sub_portfolios": {
+        "test1": {
+            "name": "test1",
+            "use_shared_cash": false,
+            "allocated_cash": 1000000.0,
+            "watch_tickers": [],
+            "positions": {}
+        }
+    }
 }
