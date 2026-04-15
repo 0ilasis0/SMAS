@@ -1,12 +1,100 @@
 {
     "version": "2.0",
-    "total_cash": 3000000.0,
+    "total_cash": 465000.0,
     "sub_portfolios": {
-        "test1": {
-            "name": "test1",
+        "current": {
+            "name": "current",
+            "use_shared_cash": true,
+            "allocated_cash": 0.0,
+            "watch_tickers": [
+                "2388.TW",
+                "0052.TW",
+                "3481.TW",
+                "2330.TW",
+                "2409.TW",
+                "2324.TW",
+                "0050.TW",
+                "2481.TW",
+                "2603.TW",
+                "2881.TW",
+                "3006.TW",
+                "2301.TW",
+                "4916.TW",
+                "2317.TW",
+                "3563.TW",
+                "2313.TW",
+                "2337.TW"
+            ],
+            "positions": {
+                "2388.TW": {
+                    "shares": 2000,
+                    "avg_cost": 50.872,
+                    "history": [
+                        {
+                            "date": "2026-04-15 23:01:03",
+                            "action": "buy",
+                            "price": 50.8,
+                            "shares": 2000,
+                            "fee": 144,
+                            "tax": 0,
+                            "total": 101744.0
+                        }
+                    ]
+                },
+                "0052.TW": {
+                    "shares": 1000,
+                    "avg_cost": 43.862,
+                    "history": [
+                        {
+                            "date": "2026-04-15 23:01:41",
+                            "action": "buy",
+                            "price": 43.8,
+                            "shares": 1000,
+                            "fee": 62,
+                            "tax": 0,
+                            "total": 43862.0
+                        }
+                    ]
+                },
+                "3481.TW": {
+                    "shares": 1000,
+                    "avg_cost": 25.035,
+                    "history": [
+                        {
+                            "date": "2026-04-15 23:02:00",
+                            "action": "buy",
+                            "price": 25.0,
+                            "shares": 1000,
+                            "fee": 35,
+                            "tax": 0,
+                            "total": 25035.0
+                        }
+                    ]
+                },
+                "0050.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2409.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2337.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                }
+            }
+        },
+        "AI": {
+            "name": "AI",
             "use_shared_cash": false,
-            "allocated_cash": 1000000.0,
-            "watch_tickers": [],
+            "allocated_cash": 400000.0,
+            "watch_tickers": [
+                "2337.TW"
+            ],
             "positions": {}
         }
     }

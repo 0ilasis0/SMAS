@@ -61,7 +61,8 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
             selected_sp_name = st.selectbox(
                 "選擇目前操作的組合",
                 sp_names,
-                index=sp_names.index(current_sp_name)
+                index=sp_names.index(current_sp_name),
+                disabled=is_locked
             )
 
             # 如果使用者切換了下拉選單，更新 Session 並重整

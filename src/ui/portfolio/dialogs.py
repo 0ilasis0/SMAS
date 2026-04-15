@@ -76,7 +76,7 @@ def create_sub_portfolio_dialog():
             if allocated_amount >= 1_000_000_000:
                 amount_str += f" ({allocated_amount / 1_000_000_000:.2f} 億)"
             elif allocated_amount >= 10_000:
-                amount_str += f" ({allocated_amount / 10_000:.0f} 萬)"
+                amount_str += f" ({allocated_amount / 10_000:.1f} 萬)"
 
             st.info(f"💡 目前設定金額： **{amount_str}**")
 
@@ -141,7 +141,7 @@ def fund_transfer_dialog(sp_id: str):
     if amount >= 1_000_000_000:
         amount_str += f" ({amount / 1_000_000_000:.2f} 億)"
     elif amount >= 10_000:
-        amount_str += f" ({amount / 10_000:.0f} 萬)"
+        amount_str += f" ({amount / 10_000:.1f} 萬)"
 
     st.info(f"💡 目前設定金額： **{amount_str}**")
 
@@ -193,7 +193,7 @@ def cash_operation_dialog():
     if amount >= 1_000_000_000:
         amount_str += f" ({amount / 1_000_000_000:.2f} 億)"
     elif amount >= 10_000:
-        amount_str += f" ({amount / 10_000:.0f} 萬)"
+        amount_str += f" ({amount / 10_000:.1f} 萬)"
 
     st.info(f"💡 目前設定金額： **{amount_str}**")
     st.markdown("---")
