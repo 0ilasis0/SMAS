@@ -5,9 +5,10 @@ from data.const import StockCol
 from ui.const import SessionKey
 from ui.stock_names import get_tw_stock_mapping
 
-from .data import load_portfolio, save_portfolio
+from .data import load_portfolio
 from .dialogs import (cash_operation_dialog, create_sub_portfolio_dialog,
-                      fund_transfer_dialog, history_dialog, trade_dialog)
+                      fund_transfer_dialog, history_dialog,
+                      sub_portfolio_settings_dialog, trade_dialog)
 
 
 def render_portfolio_page(db_manager=None):
@@ -62,17 +63,18 @@ def render_portfolio_page(db_manager=None):
         sp_pnl = sp_market_val - sp_cost_val
 
         if sp_pnl >= 0:
-            pnl_str = f":green[獲利: +${sp_pnl:,.0f}]"
+            pnl_str = f"獲利: +${sp_pnl:,.0f}"
             icon = "🟢"
         else:
-            pnl_str = f":red[虧損: -${abs(sp_pnl):,.0f}]"
+            pnl_str = f"虧損: -${abs(sp_pnl):,.0f}"
             icon = "🔴"
 
-        expander_title = f"{icon} 組合包：{sp.name} | 市值: ${sp_market_val:,.0f} | {pnl_str}"
+        gap = "\u3000\u3000|\u3000\u3000"
+        expander_title = f"📦 名稱：{sp.name}{gap}市值: ${sp_market_val:,.0f}{gap}{icon} {pnl_str}"
 
         with st.expander(expander_title, expanded=True):
-            # --- 🌟 組合包頂部狀態列 (加入切換按鈕) ---
-            sc1, sc2, sc3, sc4 = st.columns([2.5, 1, 1.5, 1.5])
+            # --- 組合包頂部狀態列 (替換為設定按鈕) ---
+            sc1, sc2, sc3, sc4 = st.columns([8, 3, 3, 1])
 
             with sc1:
                 if sp.use_shared_cash:
@@ -81,22 +83,6 @@ def render_portfolio_page(db_manager=None):
                     st.markdown(f"🔒 資金來源：**專屬資金** (餘額: **${sp.allocated_cash:,.0f}**)")
 
             with sc2:
-                # 🌟 資金來源切換按鈕
-                if sp.use_shared_cash:
-                    if st.button("切換為專屬資金", key=f"tg_{sp_id}", help="將停止共用流動資金，改為獨立專屬資金 (初始餘額為 0)。", use_container_width=True):
-                        sp.use_shared_cash = False
-                        sp.allocated_cash = 0.0
-                        save_portfolio(account)
-                        st.rerun()
-                else:
-                    if st.button("切換為共用資金", key=f"tg_{sp_id}", help="將剩餘專屬資金退回，並改為共用未分配流動資金。", use_container_width=True):
-                        sp.use_shared_cash = True
-                        # 因為 use_shared_cash 變 true，它的 allocated_cash 在計算 unallocated_cash 時就不會被扣除，等同於自動退回大水庫！
-                        sp.allocated_cash = 0.0
-                        save_portfolio(account)
-                        st.rerun()
-
-            with sc3:
                 # 只有專屬資金才顯示劃撥按鈕
                 if not sp.use_shared_cash:
                     if st.button("🔄 劃撥資金", key=f"fund_{sp_id}", use_container_width=True):
@@ -104,9 +90,15 @@ def render_portfolio_page(db_manager=None):
                 else:
                     st.write("") # 佔位
 
-            with sc4:
+            with sc3:
                 if st.button("⚖️ 新增交易", key=f"trade_{sp_id}", type="primary", use_container_width=True):
                     trade_dialog(sp_id, db_manager)
+
+            with sc4:
+                # 統一的設定按鈕
+                if st.button("⚙️", key=f"set_{sp_id}", use_container_width=True):
+                    # 呼叫剛剛寫好的 Dialog
+                    sub_portfolio_settings_dialog(sp_id)
 
             # --- 組合包庫存明細表 ---
             active_tickers = [t for t, p in sp.positions.items() if p.shares > 0 or len(p.history) > 0]

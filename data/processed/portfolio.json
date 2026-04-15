@@ -5,7 +5,7 @@
         "pp": {
             "name": "pp",
             "use_shared_cash": false,
-            "allocated_cash": 693049.0007629395,
+            "allocated_cash": 0.0,
             "watch_tickers": [
                 "2388.TW",
                 "4919.TW",

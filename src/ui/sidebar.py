@@ -58,23 +58,17 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 current_sp_name = sp_names[0]
                 st.session_state["CURRENT_SUB_PORTFOLIO"] = current_sp_name
 
-            # 將下拉選單與刪除按鈕並排
-            col_sp1, col_sp2 = st.columns([4, 1])
-            with col_sp1:
-                selected_sp_name = st.selectbox(
-                    "選擇目前操作的組合",
-                    sp_names,
-                    index=sp_names.index(current_sp_name),
-                    label_visibility="collapsed"
-                )
-            with col_sp2:
-                # 刪除組合包按鈕
-                if st.button("🗑️", help="刪除目前選中的組合包"):
-                    delete_sub_portfolio_dialog(selected_sp_name)
+            selected_sp_name = st.selectbox(
+                "選擇目前操作的組合",
+                sp_names,
+                index=sp_names.index(current_sp_name)
+            )
 
+            # 如果使用者切換了下拉選單，更新 Session 並重整
             if selected_sp_name != current_sp_name:
                 st.session_state["CURRENT_SUB_PORTFOLIO"] = selected_sp_name
                 st.session_state[SessionKey.CURRENT_TICKER.value] = None
+                st.session_state[SessionKey.CTRL_LIVE.value] = None
                 st.rerun()
 
             current_sp = account.get_sub_portfolio(selected_sp_name)

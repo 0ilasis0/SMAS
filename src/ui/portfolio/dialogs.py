@@ -51,12 +51,34 @@ def create_sub_portfolio_dialog():
             st.warning("⚠️ 目前未分配流動資金為 $0，無法設定專屬資金！請先選擇「共用總資金」，日後再進行資金劃撥。")
             use_shared = True
         else:
+            # 專屬資金提撥的快捷按鈕與 Session Key
+            temp_key = "create_sp_alloc_amount"
+            if temp_key not in st.session_state:
+                st.session_state[temp_key] = 0.0
+
+            st.caption("⚡ 快捷輸入")
+            btn_cols = st.columns(4)
+            if btn_cols[0].button("+ 10 萬", key="c1", use_container_width=True): st.session_state[temp_key] += 100_000.0
+            if btn_cols[1].button("+ 100 萬", key="c2", use_container_width=True): st.session_state[temp_key] += 1_000_000.0
+            if btn_cols[2].button("+ 1000 萬", key="c3", use_container_width=True): st.session_state[temp_key] += 10_000_000.0
+            if btn_cols[3].button("歸零", key="c4", use_container_width=True): st.session_state[temp_key] = 0.0
+
             allocated_amount = st.number_input(
                 f"請輸入提撥金額 (目前流動資金上限: ${unallocated:,.0f})",
                 min_value=0.0,
                 max_value=float(unallocated),
-                step=10_000.0
+                step=10_000.0,
+                key=temp_key
             )
+
+            # 即時千分位與中文單位預覽
+            amount_str = f"${allocated_amount:,.0f}"
+            if allocated_amount >= 1_000_000_000:
+                amount_str += f" ({allocated_amount / 1_000_000_000:.2f} 億)"
+            elif allocated_amount >= 10_000:
+                amount_str += f" ({allocated_amount / 10_000:.0f} 萬)"
+
+            st.info(f"💡 目前設定金額： **{amount_str}**")
 
     if st.button("✅ 確認建立", type="primary", use_container_width=True):
         new_sp = SubPortfolio(
@@ -69,6 +91,10 @@ def create_sub_portfolio_dialog():
         save_portfolio(account)
         st.session_state[SessionKey.PORTFOLIO.value] = account
         st.session_state["CURRENT_SUB_PORTFOLIO"] = sp_name
+
+        # 執行完畢後清理 temp_key
+        if not use_shared and "create_sp_alloc_amount" in st.session_state:
+            del st.session_state["create_sp_alloc_amount"]
 
         st.toast(f"✅ 成功建立組合包：{sp_name}", icon="📦")
         time.sleep(0.5)
@@ -367,3 +393,84 @@ def history_dialog(sp_id: str, ticker: str):
                 save_portfolio(account)
                 st.session_state[SessionKey.PORTFOLIO.value] = account
                 st.rerun()
+
+# ==========================================
+# 5. 組合包專屬設定 Dialog
+# ==========================================
+@st.dialog("⚙️ 組合包設定")
+def sub_portfolio_settings_dialog(sp_id: str):
+    account: Account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
+    if sp_id not in account.sub_portfolios:
+        st.error("找不到該組合包。")
+        return
+
+    sp = account.get_sub_portfolio(sp_id)
+
+    st.markdown("#### ✏️ 重新命名")
+    new_name = st.text_input("輸入新名稱", value=sp.name, label_visibility="collapsed")
+
+    st.markdown("---")
+    st.markdown("#### 💰 資金來源切換")
+    current_source_index = 0 if sp.use_shared_cash else 1
+    fund_source = st.radio(
+        "扣款方式：",
+        ["💧 共用總資金 (未分配流動資金)", "🔒 設定專屬資金"],
+        index=current_source_index,
+        label_visibility="collapsed"
+    )
+
+    st.markdown("---")
+
+    # 儲存變更按鈕
+    if st.button("💾 儲存變更", type="primary", use_container_width=True):
+        # 1. 處理重新命名
+        if new_name != sp_id:
+            if new_name in account.sub_portfolios:
+                st.error("❌ 名稱已存在，請換一個名稱！")
+                return
+            sp.name = new_name
+            # 更換字典的 Key
+            account.sub_portfolios[new_name] = account.sub_portfolios.pop(sp_id)
+            # 如果目前正在操作這個組合包，同步更新 Session
+            if st.session_state.get("CURRENT_SUB_PORTFOLIO") == sp_id:
+                st.session_state["CURRENT_SUB_PORTFOLIO"] = new_name
+
+        # 2. 處理資金切換
+        new_use_shared = fund_source.startswith("💧")
+        if new_use_shared != sp.use_shared_cash:
+            sp.use_shared_cash = new_use_shared
+            sp.allocated_cash = 0.0 # 切換時，專屬資金重置為 0 (若退回共用，資金會自動回到大水庫)
+
+        save_portfolio(account)
+        st.session_state[SessionKey.PORTFOLIO.value] = account
+        st.toast("✅ 設定已更新！", icon="💾")
+        time.sleep(0.5)
+        st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # 危險操作區
+    with st.expander("⚠️ 危險操作：刪除組合包"):
+        st.warning(f"刪除組合包後，其內部所有的庫存將被強制以**最新收盤價**結算，並將剩餘資金全數退回系統的「未分配流動資金」。\n此操作**無法復原**！")
+        confirm_delete = st.checkbox("我了解風險，確認刪除")
+
+        if st.button("🚨 確認刪除並結算", disabled=not confirm_delete, use_container_width=True):
+            liquidation_value = sp.total_market_value
+            returned_cash = sp.allocated_cash + liquidation_value
+
+            # 將退回的資金加到系統總資金
+            account.total_cash += returned_cash
+            del account.sub_portfolios[sp_id]
+
+            save_portfolio(account)
+            st.session_state[SessionKey.PORTFOLIO.value] = account
+
+            # 如果刪除的是當前選中的組合包，清空焦點
+            if st.session_state.get("CURRENT_SUB_PORTFOLIO") == sp_id:
+                st.session_state["CURRENT_SUB_PORTFOLIO"] = None
+                st.session_state[SessionKey.CURRENT_TICKER.value] = None
+                st.session_state[SessionKey.CTRL_LIVE.value] = None
+
+            st.toast(f"✅ 已刪除組合包並退回結算資金 ${returned_cash:,.0f}", icon="🗑️")
+            time.sleep(1.0)
+            st.rerun()
