@@ -18,3 +18,6 @@ class Color(StrEnum):
 @dataclass(frozen=True)
 class GlobalParams:
     DEFAULT_ERROR = -9999999
+
+    # 用於將系統模型的時間提前一個開盤日
+    IS_T_MINUS_1_SIM = False

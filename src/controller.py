@@ -33,8 +33,6 @@ class IDSSController:
         )
         self.is_ready = False
 
-        self.is_t_minus_1_sim = False
-
     def load_system(self) -> bool:
         dbg.log(f"[{self.ticker}] 正在初始化 IDSS 決策中樞...")
         if self.engine.load_inference_models():
@@ -62,7 +60,7 @@ class IDSSController:
             return {"status": "error", "message": "系統尚未載入完成，請先呼叫 load_system()"}
 
         # 1. AI 引擎預測與新聞分析
-        prediction_result = self.engine.predict_today(mode=TradingMode.SWING, is_t_minus_1_sim=self.is_t_minus_1_sim)
+        prediction_result = self.engine.predict_today(mode=TradingMode.SWING, is_t_minus_1_sim=GlobalParams.IS_T_MINUS_1_SIM)
         if not prediction_result:
             return {"status": "error", "message": "預測失敗，缺乏最新市場資料"}
 
@@ -76,7 +74,7 @@ class IDSSController:
         # 3. 建立黑板與寫入「真實帳戶資料」
         account = Account(cash=current_cash)
 
-        real_display_price = prediction_result.get("REAL_LATEST_PRICE", avg_cost)
+        real_display_price = prediction_result.get(QuoteCol.REAL_LATEST_PRICE.value, avg_cost)
 
         account.positions[self.ticker] = Position(
             shares=current_position,

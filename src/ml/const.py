@@ -103,6 +103,7 @@ class QuoteCol(StrEnum):
     DATE = "date"
     CURRENT_PRICE = "current_price"
     AVG_5D_VOL = "avg_5d_vol"
+    REAL_LATEST_PRICE = "real_latest_price"
 
 
 class DLParamKey(StrEnum):

@@ -449,7 +449,7 @@ class QuantAIEngine:
             OracleCol.SCORE.value: sentiment_score,
             OracleCol.REASON.value: sentiment_reason,
             QuoteCol.CURRENT_PRICE.value: float(current_price),
-            "REAL_LATEST_PRICE": real_latest_price,
+            QuoteCol.REAL_LATEST_PRICE.value: real_latest_price,
             QuoteCol.AVG_5D_VOL.value: float(avg_5d_vol) if not pd.isna(avg_5d_vol) else 0.0,
             FeatureCol.BIAS_MONTH.value: float(latest_bias_20) if not pd.isna(latest_bias_20) else 0.0,
             FeatureCol.RETURN_5D.value: float(latest_return_5d) if not pd.isna(latest_return_5d) else 0.0
