@@ -74,6 +74,34 @@ class XGBFeatureEngine:
         rolling_std = data[ai_vision_col].rolling(window=self.params.MA_MONTH).std()
         data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
+        price_diff = data[ai_vision_col].diff()
+        direction = np.sign(price_diff)
+        # 處理平盤 (direction=0) 的情況，保持成交量不增不減
+        direction = direction.fillna(0)
+        # OBV 是絕對數值非常大，我們把它轉換為 20 日移動平均乖離率，讓 AI 更好吸收
+        raw_obv = (direction * data[StockCol.VOLUME]).cumsum()
+        obv_ma20 = raw_obv.rolling(window=20).mean()
+        # 加上 1 防止分母為 0
+        data[FeatureCol.OBV] = (raw_obv - obv_ma20) / (obv_ma20.abs() + 1)
+
+        high_low = data[StockCol.HIGH] - data[StockCol.LOW]
+        high_close = (data[StockCol.HIGH] - data[StockCol.CLOSE].shift()).abs()
+        low_close = (data[StockCol.LOW] - data[StockCol.CLOSE].shift()).abs()
+
+        # 算出每日真實波幅 (True Range)
+        true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+        # 計算 14 日平均真實波幅 (ATR)
+        atr_14 = true_range.rolling(window=14).mean()
+        # 正規化為百分比，這樣 10 元和 1000 元的股票才能在 AI 腦中公平比較
+        data[FeatureCol.ATR_RATIO] = atr_14 / (data[ai_vision_col] + 1e-9)
+
+        # 用 10 日均線的斜率絕對值，加上 20 日均線的斜率絕對值
+        ma10 = data[ai_vision_col].rolling(window=10).mean()
+        slope_10 = (ma10 - ma10.shift(5)) / (ma10.shift(5) + 1e-9)
+        slope_20 = (ma_m - ma_m.shift(10)) / (ma_m.shift(10) + 1e-9)
+        # 強度 = 短期與中期趨勢動能的疊加絕對值 (不在乎多空，只在乎盤勢黏不黏)
+        data[FeatureCol.TREND_STRENGTH] = slope_10.abs() + slope_20.abs()
+
         # 價格與成交量動能
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
         data[FeatureCol.CLOSE_CHANGE] = data[ai_vision_col].pct_change()

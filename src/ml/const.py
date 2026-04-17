@@ -53,6 +53,11 @@ class FeatureCol(StrEnum):
     BUY_POWER = "buy_power"     # 當日買盤力道 (收盤價位置)
     RS_5D = "rs_5d"             # 個股與大盤的相對強弱
 
+    # 三個不同維度特徵
+    OBV = "obv"
+    ATR_RATIO = "atr_ratio"
+    TREND_STRENGTH = "trend_strength"
+
     # 標籤 (Label)
     TARGET = "target"
 
