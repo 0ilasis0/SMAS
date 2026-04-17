@@ -249,8 +249,31 @@ def main():
     my_avg_cost = pos_obj.avg_cost
 
     st.markdown("---")
-    st.title(f"📊 IDSS 決策大廳 - {current_ticker}")
-    st.caption(f"📂 目前操作組合包：**【{current_sp.name}】**")
+
+    title_col, btn_col = st.columns([3, 1])
+    with title_col:
+        st.title(f"📊 IDSS 決策大廳 - {current_ticker}")
+        st.caption(f"📂 目前操作組合包：**【{current_sp.name}】**")
+
+    with btn_col:
+        st.write("") # 往下擠一點對齊標題
+        if st.button("🔄 盤中同步現價", use_container_width=True):
+            with st.spinner("正在從 Yahoo 同步所有關注標的..."):
+                all_tickers = set()
+                for sp in account.sub_portfolios.values():
+                    all_tickers.update(sp.watch_tickers)
+
+                for t in all_tickers:
+                    try:
+                        temp_engine = QuantAIEngine(ticker=t, oos_days=0)
+                        temp_engine.update_market_data(force_sync=True)
+                    except Exception as e:
+                        st.error(f"⚠️ {t} 同步失敗: {e}")
+
+                st.session_state[HAS_AUTO_UPDATED_KEY] = False # 讓系統重整後知道要重讀資料
+                st.toast("✅ 盤中即時資料已強制覆蓋更新！", icon="⚡")
+                time.sleep(1)
+                st.rerun()
     st.markdown("---")
 
     render_chart()

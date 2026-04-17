@@ -1,4 +1,5 @@
 import copy
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -6,16 +7,15 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from sklearn.metrics import accuracy_score, roc_auc_score
-from sklearn.model_selection import TimeSeriesSplit
-from sklearn.preprocessing import RobustScaler
-from torch.utils.data import DataLoader, TensorDataset
-
 from base import MathTool, MLTool
 from debug import dbg
 from ml.const import DLModelType, DLParamKey
 from ml.params import DLHyperParams, TrainConfig
 from ml.trainers.dl_net import DLModelFactory, RNNType
+from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.model_selection import TimeSeriesSplit
+from sklearn.preprocessing import RobustScaler
+from torch.utils.data import DataLoader, TensorDataset
 
 
 class DLTrainer:
@@ -241,7 +241,7 @@ class DLTrainer:
         try:
             model_path = Path(model_path)
             if not model_path.exists():
-                dbg.error(f"深度學習模型載入失敗: 找不到檔案 {model_path}")
+                dbg.error(f"❌ 深度學習模型載入失敗: 找不到檔案 {model_path}")
                 return None
 
             model = DLModelFactory.create(
@@ -251,10 +251,18 @@ class DLTrainer:
                 rnn_type=self.rnn_type
             ).to(self.device)
 
-            model.load_state_dict(torch.load(model_path, map_location=self.device, weights_only=True))
+            model.load_state_dict(torch.load(str(model_path), map_location=self.device, weights_only=True))
+
             model.eval()
-            dbg.log(f"成功載入 DL 模型: {model_path}")
+            dbg.log(f"✅ 成功載入 DL 模型: {model_path}")
             return model
+
+        except RuntimeError as re:
+            error_details = traceback.format_exc()
+            dbg.error(f"💀 DL 模型結構不匹配 (Shape Mismatch)！\n您可能修改了特徵數量 (num_features={num_features}) 或 Time Steps，導致舊的權重檔塞不進去。\n請至 UI 介面點擊「強制深度重訓」！\n追蹤:\n{error_details}")
+            return None
+
         except Exception as e:
-            dbg.error(f"深度學習模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
+            error_details = traceback.format_exc()
+            dbg.error(f"🔥 DL 模型載入發生深層崩潰！\n目標路徑: {model_path}\n詳細錯誤追蹤:\n{error_details}")
             return None

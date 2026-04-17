@@ -71,9 +71,9 @@ class QuantAIEngine:
     # 公開 API (Facade 面板) - 這些方法名稱與參數必須與舊版 100% 相同
     # =========================================================================
 
-    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False) -> bool:
+    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
         """模組 1：資料更新 (委派給 DataUpdater)"""
-        return self._updater.update_market_data(period, unit, force_wipe)
+        return self._updater.update_market_data(period, unit, force_wipe, force_sync)
 
     def run_data_watchdog(self, ticker: str):
         """模組 2：資料防護與修復 (委派給 DataWatchdog)"""

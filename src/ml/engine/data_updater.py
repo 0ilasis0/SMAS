@@ -48,7 +48,7 @@ class DataUpdater:
         except Exception as e:
             dbg.war(f"無法寫入更新快取檔: {e}")
 
-    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False) -> bool:
+    def update_market_data(self, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
         """從網路抓取最新歷史資料並寫入資料庫"""
         ticker = self.engine.config.ticker
 
@@ -58,8 +58,8 @@ class DataUpdater:
 
         success = True
 
-        # 1. 個股更新邏輯
-        if force_wipe or self._needs_update(ticker):
+        # 個股更新邏輯 (加入了 force_sync)
+        if force_wipe or force_sync or self._needs_update(ticker):
             dbg.log(f"[{ticker}] 正在從網路更新個股歷史資料...")
             daily_df = self.engine.fetcher.fetch_daily_data(ticker, period=period, unit=unit)
 
@@ -73,10 +73,10 @@ class DataUpdater:
         else:
             dbg.log(f"⚡ [{ticker}] 今日已同步過最新資料，跳過網路抓取。")
 
-        # 2. 大盤/總經更新邏輯 (遍歷 MacroTicker Enum)
+        # 大盤/總經更新邏輯 (同樣加入了 force_sync)
         for macro_item in MacroTicker:
             m_ticker = macro_item.value
-            if force_wipe or self._needs_update(m_ticker):
+            if force_wipe or force_sync or self._needs_update(m_ticker):
                 dbg.log(f"[{m_ticker}] 正在同步更新大盤/總經資料...")
                 df_macro = self.engine.fetcher.fetch_daily_data(m_ticker, period=period, unit=unit)
 
