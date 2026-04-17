@@ -33,13 +33,13 @@ def render_chart():
                     "近 3 個月": 60,
                     "近半年": 120,
                     "近 1 年": 240,
-                    "全部 (近 3 年)": len(df_recent)
+                    f"全部 (近 {len(df_recent) // 240} 年)": len(df_recent)
                 }
 
                 selected_window = st.radio(
                     "🎯 視野快速對焦 (修正 Y 軸壓縮)：",
                     options=list(window_map.keys()),
-                    index=3,
+                    index=0,
                     horizontal=True
                 )
 
@@ -49,6 +49,9 @@ def render_chart():
                 visible_df = df_recent.iloc[-lookback_days:]
                 initial_start_date = visible_df.index[0]
                 end_date = visible_df.index[-1]
+
+                # 這樣可以確保最後一根 K 線右側有留白，不被軸線或捲軸遮住
+                padded_end_date = end_date + pd.Timedelta(days=1)
 
                 fig = go.Figure()
 
@@ -94,7 +97,7 @@ def render_chart():
 
                 # 計算資料的絕對邊界 (給予前後各 2 天的緩衝)
                 min_date = df_recent.index.min() - pd.Timedelta(days=2)
-                max_date = df_recent.index.max() + pd.Timedelta(days=2)
+                max_date = df_recent.index.max() + pd.Timedelta(days=3)
 
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=10, b=0),
@@ -105,7 +108,7 @@ def render_chart():
                     dragmode='pan',
                     xaxis=dict(
                         rangebreaks=[dict(values=missing_dates_str)],
-                        range=[initial_start_date, end_date],
+                        range=[initial_start_date, padded_end_date],
                         showgrid=True,
                         gridcolor="rgba(200, 200, 200, 0.2)"
                     ),
