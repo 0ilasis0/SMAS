@@ -191,6 +191,7 @@ def run_market_comparison(lookahead: int, oos_days: int = 240):
         print(f"\n⚠️ 評估失敗: {e}")
 
 if __name__ == "__main__":
-    lookahead = 20
+    from ml.params import SessionConfig
+    lookahead = SessionConfig.lookahead
 
     run_market_comparison(lookahead=lookahead)

@@ -164,8 +164,9 @@ def run_market_optimization(oos_days: int, lookahead: int, target_total_trials: 
             print(f"    {k}: {v:.4f}" if isinstance(v, float) else f"    {k}: {v}")
 
 if __name__ == "__main__":
+    from ml.params import SessionConfig
+    lookahead = SessionConfig.lookahead
     oos_days = 240
-    lookahead = 20
     # 因為是大盤所以只跑 500 次
     target_total_trials = 500
     run_market_optimization(oos_days=oos_days, lookahead=lookahead, target_total_trials=target_total_trials)

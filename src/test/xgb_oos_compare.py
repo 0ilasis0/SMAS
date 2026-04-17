@@ -169,6 +169,9 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
     print(f"📁 詳細個股對照 CSV 已儲存至: {csv_path}")
 
 if __name__ == "__main__":
+    from ml.params import SessionConfig
+    lookahead = SessionConfig.lookahead
+
     test_tickers = [
         "2324.TW",
         "3481.TW", "0052.TW", "2481.TW",
@@ -176,5 +179,4 @@ if __name__ == "__main__":
         "3006.TW", "2301.TW", "4916.TW"
     ]
 
-    lookahead = 20 # 預測未來 20 天
     run_xgb_comparison(test_tickers=test_tickers, lookahead=lookahead)
