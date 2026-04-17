@@ -20,6 +20,13 @@ class EntryQualityCriteria:
     PROFIT_TARGET_ATR: float = 3.0    # 獲利觸發倍數 (MFE)
     STOP_LOSS_ATR: float = 1.5        # 停損容忍倍數 (MAE)
 
+@dataclass(frozen=True)
+class MarketRiskCriteria:
+    ''' 大盤防禦準則 (第三腦專用) '''
+    ATR_LOOKBACK: int = 14
+    # 未來 20 天跌幅超過 1.5 倍 ATR
+    CRASH_THRESHOLD_ATR: float = 1.5
+
 
 @dataclass(frozen=True)
 class IndicatorParams:

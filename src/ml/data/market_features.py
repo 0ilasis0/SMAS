@@ -4,7 +4,7 @@ import pandas as pd
 from data.const import StockCol
 from debug import dbg
 from ml.const import MarketFeatureCol
-from ml.params import IndicatorParams
+from ml.params import IndicatorParams, MarketRiskCriteria
 
 
 class MarketFeatureEngine:
@@ -12,9 +12,11 @@ class MarketFeatureEngine:
     大盤/總經大腦的特徵工程。
     專注於合成台股大盤 (^TWII) 與美股費半 (^SOX) 的趨勢指標，並標記崩盤風險。
     """
-    def __init__(self, lookahead: int, params: IndicatorParams = IndicatorParams()):
+    def __init__(self, lookahead: int, params: IndicatorParams = IndicatorParams(),
+                 risk_criteria: MarketRiskCriteria = MarketRiskCriteria()):
         self.lookahead = lookahead
         self.params = params
+        self.risk_criteria = risk_criteria
 
     def process_pipeline(self, df_market: pd.DataFrame, is_training: bool = True) -> pd.DataFrame:
         if df_market.empty: return pd.DataFrame()
@@ -81,14 +83,22 @@ class MarketFeatureEngine:
         # 4. 標籤：預測未來是否會有「大跌」 (Danger = 1)
         # ==========================================
         if is_training:
+            # 取得還原權值 (防止大盤除權息導致的假跌幅)
             adj_factor = data[ai_vision_col] / (data[StockCol.CLOSE] + 1e-9)
             adj_low = data[StockCol.LOW] * adj_factor
 
-            # 未來 lookahead 天內的最低點
+            # 未來 N 天內的最低點 (MAE)
             future_low_min = adj_low.rolling(window=self.lookahead, min_periods=1).min().shift(-self.lookahead)
 
-            # 如果未來 N 天內會跌破現在收盤價的 2.5%，標記為危險
-            danger_condition = future_low_min < (data[ai_vision_col] * 0.975)
+            # 計算大盤專屬的動態停損線
+            # 我們可以直接利用前面已經算好的 true_range
+            atr = true_range.rolling(window=self.risk_criteria.ATR_LOOKBACK).mean()
+
+            # 門檻：跌破 [目前收盤價 - (1.5倍大盤ATR)]
+            danger_price_threshold = data[ai_vision_col] - (atr * self.risk_criteria.CRASH_THRESHOLD_ATR)
+
+            # 判定危險：只要未來最低點跌破這個動態門檻，標記為 Danger (1)
+            danger_condition = future_low_min < danger_price_threshold
 
             data[MarketFeatureCol.TARGET_DANGER] = danger_condition.astype('Int64')
             data.loc[future_low_min.isna(), MarketFeatureCol.TARGET_DANGER] = pd.NA

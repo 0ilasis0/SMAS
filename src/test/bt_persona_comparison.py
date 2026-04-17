@@ -131,13 +131,6 @@ if __name__ == "__main__":
     #     "2603.TW", "2409.TW", "2881.TW", "3231.TW"
     # ]
 
-    # test_tickers = [2313
-    #     ".TW", ".TW","3006.TW", ".TW",
-    #     "3481.TW", "9958.TW", ".TW",
-    #     ".TW", ".TW", "2454.TW", "1519.TW" "2337.TW",
-    #     ".TW", ".TW", ".TW", "2388.TW",
-    #     "2603.TW", "2409.TW", "2881.TW", "3231.TW"
-    # ]
     Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
     # Persona = [TradingPersona.CONSERVATIVE]
 
