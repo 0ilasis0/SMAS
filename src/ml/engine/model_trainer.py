@@ -103,8 +103,17 @@ class ModelTrainer:
         # ================= 第三腦：Market Regime =================
         dbg.log("\n--- [訓練階段] 第三腦：Market Regime ---")
         market_path = paths[ModelCol.MARKET]
-        if not Path(market_path).exists():
-            dbg.log(f"未發現 OOS={oos_days} 的大盤防禦模型，開始進行全局訓練...")
+
+        # 檢查大盤模型是否存在，且是否為「今天」訓練的
+        is_market_trained_today = False
+        market_path_obj = Path(market_path)
+        if market_path_obj.exists():
+            mtime = datetime.fromtimestamp(market_path_obj.stat().st_mtime).date()
+            if mtime == datetime.now().date():
+                is_market_trained_today = True
+
+        if not is_market_trained_today:
+            dbg.log(f"未發現今日最新 (OOS={oos_days}) 的大盤防禦模型，開始進行全局訓練...")
             df_market_pure = self.engine.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value])
 
             if df_market_pure.empty:
@@ -121,7 +130,8 @@ class ModelTrainer:
             if save_models:
                 market_trainer.train_and_save_final_model(df_market_train, market_path)
         else:
-            dbg.log(f"大盤防禦模型 (OOS={oos_days}) 已存在，跳過重複訓練。")
+            # 現在只有真正是今天訓練的，才會印出這行跳過
+            dbg.log(f"大盤防禦模型 (OOS={oos_days}) 今日已訓練更新，跳過重複訓練。")
 
         # 清理 GPU 記憶體
         if torch.cuda.is_available(): torch.cuda.empty_cache()
