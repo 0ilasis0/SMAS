@@ -217,6 +217,20 @@ class IDSSController:
             bb.gemini_reasoning += hold_reason
             bb.last_trade_price = 0.0
 
+        # 洗盤風險評估指令
+        atr_ratio = prediction_result.get(FeatureCol.ATR_RATIO.value, 0.0)
+        trend_strength = prediction_result.get(FeatureCol.TREND_STRENGTH.value, 0.0)
+
+        # 條件：如果 AI 不看好 (勝率 < 51%) 且 波動率偏高 (每天震幅超過 3.5%)
+        if bb.prob_final < 0.51 and atr_ratio > 0.035:
+            warning_msg = (
+                f"\n\n🚨 **[總裁特級指令]** 目前個股真實波幅 (ATR Ratio) 高達 {atr_ratio:.2%}，"
+                f"且趨勢強度呈現不穩 ({trend_strength:.2f})，AI 綜合勝率偏低 ({bb.prob_final:.0%})。"
+                f"請你在戰報的開頭，以強烈的語氣加上一段『⚠️ 總裁警告』，明確告訴使用者："
+                f"『量化模型偵測到該股目前處於高波動的洗盤階段。由於未來極易觸發停損機制（接刀子風險），AI 已主動下修買進評分。強烈建議目前以保護資金為主，空手觀望，等待波動率收斂且底打好後再行評估。』"
+            )
+            bb.gemini_reasoning += warning_msg
+
         if should_run_llm:
             dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
             bb.oracle = self.engine.oracle

@@ -118,19 +118,26 @@ def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: in
 if __name__ == "__main__":
     initial_cash = 2_000_000
 
-    # test_tickers = [
-    #     "2324.TW",
-    #     "3481.TW", "0052.TW", "2481.TW",
-    #     "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-    #     "3006.TW", "2301.TW", "4916.TW", "3563.TW"
-    # ]
     test_tickers = [
-        "2330.TW", "2409.TW", "2388.TW", "2324.TW", "0050.TW",
-        "3481.TW", "0052.TW", "2481.TW", "2603.TW", "2881.TW",
-        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-        "3006.TW", "2301.TW", "4916.TW", "2317.TW", "3563.TW"
+        "0052.TW", "2324.TW","3006.TW", "2301.TW",
+        "3481.TW", "9958.TW", "2344.TW",
+        "2382.TW", "2377.TW", "2454.TW", "1519.TW" "2337.TW",
     ]
+    # test_tickers = [
+    #     "0052.TW", "2324.TW","3006.TW", "2301.TW",
+    #     "3481.TW", "9958.TW", "2344.TW",
+    #     "2382.TW", "2377.TW", "2454.TW", "1519.TW" "2337.TW",
+    #     "2330.TW", "0050.TW", "2317.TW", "2388.TW",
+    #     "2603.TW", "2409.TW", "2881.TW", "3231.TW"
+    # ]
 
+    # test_tickers = [2313
+    #     ".TW", ".TW","3006.TW", ".TW",
+    #     "3481.TW", "9958.TW", ".TW",
+    #     ".TW", ".TW", "2454.TW", "1519.TW" "2337.TW",
+    #     ".TW", ".TW", ".TW", "2388.TW",
+    #     "2603.TW", "2409.TW", "2881.TW", "3231.TW"
+    # ]
     Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
     # Persona = [TradingPersona.CONSERVATIVE]
 

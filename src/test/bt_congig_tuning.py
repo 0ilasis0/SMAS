@@ -285,8 +285,8 @@ if __name__ == "__main__":
     initial_cash: int = 2_000_000
 
     test_tickers = [
-        "2330.TW", "0050.TW", "2603.TW", "2317.TW",
-        "2881.TW", "2409.TW", "2388.TW"
+        "2330.TW", "0050.TW", "2317.TW", "2388.TW",
+        "2603.TW", "2409.TW", "2881.TW", "3231.TW"
     ]
 
     run_optimization(

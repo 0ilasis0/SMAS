@@ -5,7 +5,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from data.const import StockCol
 from debug import dbg
 from ml.const import FeatureCol
-from ml.params import DLHyperParams, IndicatorParams
+from ml.params import DLHyperParams, EntryQualityCriteria, IndicatorParams
 
 
 class DLFeatureEngine:
@@ -16,10 +16,12 @@ class DLFeatureEngine:
     def __init__(
             self,
             lookahead: int,
-            time_steps: int = DLHyperParams.TIME_STEPS
+            time_steps: int = DLHyperParams.TIME_STEPS,
+            entry_criteria: EntryQualityCriteria = EntryQualityCriteria()
         ):
         self.lookahead = lookahead
         self.time_steps = time_steps
+        self.entry_criteria = entry_criteria
         self.max_warmup = 19
 
     def process_pipeline(self, df: pd.DataFrame, is_training: bool = True):
@@ -45,20 +47,14 @@ class DLFeatureEngine:
         new_features = {}
         dl_features = []
 
-        # 基礎 K 線變化 (對數報酬率)
         for col in target_cols:
             feat_name = f"{col.value}_log_chg"
-
             if col == StockCol.VOLUME:
-                # 成交量不需要還原
                 new_features[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
-
             else:
                 adj_price = data[col] * adj_factor if col != StockCol.ADJ_CLOSE else data[col]
                 prev_adj_price = data[col].shift(1) * adj_factor.shift(1) if col != StockCol.ADJ_CLOSE else data[col].shift(1)
-
                 new_features[feat_name] = np.log(adj_price / (prev_adj_price + 1e-9))
-
             dl_features.append(feat_name)
 
         ai_vision_col = str(StockCol.ADJ_CLOSE)
@@ -82,28 +78,51 @@ class DLFeatureEngine:
             dbg.war("扣除暖機期後，資料量不足以建立滑動視窗。")
             return None, None, None
 
-        # 直接使用未縮放的原始特徵建立滑動視窗
         raw_features = data[dl_features].values
-
-        # 建立滑動視窗 (batch, features, time_steps)
         X = sliding_window_view(raw_features, window_shape=self.time_steps, axis=0)
-        # 轉置給 PyTorch LSTM (batch, time_steps, features)
         X = np.transpose(X, (0, 2, 1))
 
         aligned_index = data.index[self.time_steps - 1:]
 
         if is_training:
+            # 1. 還原權值避免高低點判斷失真
             current_adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
             adj_high = data[StockCol.HIGH] * current_adj_factor
+            adj_low = data[StockCol.LOW] * current_adj_factor
 
-            future_high_max = adj_high.rolling(window=self.lookahead, min_periods=1).max().shift(-self.lookahead)
-            # 判斷未來 N 天內是否上漲超過 2.5%
-            target_condition = future_high_max > (data[ai_vision_col] * 1.025)
+            # 2. 計算真實波幅 ATR
+            high_low = adj_high - adj_low
+            high_close = (adj_high - data[ai_vision_col].shift()).abs()
+            low_close = (adj_low - data[ai_vision_col].shift()).abs()
+            true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
+            atr = true_range.rolling(window=self.entry_criteria.ATR_LOOKBACK).mean()
+
+            # 3. 動態設定目標與停損價位
+            target_profit_price = data[ai_vision_col] + (atr * self.entry_criteria.PROFIT_TARGET_ATR)
+            stop_loss_price = data[ai_vision_col] - (atr * self.entry_criteria.STOP_LOSS_ATR)
+
+            hit_target_day = pd.Series(np.inf, index=data.index)
+            hit_stop_day = pd.Series(np.inf, index=data.index)
+
+            # 4. 實戰時間迴圈模擬器
+            for i in range(1, self.lookahead + 1):
+                future_high = adj_high.shift(-i)
+                future_low = adj_low.shift(-i)
+
+                target_mask = (future_high >= target_profit_price) & (hit_target_day == np.inf)
+                hit_target_day.loc[target_mask] = i
+
+                stop_mask = (future_low <= stop_loss_price) & (hit_stop_day == np.inf)
+                hit_stop_day.loc[stop_mask] = i
+
+            # 5. 終極標籤判定：有碰到目標，且比停損早碰到
+            target_condition = (hit_target_day != np.inf) & (hit_target_day < hit_stop_day)
 
             y_all = target_condition.astype(int).values
             y = y_all[self.time_steps - 1:]
 
-            future_isna = future_high_max.isna().values[self.time_steps - 1:]
+            # 確保未來天數足夠才納入訓練
+            future_isna = data[ai_vision_col].shift(-self.lookahead).isna().values[self.time_steps - 1:]
             valid_mask = ~future_isna
 
             X = X[valid_mask]
@@ -116,5 +135,4 @@ class DLFeatureEngine:
         y_shape_str = str(y.shape) if y is not None else "None"
         dbg.log(f"時序矩陣建立完成！ X 原始形狀: {X.shape}, y 形狀: {y_shape_str}")
 
-        # 回傳原始矩陣，交由 Trainer 處理縮放
         return X, y, valid_index

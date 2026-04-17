@@ -13,6 +13,13 @@ class SessionConfig:
     # 除非重新尋找模型超參數，否則不可調整 lookahead
     lookahead: int = 20
 
+@dataclass(frozen=True)
+class EntryQualityCriteria:
+    ''' 進場品質準則 '''
+    ATR_LOOKBACK: int = 14            # 波動率參考週期
+    PROFIT_TARGET_ATR: float = 3.0    # 獲利觸發倍數 (MFE)
+    STOP_LOSS_ATR: float = 1.5        # 停損容忍倍數 (MAE)
+
 
 @dataclass(frozen=True)
 class IndicatorParams:

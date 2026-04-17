@@ -163,7 +163,9 @@ class ModelPredictor:
             QuoteCol.REAL_LATEST_PRICE.value: real_latest_price,
             QuoteCol.AVG_5D_VOL.value: float(df_recent[StockCol.VOLUME].tail(5).mean()) if not pd.isna(df_recent[StockCol.VOLUME].tail(5).mean()) else 0.0,
             FeatureCol.BIAS_MONTH.value: float(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) else 0.0,
-            FeatureCol.RETURN_5D.value: float(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) else 0.0
+            FeatureCol.RETURN_5D.value: float(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) else 0.0,
+            FeatureCol.ATR_RATIO.value: float(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) else 0.0,
+            FeatureCol.TREND_STRENGTH.value: float(df_xgb_clean[FeatureCol.TREND_STRENGTH].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.TREND_STRENGTH].iloc[-1]) else 0.0
         }
 
     def generate_backtest_data(self) -> pd.DataFrame:
