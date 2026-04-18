@@ -57,8 +57,8 @@ class StrategyConfig:
     block_sell_sentiment_score: int = 8
 
     '''
-    智慧定價與系統防禦參數 (Smart Pricing & Risk)
-    大部分不會調整，且不同個性應該共用(有用空格分開前的為可調整)
+    智慧定價與系統防禦參數
+    不需要進行調整(optuna)，且大部分參數不同個性應該共用
     '''
 
     # --- 1. 總經與大盤連動 (Macro & System) ---
