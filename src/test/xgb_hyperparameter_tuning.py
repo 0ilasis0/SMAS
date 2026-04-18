@@ -37,14 +37,14 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
         'early_stopping_rounds': EARLY_STOP,
 
         # 配合嚴格 ATR 標籤，放寬一點深度，並加強雜訊過濾
-        'max_depth': trial.suggest_int('max_depth', 3, 8),
-        'min_child_weight': trial.suggest_int('min_child_weight', 1, 15),
-        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.1, log=True),
+        'max_depth': trial.suggest_int('max_depth', 3, 6),
+        'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
+        'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.2, log=True),
         'subsample': trial.suggest_float('subsample', 0.5, 0.9),
         'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 0.9),
-        'gamma': trial.suggest_float('gamma', 0.0, 5.0),
-        'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 10.0, log=True),
-        'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 10.0, log=True),
+        'gamma': trial.suggest_float('gamma', 1.0, 4.0),
+        'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 5.0, log=True),
+        'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 5.0, log=True),
     }
 
     tscv = TimeSeriesSplit(n_splits=N_SPLITS)
@@ -215,6 +215,6 @@ if __name__ == "__main__":
     ]
 
     # 強烈建議：對於 XGBoost 來說 300 次已經逼近全域最佳解了
-    target_total_trials = 500
+    target_total_trials = 1200
 
     run_optimization(target_total_trials=target_total_trials, test_tickers=test_tickers)

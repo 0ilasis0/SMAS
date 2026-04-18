@@ -10,7 +10,6 @@ from debug import dbg
 from ml.const import FeatureCol
 from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
-# ================= 引入您的實際生產模組 =================
 from path import PathConfig
 
 dbg.toggle()
@@ -27,31 +26,38 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
         'eval_metric': 'auc',
         'random_state': 42,
         'n_jobs': 1,
-        'n_estimators': 100,
 
-        'max_depth': 4,
-        'learning_rate': 0.05,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
+        'n_estimators': 100,
+        'max_depth': 3,
+        'min_child_weight': 3,
+        'learning_rate': 0.0992,
+        'subsample': 0.6505,
+        'colsample_bytree': 0.7472,
+        'gamma': 3.450,
+        'reg_alpha': 2.2545,
+        'reg_lambda': 0.8625
     }
 
-    # 🟢 實驗組：請將 Optuna 尋優跑出來的最強參數貼在這邊
+    # 🟢 實驗組：注入 Optuna 尋優結果與動態早停機制
     OPTIMIZED_PARAMS = {
         'objective': 'binary:logistic',
         'eval_metric': 'auc',
         'random_state': 42,
         'n_jobs': 1,
-        'n_estimators': 100,
 
-        # --- ⬇️ 請替換為您的 Optuna 結果 ⬇️ ---
+        # 放大樹量並加入早停機制，讓 Eval Set 發揮作用
+        'n_estimators': 100,
+        'early_stopping_rounds': 50,
+
+        # --- ⬇️ 注入 Optuna 的最新參數 ⬇️ ---
         'max_depth': 3,
-        'min_child_weight': 11,
-        'learning_rate': 0.0992,
-        'subsample': 0.6505,
-        'colsample_bytree': 0.5393,
-        'gamma': 3.4522,
-        'reg_alpha': 2.2545,
-        'reg_lambda': 0.0779
+        'min_child_weight': 4,
+        'learning_rate': 0.1239,
+        'subsample': 0.6152,
+        'colsample_bytree':0.8377,
+        'gamma': 3.9337,
+        'reg_alpha': 0.0108,
+        'reg_lambda': 0.1040
     }
 
     report_data = []
@@ -71,11 +77,12 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
             df_with_features = xgb_engine.process_pipeline(df_raw, lookahead=lookahead, is_training=True)
             df_clean = df_with_features.dropna(subset=[FeatureCol.TARGET]).copy()
 
-            # 訓練集只取到倒數 (oos_days + lookahead) 天
+            # 訓練集只取到倒數 (oos_days + lookahead) 天，防止未來函數洩漏
             df_train_full = df_clean.iloc[: -(oos_days + lookahead)]
             df_oos = df_clean.iloc[-oos_days:]
 
-            exclude_cols = [FeatureCol.TARGET, "date", "ticker", "Date", StockCol.CLOSE.value, StockCol.VOLUME.value, StockCol.OPEN.value, StockCol.HIGH.value, StockCol.LOW.value]
+            exclude_cols = [FeatureCol.TARGET.value, "date", "ticker", "Date", StockCol.CLOSE.value, StockCol.VOLUME.value, StockCol.OPEN.value, StockCol.HIGH.value, StockCol.LOW.value]
+            # 確保使用白名單萃取特徵，避免抓到無關的文字欄位
             features = [c for c in df_train_full.columns if c not in exclude_cols]
 
             X_train_full, y_train_full = df_train_full[features], df_train_full[FeatureCol.TARGET].astype(int)
@@ -100,16 +107,14 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
             prec_base = precision_score(y_oos, preds_label_base, zero_division=0)
 
             # --- C. 訓練與評估：Optimized (調整後) ---
-
             # 從訓練集內部再切出最後 20% 當作 Valid Set 供 Early Stopping 使用
             val_split_idx = int(len(X_train_full) * 0.8)
             X_tr, y_tr = X_train_full.iloc[:val_split_idx], y_train_full.iloc[:val_split_idx]
             X_val, y_val = X_train_full.iloc[val_split_idx:], y_train_full.iloc[val_split_idx:]
 
-            # 直接使用含有 early_stopping_rounds 與 n_estimators=1000 的 OPTIMIZED_PARAMS
             model_opt = xgb.XGBClassifier(**OPTIMIZED_PARAMS, scale_pos_weight=scale_pos_weight)
 
-            # 使用訓練集內部的 X_val 決定最佳樹量
+            # 🌟 使用訓練集內部的 X_val 決定最佳樹量 (Early Stopping 啟動)
             model_opt.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
 
             # 以最佳樹量對盲測集 (X_oos) 進行預測
@@ -120,7 +125,7 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
             acc_opt = accuracy_score(y_oos, preds_label_opt)
             prec_opt = precision_score(y_oos, preds_label_opt, zero_division=0)
 
-            # --- D. 寫入報表 (已修正重複寫入問題) ---
+            # --- D. 寫入報表 ---
             report_data.append({
                 "Ticker": ticker,
                 "AUC_Before": round(auc_base, 4),
@@ -142,8 +147,6 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
         return
 
     df_report = pd.DataFrame(report_data)
-
-    # 依照 AUC 進步幅度排序
     df_report = df_report.sort_values(by="AUC_Diff", ascending=False)
 
     PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
@@ -169,14 +172,23 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
     print(f"📁 詳細個股對照 CSV 已儲存至: {csv_path}")
 
 if __name__ == "__main__":
-    from ml.params import SessionConfig
-    lookahead = SessionConfig.lookahead
+    try:
+        from ml.params import SessionConfig
+        lookahead = SessionConfig.lookahead
+    except ImportError:
+        lookahead = 20  # 預設保護機制
 
+    # test_tickers = [
+    #     "2324.TW", "3481.TW", "0052.TW", "2481.TW",
+    #     "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
+    #     "3006.TW", "2301.TW", "4916.TW"
+    # ]
     test_tickers = [
-        "2324.TW",
-        "3481.TW", "0052.TW", "2481.TW",
-        "2344.TW", "4919.TW", "3231.TW", "2455.TW", "9958.TW",
-        "3006.TW", "2301.TW", "4916.TW"
+        "0052.TW", "2324.TW","3006.TW", "2301.TW",
+        "3481.TW", "9958.TW", "2344.TW",
+        "2382.TW", "2377.TW", "2454.TW", "1519.TW" "2337.TW",
+        "2330.TW", "0050.TW", "2317.TW", "2388.TW",
+        "2603.TW", "2409.TW", "2881.TW", "3231.TW"
     ]
 
     run_xgb_comparison(test_tickers=test_tickers, lookahead=lookahead)
