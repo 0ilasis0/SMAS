@@ -1,5 +1,8 @@
 import gc
+import os
 import random
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -25,7 +28,6 @@ def seed_everything(seed=42):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-    # 若有使用 MacOS MPS
     if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
 
@@ -46,119 +48,127 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     # 請替換為您的 Optuna 結果
     OPTIMIZED_PARAMS = {
         'CNN_OUT_CHANNELS': 32,
-        'LSTM_HIDDEN': 64,
-        'LEARNING_RATE': 0.0015,
-        'DROPOUT': 0.35,
+        'LSTM_HIDDEN': 16,
+        'LEARNING_RATE': 0.004986,
+        'DROPOUT': 0.499119,
         'BATCH_SIZE': 32,
         'EPOCHS': 50
     }
 
-    def apply_dl_params(params):
-        DLHyperParams.CNN_OUT_CHANNELS = params['CNN_OUT_CHANNELS']
-        DLHyperParams.LSTM_HIDDEN = params['LSTM_HIDDEN']
-        DLHyperParams.LEARNING_RATE = params['LEARNING_RATE']
-        DLHyperParams.DROPOUT = params['DROPOUT']
-        DLHyperParams.BATCH_SIZE = params['BATCH_SIZE']
-        DLHyperParams.EPOCHS = params['EPOCHS']
-
     report_data = []
     print(f"⏳ 開始針對 {len(test_tickers)} 檔個股進行 DL 訓練與盲測比較...\n")
 
-    for ticker in tqdm(test_tickers, desc="評估進度"):
-        try:
-            # 每次訓練一檔新股票前，重置種子，保證對照組與實驗組起點相同
-            seed_everything(42)
+    # 建立一個暫存資料夾來存放訓練過程產生的權重檔，跑完就會自動刪除
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_model_path_base = Path(temp_dir) / "temp_dl_model_base.pth"
+        temp_model_path_opt = Path(temp_dir) / "temp_dl_model_opt.pth"
 
-            engine = QuantAIEngine(ticker=ticker, oos_days=oos_days,
-                                   dl_model_type=DLModelType.HYBRID, rnn_type=RNNType.LSTM)
-            macro_tickers = MacroTicker.get_all_tickers()
+        for ticker in tqdm(test_tickers, desc="評估進度"):
+            try:
+                seed_everything(42)
 
-            # 這裡拿到的 df_raw 包含了訓練 + OOS 的所有歷史資料
-            df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
+                engine = QuantAIEngine(ticker=ticker, oos_days=oos_days,
+                                       dl_model_type=DLModelType.HYBRID, rnn_type=RNNType.LSTM)
+                macro_tickers = MacroTicker.get_all_tickers()
+                df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
 
-            if df_raw.empty or len(df_raw) < (oos_days + 100):
-                continue
+                if df_raw.empty or len(df_raw) < (oos_days + 100):
+                    continue
 
-            # 防堵 Scaler 洩漏！先切 DataFrame，再送進特徵引擎
-            df_train_raw = df_raw.iloc[:-oos_days]
+                dl_engine = DLFeatureEngine(engine.config.lookahead)
+                X_all, y_all, _ = dl_engine.process_pipeline(df_raw, is_training=True)
 
-            # 加入熱機緩衝 (Warm-up Buffer)
-            # 多切 60 天的資料給 OOS，讓均線跟 LSTM 的 TIME_STEPS 有歷史資料可以算
-            buffer_days = 60
-            df_oos_raw_with_buffer = df_raw.iloc[-(oos_days + buffer_days):]
+                if X_all is None or y_all is None or len(X_all) < (oos_days + 50):
+                    continue
 
-            # 訓練集處理 (Scaler 會 fit 訓練集)
-            dl_engine_train = DLFeatureEngine(engine.config.lookahead)
-            X_train, y_train, _ = dl_engine_train.process_pipeline(df_train_raw, is_training=True)
+                # ==========================================
+                # 切割資料
+                # ==========================================
+                train_size = len(X_all) - oos_days
+                X_train = X_all[:train_size]
+                y_train = y_all[:train_size]
 
-            # OOS 處理 (使用帶有緩衝區的資料)
-            X_oos_full, y_oos_full, _ = dl_engine_train.process_pipeline(df_oos_raw_with_buffer, is_training=False)
+                X_oos = X_all[train_size:]
+                y_oos = y_all[train_size:]
+                num_features = X_all.shape[2]
 
-            if X_train is None or X_oos_full is None:
-                continue
+                if len(np.unique(y_oos)) < 2:
+                    continue
 
-            # 精準切掉熱機緩衝，只保留真正的 OOS 天數
-            # 確保我們只評估模型在真正盲測期間的表現
-            X_oos = X_oos_full[-oos_days:]
-            y_oos = y_oos_full[-oos_days:]
+                # ==========================================
+                # 預測輔助函數 (因為 DLTrainer 沒有寫 predict，我們自己做)
+                # ==========================================
+                def predict_oos(trainer: DLTrainer, model_path: Path, X_raw: np.ndarray, final_scaler) -> np.ndarray:
+                    # 1. 將 OOS 資料進行 Scaler 轉換 (使用訓練集的 Scaler)
+                    X_2d = X_raw.reshape(-1, num_features)
+                    X_scaled = final_scaler.transform(X_2d).reshape(X_raw.shape)
 
-            if len(np.unique(y_oos)) < 2:
-                continue
+                    # 2. 轉換為 Tensor
+                    X_tensor = torch.tensor(X_scaled, dtype=torch.float32).to(trainer.device)
 
-            # ==========================================
-            # A. 測試對照組 (Baseline)
-            # ==========================================
-            seed_everything(42) # 確保 Baseline 模型初始化狀態
-            apply_dl_params(BASELINE_PARAMS)
-            trainer_base = DLTrainer(ticker, DLModelType.HYBRID, RNNType.LSTM)
+                    # 3. 載入模型
+                    model = trainer.load_inference_model(num_features=num_features, model_path=model_path)
+                    if model is None: return np.zeros(len(X_raw))
 
-            # 假設您的 trainer 有支援驗證集早停，請不要傳入 X_oos！這裡必須盲測到底
-            trainer_base.train(X_train, y_train)
-            preds_base = trainer_base.predict(X_oos)
+                    # 4. 進行推論
+                    with torch.no_grad():
+                        logits = model(X_tensor)
+                        preds = torch.sigmoid(logits).cpu().numpy().flatten()
+                    return preds
 
-            pr_auc_base = average_precision_score(y_oos, preds_base)
-            threshold_base = np.percentile(preds_base, 80)
-            labels_base = (preds_base >= threshold_base).astype(int)
-            prec_base = precision_score(y_oos, labels_base, zero_division=0)
+                # ==========================================
+                # A. 測試對照組 (Baseline)
+                # ==========================================
+                seed_everything(42)
+                trainer_base = DLTrainer(ticker, DLModelType.HYBRID, RNNType.LSTM, custom_hp=BASELINE_PARAMS)
 
-            # ==========================================
-            # B. 測試實驗組 (Optimized)
-            # ==========================================
-            seed_everything(42) # 確保 Optimized 模型初始化狀態相同
-            apply_dl_params(OPTIMIZED_PARAMS)
-            trainer_opt = DLTrainer(ticker, DLModelType.HYBRID, RNNType.LSTM)
+                # 呼叫現有的 API：訓練並拿到訓練集的 Scaler
+                scaler_base = trainer_base.train_and_save_final_model(X_train, y_train, temp_model_path_base)
 
-            trainer_opt.train(X_train, y_train)
-            preds_opt = trainer_opt.predict(X_oos)
+                # 執行預測
+                preds_base = predict_oos(trainer_base, temp_model_path_base, X_oos, scaler_base)
 
-            pr_auc_opt = average_precision_score(y_oos, preds_opt)
-            threshold_opt = np.percentile(preds_opt, 80)
-            labels_opt = (preds_opt >= threshold_opt).astype(int)
-            prec_opt = precision_score(y_oos, labels_opt, zero_division=0)
+                pr_auc_base = average_precision_score(y_oos, preds_base)
+                threshold_base = np.percentile(preds_base, 80)
+                labels_base = (preds_base >= threshold_base).astype(int)
+                prec_base = precision_score(y_oos, labels_base, zero_division=0)
 
-            # ==========================================
-            # C. 寫入報表
-            # ==========================================
-            report_data.append({
-                "Ticker": ticker,
-                "PR_AUC_Before": round(pr_auc_base, 4),
-                "PR_AUC_After": round(pr_auc_opt, 4),
-                "PR_AUC_Diff": round(pr_auc_opt - pr_auc_base, 4),
-                "Top20_Prec_Before(%)": round(prec_base * 100, 2),
-                "Top20_Prec_After(%)": round(prec_opt * 100, 2),
-                "Top20_Prec_Diff(%)": round((prec_opt - prec_base) * 100, 2)
-            })
+                # ==========================================
+                # B. 測試實驗組 (Optimized)
+                # ==========================================
+                seed_everything(42)
+                trainer_opt = DLTrainer(ticker, DLModelType.HYBRID, RNNType.LSTM, custom_hp=OPTIMIZED_PARAMS)
 
-            # 強制記憶體回收，避免連續訓練導致 GPU 崩潰
-            del trainer_base, trainer_opt, X_train, y_train, X_oos, y_oos
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-                torch.mps.empty_cache()
+                scaler_opt = trainer_opt.train_and_save_final_model(X_train, y_train, temp_model_path_opt)
+                preds_opt = predict_oos(trainer_opt, temp_model_path_opt, X_oos, scaler_opt)
 
-        except Exception as e:
-            print(f"\n⚠️ {ticker} 評估失敗: {e}")
+                pr_auc_opt = average_precision_score(y_oos, preds_opt)
+                threshold_opt = np.percentile(preds_opt, 80)
+                labels_opt = (preds_opt >= threshold_opt).astype(int)
+                prec_opt = precision_score(y_oos, labels_opt, zero_division=0)
+
+                # ==========================================
+                # C. 寫入報表
+                # ==========================================
+                report_data.append({
+                    "Ticker": ticker,
+                    "PR_AUC_Before": round(pr_auc_base, 4),
+                    "PR_AUC_After": round(pr_auc_opt, 4),
+                    "PR_AUC_Diff": round(pr_auc_opt - pr_auc_base, 4),
+                    "Top20_Prec_Before(%)": round(prec_base * 100, 2),
+                    "Top20_Prec_After(%)": round(prec_opt * 100, 2),
+                    "Top20_Prec_Diff(%)": round((prec_opt - prec_base) * 100, 2)
+                })
+
+                del trainer_base, trainer_opt, X_train, y_train, X_oos, y_oos
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                    torch.mps.empty_cache()
+
+            except Exception as e:
+                print(f"\n⚠️ {ticker} 評估失敗: {e}")
 
     # ================= 產出 CSV 與總結 =================
     if not report_data:

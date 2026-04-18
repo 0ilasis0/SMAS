@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -285,7 +286,6 @@ class DataManager:
         計算距離下一次法說會還有幾天。
         若無即將到來的法說會，回傳 None。
         """
-        from datetime import datetime  # 確保有 import
         query = f"""
             SELECT earnings_date
             FROM earnings_calendar

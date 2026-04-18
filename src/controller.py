@@ -131,10 +131,10 @@ class IDSSController:
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
 
-        # 法說會避險 (覆蓋行為樹的決策)
+        # 法說會避險
         days_to_earnings = self.engine.db.get_days_to_next_earnings(self.ticker, current_date)
 
-        if action_str == TradeDecision.BUY.value and days_to_earnings is not None and 0 <= days_to_earnings <= 3:
+        if action_str == TradeDecision.BUY.value and days_to_earnings is not None and 0 <= days_to_earnings <= strategy_config.earnings_shield_days:
             action_str = TradeDecision.HOLD.value
             bb.action_decision = TradeDecision.HOLD
             bb.gemini_reasoning += f"\n\n🚨 **[事件避險]** 距離本檔股票的法說會/財報公佈僅剩 **{days_to_earnings} 天**。為防範財報地雷引發的無預警跳空大跌，系統已強制撤銷買進決策，改為【觀望】。君子不立危牆之下。"
@@ -160,55 +160,61 @@ class IDSSController:
                 sox_return = (sox_close_last - sox_close_prev) / sox_close_prev
 
             is_tech_stock = self.ticker.startswith(('23', '24', '3', '5', '6', '8'))
-            beta = 0.4 if is_tech_stock else 0.1
+            beta = strategy_config.beta_tech if is_tech_stock else strategy_config.beta_non_tech
             raw_expected_open = current_price * (1 + (sox_return * beta))
 
             market_safe = bb.prob_market_safe
             bias_20 = bb.bias_20
-            limit_up = self._get_tw_tick_price(current_price * 1.099)
-            limit_down = self._get_tw_tick_price(current_price * 0.901)
+
+            limit_up = self._get_tw_tick_price(current_price * strategy_config.tw_limit_up_ratio)
+            limit_down = self._get_tw_tick_price(current_price * strategy_config.tw_limit_down_ratio)
 
             raw_expected_open = MathTool.clamp(raw_expected_open, limit_down, limit_up)
             expected_open_price = self._get_tw_tick_price(raw_expected_open)
 
             pricing_prefix = f"\n\n💡 **[智慧定價]** "
-            if abs(sox_return) > 0.015:
+            if abs(sox_return) > strategy_config.sox_surge_threshold:
                 gap_dir = "大漲" if sox_return > 0 else "重挫"
                 pricing_prefix += f"昨夜費半{gap_dir} {sox_return:.1%}，預期今日開盤價位移至 {expected_open_price:.2f}。 "
 
             if action_str == TradeDecision.BUY.value:
-                if market_safe < 0.35:
-                    raw_price = expected_open_price - (1.2 * atr)
+                if market_safe < strategy_config.market_danger_threshold:
+                    raw_price = expected_open_price - (strategy_config.buy_panic_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"大盤系統性風險高 (安全度 {market_safe:.0%})，即便個股有買進訊號，仍強烈建議掛「大幅拉回之恐慌價」防禦性低接 (建議買價: {trade_price:.2f})。"
-                elif bb.prob_final >= 0.75 or (bb.prob_final >= 0.65 and bb.sentiment_score >= 8):
-                    raw_price = expected_open_price - (0.2 * atr)
+
+                elif bb.prob_final >= strategy_config.pricing_buy_extreme_prob or (bb.prob_final >= strategy_config.pricing_buy_strong_prob and bb.sentiment_score >= strategy_config.pricing_buy_sentiment_min):
+                    raw_price = expected_open_price - (strategy_config.buy_strong_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股勝率極高 ({bb.prob_final:.0%})。建議掛「預期開盤價之微幅拉回處」積極承接，避免錯失行情 (建議買價: {trade_price:.2f})。"
-                elif bias_20 < -0.06:
-                    raw_price = expected_open_price - (0.6 * atr)
+
+                elif bias_20 < strategy_config.buy_rebound_bias:
+                    raw_price = expected_open_price - (strategy_config.buy_rebound_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"具備跌深反彈契機 (月乖離 {bias_20:.1%})，建議掛「合理拉回價」等待盤中洗盤安全摸底 (建議買價: {trade_price:.2f})。"
                 else:
-                    raw_price = expected_open_price - (0.8 * atr)
+                    raw_price = expected_open_price - (strategy_config.buy_normal_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"屬常規震盪格局，建議耐心掛「偏低價」等待盤中自然拉回成交 (建議買價: {trade_price:.2f})。"
 
             elif action_str == TradeDecision.SELL.value:
-                if bb.prob_final <= 0.20 or market_safe < 0.3:
-                    raw_price = expected_open_price - (0.5 * atr)
+
+                if bb.prob_final <= strategy_config.pricing_sell_extreme_prob or market_safe < strategy_config.hold_weak_threshold:
+                    raw_price = expected_open_price - (strategy_config.sell_panic_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
-                    bb.gemini_reasoning += pricing_prefix + f"空頭動能強或大盤有崩跌風險，建議掛「低於預期開盤價 (折價 0.5ATR)」果斷出脫求現 (建議賣價: {trade_price:.2f})。"
-                elif bias_20 > 0.08:
-                    raw_price = expected_open_price + (0.8 * atr)
+                    bb.gemini_reasoning += pricing_prefix + f"空頭動能強或大盤有崩跌風險，建議掛「低於預期開盤價 (折價 {strategy_config.sell_panic_discount_atr}ATR)」果斷出脫求現 (建議賣價: {trade_price:.2f})。"
+
+                elif bias_20 > strategy_config.sell_overheated_bias:
+                    raw_price = expected_open_price + (strategy_config.sell_overheated_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"短線已嚴重超漲 (月乖離 {bias_20:.1%})，建議掛「偏高價」等待主力拉抬時停利給追價散戶 (建議賣價: {trade_price:.2f})。"
-                elif bb.prob_final >= 0.7:
-                    raw_price = expected_open_price + (0.6 * atr)
+
+                elif bb.prob_final >= strategy_config.pricing_sell_strong_prob:
+                    raw_price = expected_open_price + (strategy_config.sell_strong_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股依然強勢，建議掛「偏高價」等待盤中衝高時優雅出脫 (建議賣價: {trade_price:.2f})。"
                 else:
-                    raw_price = expected_open_price + (0.4 * atr)
+                    raw_price = expected_open_price + (strategy_config.sell_normal_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"趨勢轉弱，建議掛「微幅高於預期開盤」等待反彈時調節 (建議賣價: {trade_price:.2f})。"
 
@@ -217,17 +223,16 @@ class IDSSController:
         elif action_str == TradeDecision.HOLD.value:
             hold_reason = f"\n\n\n**[觀望判定]** "
 
-            # 優先判斷是不是被法說會護盾強制壓下來的
-            if days_to_earnings is not None and 0 <= days_to_earnings <= 3 and bb.action_decision == TradeDecision.HOLD:
+            if days_to_earnings is not None and 0 <= days_to_earnings <= strategy_config.earnings_shield_days and bb.action_decision == TradeDecision.HOLD:
                  hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率極高，仍強制退回空手觀望，防範財報地雷，確保資金絕對安全。"
-            elif bb.prob_market_safe < 0.4:
+            elif bb.prob_market_safe < strategy_config.hold_danger_threshold:
                 if current_position > 0: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
                 else: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
-            elif bb.prob_final <= 0.3 and current_position == 0:
+            elif bb.prob_final <= strategy_config.hold_weak_threshold and current_position == 0:
                 hold_reason += f"綜合技術面偏空 (勝率 {bb.prob_final:.0%})，具備下跌風險。因帳上無庫存，維持空手觀望。"
-            elif bb.prob_final < 0.6 and current_position == 0:
+            elif bb.prob_final < strategy_config.hold_neutral_threshold and current_position == 0:
                 hold_reason += f"個股動能不足 (勝率 {bb.prob_final:.0%})，處於盤整期，不具建倉優勢，建議保留現金實力。"
-            elif bb.prob_final >= 0.4 and current_position > 0:
+            elif bb.prob_final >= strategy_config.hold_wait_threshold and current_position > 0:
                 hold_reason += f"個股勝率適中 ({bb.prob_final:.0%})，趨勢未明，建議既有部位續抱觀察，靜待表態。"
             else:
                 hold_reason += f"動能訊號未達閥值 (勝率 {bb.prob_final:.0%})，建議維持現狀，避免耗損交易成本。"
@@ -235,11 +240,10 @@ class IDSSController:
             bb.gemini_reasoning += hold_reason
             bb.last_trade_price = 0.0
 
-        # 洗盤風險評估指令
         atr_ratio = prediction_result.get(FeatureCol.ATR_RATIO.value, 0.0)
         trend_strength = prediction_result.get(FeatureCol.TREND_STRENGTH.value, 0.0)
 
-        if bb.prob_final < 0.51 and atr_ratio > 0.035:
+        if bb.prob_final < strategy_config.wash_risk_win_rate and atr_ratio > strategy_config.wash_risk_atr_ratio:
             warning_msg = (
                 f"\n\n🚨 **[總裁特級指令]** 目前個股真實波幅 (ATR Ratio) 高達 {atr_ratio:.2%}，"
                 f"且趨勢強度呈現不穩 ({trend_strength:.2f})，AI 綜合勝率偏低 ({bb.prob_final:.0%})。"

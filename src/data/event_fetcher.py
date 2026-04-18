@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pandas as pd
@@ -17,8 +18,13 @@ class TWSEEventFetcher:
     EARNINGS_URL = "https://openapi.twse.com.tw/v1/company/investorConference"
 
     def __init__(self):
-        # 建立帶有自動重試機制的 Session
         self.session = requests.Session()
+
+        # 幫爬蟲戴上 Chrome 瀏覽器的面具，避免被證交所的防火牆擋下
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        })
+
         # 設定重試 3 次，遇到 500, 502, 503, 504 時自動退避重試
         retry_strategy = Retry(
             total=3,
@@ -56,9 +62,13 @@ class TWSEEventFetcher:
     def fetch_upcoming_dividends(self) -> pd.DataFrame:
         dbg.log("正在從 TWSE 抓取最新除權息預告數據...")
         try:
-            # 使用配置好的 session 發送請求
             resp = self.session.get(self.DIVIDEND_URL, timeout=10)
-            resp.raise_for_status() # 檢查 4xx/5xx 錯誤
+            resp.raise_for_status()
+
+            # 防呆，確認回傳的不是空字串或網頁檔
+            if not resp.text.strip() or "<html>" in resp.text.lower():
+                dbg.war("TWSE 除權息 API 回傳空白或網頁 (可能正在維護中)。")
+                return pd.DataFrame()
 
             data = resp.json()
             results = []
@@ -69,7 +79,6 @@ class TWSEEventFetcher:
                 results.append({
                     'ticker': f"{ticker}.TW",
                     'ex_date': self._parse_roc_date(item.get('Date', '')),
-                    # 🚀 升級：增強數值轉換的防呆，防範空字串轉換 float 報錯
                     'cash_dividend': float(item.get('CashDividend') or 0.0)
                 })
 
@@ -78,6 +87,9 @@ class TWSEEventFetcher:
                 df = df[df['ex_date'] != ""].drop_duplicates()
                 dbg.log(f"成功抓取 {len(df)} 筆即將到來的除權息事件。")
             return df
+        except json.JSONDecodeError:
+            dbg.war("TWSE 回傳資料格式錯誤 (非 JSON 格式)，可能是週末維護中。")
+            return pd.DataFrame()
         except Exception as e:
             dbg.error(f"除權息資料更新異常: {e}")
             return pd.DataFrame()
@@ -87,6 +99,10 @@ class TWSEEventFetcher:
         try:
             resp = self.session.get(self.EARNINGS_URL, timeout=10)
             resp.raise_for_status()
+
+            if not resp.text.strip() or "<html>" in resp.text.lower():
+                dbg.war("TWSE 法說會 API 回傳空白或網頁 (可能正在維護中)。")
+                return pd.DataFrame()
 
             data = resp.json()
             results = []
@@ -104,6 +120,9 @@ class TWSEEventFetcher:
                 df = df[df['earnings_date'] != ""].drop_duplicates()
                 dbg.log(f"成功抓取 {len(df)} 筆即將到來的法說會日期。")
             return df
+        except json.JSONDecodeError:
+            dbg.war("TWSE 回傳資料格式錯誤 (非 JSON 格式)，可能是週末維護中。")
+            return pd.DataFrame()
         except Exception as e:
             dbg.error(f"法說會資料更新異常: {e}")
             return pd.DataFrame()

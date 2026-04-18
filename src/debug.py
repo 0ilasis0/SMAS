@@ -19,7 +19,6 @@ class Debug:
         取得過濾後的呼叫堆疊路徑 (包含資料夾名稱，並過濾掉系統檔案)
         格式: game_main.py:24(run) -> logic/manager.py:159(get_data)
         """
-        # 取得當前工作目錄 (Project Root)
         project_root = os.getcwd()
 
         # 取得完整堆疊
@@ -44,15 +43,12 @@ class Debug:
             if (rel_path.startswith("..") or
                 "site-packages" in rel_path or
                 "pydevd" in rel_path or
-                "cli.py" in rel_path): # 針對你的案例過濾 cli.py
+                "cli.py" in rel_path):
 
                 # 一旦遇到系統層級的檔案，通常代表已經超出我們專案的範圍了
-                # 我們可以選擇跳過，或者如果希望從 main 截斷，就不再繼續往上找
                 continue
 
             # 組合顯示字串
-            # 格式： 資料夾/檔名:行號(函式名)
-            # 為了美觀，如果是 Windows 的反斜線 \ 可以換成 / (選用)
             display_path = rel_path.replace("\\", "/")
 
             lineno = frame_info.lineno
@@ -81,8 +77,6 @@ class Debug:
         # 如果有標籤 (例如變數名稱)，加在前面
         prefix = f" ({label})" if label else ""
 
-        # \033[96m 是青色 (Cyan)，適合區分一般 Log
-        # 這裡加一個 \n 換行，讓物件內容從下一行開始，閱讀體驗較好
         print(f"\033[96m[DUMP {time} {trace_str}]{prefix}\033[0m\n{formatted_data}")
 
     def log(self, *args):
@@ -105,7 +99,6 @@ class Debug:
         print(f"\033[93m[WARNING {time} {trace_str}]\033[0m", *args)
 
     def error(self, *args):
-        # Error 即使 disable 建議也要顯示，或者看你需求
         trace_str = self._get_trace_string(inspect.currentframe().f_back)
         time = datetime.datetime.now().strftime("%H:%M:%S")
         print(f"\033[91m[ERROR {time} {trace_str}]\033[0m", *args)
