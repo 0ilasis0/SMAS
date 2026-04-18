@@ -100,14 +100,14 @@ class MarketTrainer:
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
 
-        if cv_importances:
-            avg_importance = np.mean(cv_importances, axis=0)
-            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+        # if cv_importances:
+        #     avg_importance = np.mean(cv_importances, axis=0)
+        #     importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-            dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
-            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
-                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
-            dbg.log("-" * 40)
+        #     dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
+        #     for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+        #         dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+        #     dbg.log("-" * 40)
 
         return oof_predictions.dropna()
 

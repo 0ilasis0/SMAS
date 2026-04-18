@@ -90,7 +90,7 @@ def run_model_comparison(test_tickers: list, init_cash: int, oos_days: int = 240
                     continue
                 df_test = df_real_data.tail(oos_days).copy()
 
-                macro_tickers = [e.value for e in MacroTicker]
+                macro_tickers = MacroTicker.get_all_tickers()
                 df_raw = ai_engine.db.get_aligned_market_data(ticker, macro_tickers)
 
                 xgb_engine = XGBFeatureEngine()

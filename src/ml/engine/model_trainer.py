@@ -114,7 +114,8 @@ class ModelTrainer:
 
         if not is_market_trained_today:
             dbg.log(f"未發現今日最新 (OOS={oos_days}) 的大盤防禦模型，開始進行全局訓練...")
-            df_market_pure = self.engine.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value])
+            aux_macros = MacroTicker.get_auxiliary_tickers()
+            df_market_pure = self.engine.db.get_aligned_market_data(MacroTicker.TWII.value, aux_macros)
 
             if df_market_pure.empty:
                 dbg.error(f"🚨 找不到大盤資料 {MacroTicker.TWII.value}！請先執行 update_market_data()！")

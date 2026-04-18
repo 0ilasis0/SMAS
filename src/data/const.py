@@ -35,8 +35,20 @@ class MacroTicker(StrEnum):
     """總經與大盤指數標的"""
     TWII = "^TWII"  # 台灣加權指數 (本地)
     SOX = "^SOX"    # 費城半導體指數 (海外，需處理時差)
+    VIX = "^VIX"
+    USDTWD = "TWD=X"
 
     @classmethod
     def get_overseas_tickers(cls) -> list[str]:
         """回傳需要進行 T-1 時差處理的海外標的"""
-        return [cls.SOX]
+        return [cls.SOX, cls.VIX]
+
+    @classmethod
+    def get_auxiliary_tickers(cls) -> list[str]:
+        """回傳用於大盤防禦的輔助總經標的 (排除 TWII 本身)"""
+        return [e.value for e in cls if e != cls.TWII]
+
+    @classmethod
+    def get_all_tickers(cls) -> list[str]:
+        """回傳所有大盤與總經標的"""
+        return [e.value for e in cls]

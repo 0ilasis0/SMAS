@@ -75,7 +75,7 @@ def run_market_comparison(lookahead: int, oos_days: int = 240):
     # ================= 2. 準備大盤資料與防洩漏切分 =================
     try:
         engine = QuantAIEngine(ticker="0050.TW", oos_days=oos_days)
-        macro_tickers = [e.value for e in MacroTicker]
+        macro_tickers = MacroTicker.get_all_tickers()
         df_raw = engine.db.get_aligned_market_data("0050.TW", macro_tickers)
 
         market_engine = MarketFeatureEngine(lookahead=lookahead)

@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from data.const import StockCol
+from data.const import MacroTicker, StockCol
 from debug import dbg
 from ml.const import MarketFeatureCol
 from ml.params import IndicatorParams, MarketRiskCriteria
@@ -78,6 +78,34 @@ class MarketFeatureEngine:
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
 
         data[MarketFeatureCol.TWII_ATR_RATIO] = (true_range / (prev_close + 1e-9)).rolling(window=self.params.MA_WEEK).mean()
+
+        # === 大盤 K 線型態 (判斷大盤恐慌下殺或強勢軋空) ===
+        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
+        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
+        price_range = (data[StockCol.HIGH] - data[StockCol.LOW]).clip(lower=0.01)
+
+        data[MarketFeatureCol.TWII_K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
+        data[MarketFeatureCol.TWII_K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
+        data[MarketFeatureCol.TWII_K_BODY] = (data[StockCol.CLOSE] - data[StockCol.OPEN]) / price_range
+
+        # === VIX 恐慌指數 ===
+        # 假設您的 DB 會把 ^VIX 變成 VIX_close
+        vix_col = f"{MacroTicker.VIX.value.replace('^', '')}_close"
+        if vix_col in data.columns:
+            data[MarketFeatureCol.VIX_CLOSE] = data[vix_col]
+            vix_ma20 = data[vix_col].rolling(20).mean()
+            data[MarketFeatureCol.VIX_SURGE] = (data[vix_col] - vix_ma20) / (vix_ma20 + 1e-9)
+        else:
+            data[MarketFeatureCol.VIX_CLOSE] = 0.0
+            data[MarketFeatureCol.VIX_SURGE] = 0.0
+
+        # === 台幣匯率 (外資動向) ===
+        # 假設您的 DB 會把 TWD=X 變成 TWD=X_close
+        twd_col = f"{MacroTicker.USDTWD.value}_close"
+        if twd_col in data.columns:
+            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
+        else:
+            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
 
         # ==========================================
         # 4. 標籤：預測未來是否會有「大跌」 (Danger = 1)

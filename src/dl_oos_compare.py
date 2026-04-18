@@ -71,7 +71,7 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
 
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days,
                                    dl_model_type=DLModelType.HYBRID, rnn_type=RNNType.LSTM)
-            macro_tickers = [e.value for e in MacroTicker]
+            macro_tickers = MacroTicker.get_all_tickers()
 
             # 這裡拿到的 df_raw 包含了訓練 + OOS 的所有歷史資料
             df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)

@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             roc_auc_score)
+from sklearn.metrics import accuracy_score, precision_score, roc_auc_score
 from tqdm import tqdm
 
 from data.const import MacroTicker, StockCol
@@ -68,7 +67,7 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
     for ticker in tqdm(test_tickers, desc="評估進度"):
         try:
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
-            macro_tickers = [e.value for e in MacroTicker]
+            macro_tickers = MacroTicker.get_all_tickers()
             df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
 
             if df_raw.empty: continue

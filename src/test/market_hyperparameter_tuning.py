@@ -116,7 +116,7 @@ def run_market_optimization(oos_days: int, lookahead: int, target_total_trials: 
 
     print("⏳ 正在萃取大盤特徵資料...")
     engine = QuantAIEngine(ticker="0050.TW", oos_days=oos_days)
-    macro_tickers = [e.value for e in MacroTicker]
+    macro_tickers = MacroTicker.get_all_tickers()
     df_raw = engine.db.get_aligned_market_data("0050.TW", macro_tickers)
 
     df_train_raw = df_raw.iloc[:-oos_days] if oos_days > 0 else df_raw

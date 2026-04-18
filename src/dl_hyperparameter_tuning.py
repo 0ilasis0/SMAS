@@ -48,7 +48,7 @@ def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_day
                 engine = QuantAIEngine(ticker=ticker, oos_days=oos_days,
                                        dl_model_type=DLModelType.HYBRID, rnn_type=RNNType.LSTM)
 
-                macro_tickers = [e.value for e in MacroTicker]
+                macro_tickers = MacroTicker.get_all_tickers()
                 df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
 
                 if df_raw.empty:

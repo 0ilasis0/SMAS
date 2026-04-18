@@ -3,7 +3,7 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 from optuna.storages import JournalFileStorage, JournalStorage
-from sklearn.metrics import average_precision_score, roc_auc_score
+from sklearn.metrics import average_precision_score
 from sklearn.model_selection import TimeSeriesSplit
 from tqdm import tqdm
 
@@ -112,7 +112,7 @@ def run_optimization(target_total_trials: int, train_tickers: list, oos_days: in
     for ticker in train_tickers:
         try:
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
-            macro_tickers = [e.value for e in MacroTicker]
+            macro_tickers = MacroTicker.get_all_tickers()
             df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
 
             if df_raw.empty: continue

@@ -127,8 +127,12 @@ class ModelPredictor:
 
         # 第三腦推論
         market_engine_feat = MarketFeatureEngine(lookahead=config.lookahead)
-        df_market_pure = engine.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value]).tail(MLConst.MAX_LOOKBACK)
+
+        # 動態取得所有需要的總經輔助標的 (排除 TWII 自己)
+        aux_macros = MacroTicker.get_auxiliary_tickers()
+        df_market_pure = engine.db.get_aligned_market_data(MacroTicker.TWII.value, aux_macros).tail(MLConst.MAX_LOOKBACK)
         df_market_clean = market_engine_feat.process_pipeline(df_market_pure, is_training=False)
+
         if target_date not in df_market_clean.index:
             dbg.error(f"大盤缺失特徵！拒絕預測。")
             return None
@@ -201,7 +205,10 @@ class ModelPredictor:
 
         # Market
         market_engine_feat = MarketFeatureEngine(lookahead=config.lookahead)
-        df_market_clean = market_engine_feat.process_pipeline(engine.db.get_aligned_market_data(MacroTicker.TWII.value, [MacroTicker.SOX.value]), is_training=False)
+        aux_macros = MacroTicker.get_auxiliary_tickers()
+        df_market_pure = engine.db.get_aligned_market_data(MacroTicker.TWII.value, aux_macros)
+        df_market_clean = market_engine_feat.process_pipeline(df_market_pure, is_training=False)
+
         prob_market_safe_series = pd.Series(1.0 - engine.market_model.predict_proba(df_market_clean[MarketFeatureCol.get_features()])[:, 1], index=df_market_clean.index, name=SignalCol.PROB_MARKET_SAFE.value)
 
         df_backtest = df_raw.copy().join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)

@@ -29,7 +29,7 @@ def update_xgb_backtest_models(train_tickers: list, lookahead: int, oos_days: in
         try:
             # 獲取單檔股票資料
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
-            macro_tickers = [e.value for e in MacroTicker]
+            macro_tickers = MacroTicker.get_all_tickers()
             df_raw = engine.db.get_aligned_market_data(ticker, macro_tickers)
 
             if df_raw.empty:

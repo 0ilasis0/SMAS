@@ -73,12 +73,21 @@ class MarketFeatureCol(StrEnum):
     TWII_RSI = "twii_rsi"
     TWII_MACD = "twii_macd"
     TWII_VOL_CHG = "twii_vol_chg"
-
     TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
+
+    # 大盤 K 線幾何特徵
+    TWII_K_UPPER = "twii_k_upper"
+    TWII_K_LOWER = "twii_k_lower"
+    TWII_K_BODY = "twii_k_body"
+
     SOX_RET_1D = "sox_ret_1d"
     SOX_RET_5D = "sox_ret_5d"
     SOX_TWII_SPREAD = "sox_twii_spread" # 台美相對強弱差
-    SOX_CLOSE  = "SOX_close"
+    SOX_CLOSE  = "sox_close"
+
+    VIX_CLOSE = "vix_close"
+    VIX_SURGE = "vix_surge"
+    TWD_DEPRECIATION_5D = "twd_depreciation_5d"
 
     TARGET_DANGER = "target_danger"     # 1:危險(將崩盤), 0:安全
 
