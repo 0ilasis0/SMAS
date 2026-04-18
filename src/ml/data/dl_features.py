@@ -67,7 +67,20 @@ class DLFeatureEngine:
         new_features[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
         new_features[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
-        dl_features.extend([FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH])
+        # 加入 K 線型態幾何特徵 (上下影線與實體比例)
+        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
+        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
+        # 防呆：確保價格區間不為 0 (遇到一字線或漲跌停時)
+        price_range = (data[StockCol.HIGH] - data[StockCol.LOW]).clip(lower=0.01)
+
+        new_features[FeatureCol.K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
+        new_features[FeatureCol.K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
+        new_features[FeatureCol.K_BODY] = (data[StockCol.CLOSE] - data[StockCol.OPEN]) / price_range
+
+        dl_features.extend([
+            FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH,
+            FeatureCol.K_UPPER, FeatureCol.K_LOWER, FeatureCol.K_BODY
+        ])
 
         data = data.assign(**new_features)
 
