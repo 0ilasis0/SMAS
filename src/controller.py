@@ -71,27 +71,22 @@ class IDSSController:
         # 除權息假跌破護盾 (在放上黑板之前執行)
         div_info = self.engine.db.get_upcoming_dividend(self.ticker, current_date)
         dividend_warning = ""
-        # 判斷「今天」是否剛好是除權息交易日，且手上有股票
         if div_info and div_info.get('ex_date') == current_date and current_position > 0:
             cash_div = div_info.get('cash_dividend', 0.0)
             avg_cost = max(0.0, avg_cost - cash_div)
             dividend_warning = f"\n\n💰 **[除權息校正]** 今日為 {self.ticker} 除息日 (配發現金 {cash_div} 元)。為防止系統觸發假跌破停損，您的持倉成本已自動從帳面上扣除配息，下調至 {avg_cost:.2f} 元。"
             dbg.log(f"[{self.ticker}] 觸發除權息護盾！成本下修 {cash_div} 元。")
 
-
         # 2. 設定投資性格與行為樹
         strategy_config = PersonaFactory.get_config(persona)
         should_run_llm = bool(self.api_keys)
         strategy_config.enable_llm_oracle = False
-
         tree = build_trading_tree(strategy_config)
 
         # 3. 建立黑板與寫入「真實帳戶資料」(虛擬推演用)
         account = Account(total_cash=available_cash)
-
         real_display_price = prediction_result.get(QuoteCol.REAL_LATEST_PRICE.value, avg_cost)
 
-        # Account 沒有全域 positions 屬性，這裡我們手動建一個給黑板使用
         account.sub_portfolios[AccountCol.DUMMY_SP.value] = SubPortfolio(name=AccountCol.DUMMY_SP.value)
         account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker] = Position(
             shares=current_position,
@@ -99,11 +94,9 @@ class IDSSController:
             current_price=real_display_price
         )
 
-        # 建立黑板，並強制宣告這不是回測 (啟用動態風控)
         bb = Blackboard(ticker=self.ticker, account=account)
         bb.is_backtest = False
 
-        # ... (中間寫入黑板與行為樹的邏輯完全不動) ...
         bb.prob_final = prediction_result.get(SignalCol.PROB_FINAL.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_xgb = prediction_result.get(SignalCol.PROB_XGB.value, GlobalParams.DEFAULT_ERROR)
         bb.prob_dl = prediction_result.get(SignalCol.PROB_DL.value, GlobalParams.DEFAULT_ERROR)
@@ -113,7 +106,6 @@ class IDSSController:
 
         bb.position = current_position
         bb.avg_cost = avg_cost
-
         current_price = prediction_result.get(QuoteCol.CURRENT_PRICE.value, 0.0)
         bb.current_price = current_price
         bb.executable_price = current_price
@@ -132,7 +124,6 @@ class IDSSController:
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (波段模式)...")
         tree.tick(bb)
 
-        # 動作結束後，將最新的持倉同步回 Account
         account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].shares = bb.position
         account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].avg_cost = bb.avg_cost
 
@@ -144,9 +135,8 @@ class IDSSController:
         days_to_earnings = self.engine.db.get_days_to_next_earnings(self.ticker, current_date)
 
         if action_str == TradeDecision.BUY.value and days_to_earnings is not None and 0 <= days_to_earnings <= 3:
-            # 強制推翻 AI 的買進決策！
             action_str = TradeDecision.HOLD.value
-            bb.action_decision = TradeDecision.HOLD # 覆蓋黑板狀態
+            bb.action_decision = TradeDecision.HOLD
             bb.gemini_reasoning += f"\n\n🚨 **[事件避險]** 距離本檔股票的法說會/財報公佈僅剩 **{days_to_earnings} 天**。為防範財報地雷引發的無預警跳空大跌，系統已強制撤銷買進決策，改為【觀望】。君子不立危牆之下。"
             dbg.log(f"[{self.ticker}] 觸發法說會避險！強制取消 BUY 訊號。")
 
@@ -228,9 +218,8 @@ class IDSSController:
             hold_reason = f"\n\n\n**[觀望判定]** "
 
             # 優先判斷是不是被法說會護盾強制壓下來的
-            if days_to_earnings is not None and 0 <= days_to_earnings <= 3:
-                hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率高達 {bb.prob_final:.0%}，仍強制退回空手觀望，確保資金絕對安全。"
-
+            if days_to_earnings is not None and 0 <= days_to_earnings <= 3 and bb.action_decision == TradeDecision.HOLD:
+                 hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率極高，仍強制退回空手觀望，防範財報地雷，確保資金絕對安全。"
             elif bb.prob_market_safe < 0.4:
                 if current_position > 0: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
                 else: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
@@ -250,7 +239,6 @@ class IDSSController:
         atr_ratio = prediction_result.get(FeatureCol.ATR_RATIO.value, 0.0)
         trend_strength = prediction_result.get(FeatureCol.TREND_STRENGTH.value, 0.0)
 
-        # 條件：如果 AI 不看好 (勝率 < 51%) 且 波動率偏高 (每天震幅超過 3.5%)
         if bb.prob_final < 0.51 and atr_ratio > 0.035:
             warning_msg = (
                 f"\n\n🚨 **[總裁特級指令]** 目前個股真實波幅 (ATR Ratio) 高達 {atr_ratio:.2%}，"
@@ -282,7 +270,7 @@ class IDSSController:
             },
 
             APIKey.ACCOUNT.value: {
-                APIKey.CASH_LEFT.value: account.total_cash, # AI 預估扣款後的剩餘資金
+                APIKey.CASH_LEFT.value: account.total_cash,
                 APIKey.POSITION_LEFT.value: bb.position,
                 APIKey.TOTAL_EQUITY: account.total_equity
             },
