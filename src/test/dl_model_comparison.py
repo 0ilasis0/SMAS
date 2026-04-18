@@ -11,6 +11,9 @@ from sklearn.metrics import accuracy_score, roc_auc_score
 from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
 from data.const import MacroTicker, StockCol
+from data.fetcher import Fetcher
+from data.manager import DataManager
+from data.updater import DataUpdater
 from debug import dbg
 from ml.const import DLModelType, FeatureCol, RNNType, SignalCol
 from ml.data.xgb_features import XGBFeatureEngine
@@ -18,6 +21,14 @@ from ml.engine import QuantAIEngine
 from path import PathConfig
 
 dbg.toggle()
+
+
+def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False):
+    """獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)"""
+    db = DataManager()
+    fetcher = Fetcher()
+    updater = DataUpdater(db, fetcher)
+    updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -77,7 +88,7 @@ def run_model_comparison(test_tickers: list, init_cash: int, oos_days: int = 240
                     rnn_type=rnn_type
                 )
 
-                ai_engine.update_market_data()
+                sync_market_data(ticker=ticker, force_wipe=True)
                 start_time = time.time()
                 ai_engine.train_all_models(save_models=True)
 

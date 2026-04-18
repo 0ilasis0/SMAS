@@ -106,3 +106,4 @@ class Fetcher:
 
         dbg.error("已達最大重試次數，放棄抓取。")
         return pd.DataFrame()
+    

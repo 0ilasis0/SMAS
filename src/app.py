@@ -11,6 +11,9 @@ import streamlit as st
 
 from bt.const import TradeDecision
 from controller import IDSSController
+from data.fetcher import Fetcher
+from data.manager import DataManager
+from data.updater import DataUpdater
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
@@ -26,6 +29,15 @@ if TYPE_CHECKING:
 
 HAS_AUTO_UPDATED_KEY = "has_auto_updated"
 
+
+def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False):
+    """獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)"""
+    db = DataManager()
+    fetcher = Fetcher()
+    updater = DataUpdater(db, fetcher)
+    updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
+
+
 def run_mlops_pipeline(ticker: str):
     """執行完整的雙軌訓練管線，並在訓練前後開關 UI 鎖"""
     try:
@@ -33,8 +45,8 @@ def run_mlops_pipeline(ticker: str):
             try:
                 # 階段 1：更新資料
                 st.write("📥 正在從 Yahoo Finance 重新下載最新歷史與大盤雙軌資料...")
+                sync_market_data(ticker, force_wipe=True)
                 engine_bt = QuantAIEngine(ticker=ticker, oos_days=BacktestParams.MAX_DAYS)
-                engine_bt.update_market_data(force_wipe=True)
 
                 # 階段 2：訓練回測大腦
                 st.write(f"🧠 正在訓練回測大腦 (OOS={BacktestParams.MAX_DAYS})... 這將花費數分鐘")
@@ -94,8 +106,8 @@ def run_global_mlops_pipeline():
                 try:
                     # 階段 1：清除舊資料，下載最新 K 線
                     st.write(f"📥 [{ticker}] 清除快取並下載最新資料...")
+                    sync_market_data(ticker, force_wipe=True)
                     engine_bt = QuantAIEngine(ticker=ticker, oos_days=BacktestParams.MAX_DAYS)
-                    engine_bt.update_market_data(force_wipe=True)
 
                     # 階段 2：訓練回測大腦
                     st.write(f"🧠 [{ticker}] 訓練歷史回測大腦...")
@@ -145,8 +157,7 @@ def main():
                 for t in watch_list:
                     st.write(f"📥 正在檢查/同步 {t} 的最新 K 線與大盤資料...")
                     try:
-                        temp_engine = QuantAIEngine(ticker=t, oos_days=0)
-                        temp_engine.update_market_data()
+                        sync_market_data(t)
                     except Exception as e:
                         st.write(f"⚠️ {t} 同步失敗: {e}")
                         has_error = True
@@ -265,8 +276,7 @@ def main():
 
                 for t in all_tickers:
                     try:
-                        temp_engine = QuantAIEngine(ticker=t, oos_days=0)
-                        temp_engine.update_market_data(force_sync=True)
+                        sync_market_data(t, force_sync=True)
                     except Exception as e:
                         st.error(f"⚠️ {t} 同步失敗: {e}")
 

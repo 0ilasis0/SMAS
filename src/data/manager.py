@@ -66,6 +66,25 @@ class DataManager:
                 )
             ''')
 
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS dividends_calendar (
+                    ticker TEXT,
+                    ex_date TEXT,
+                    cash_dividend REAL
+                )
+            ''')
+            # 建立索引加快查詢速度
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_div_ticker ON dividends_calendar(ticker)')
+
+            # 法說會日程表
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS earnings_calendar (
+                    ticker TEXT,
+                    earnings_date TEXT
+                )
+            ''')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_earn_ticker ON earnings_calendar(ticker)')
+
             conn.commit()
 
     def clear_ticker_data(self, ticker: str):
@@ -222,3 +241,63 @@ class DataManager:
             df = df.sort_index()
 
         return df
+
+    # ==========================================
+    # 企業事件 (除權息 & 法說會) 資料庫操作
+    # ==========================================
+    def save_dividends_calendar(self, df: pd.DataFrame):
+        """將除權息預告表寫入資料庫"""
+        if df.empty: return
+        with sqlite3.connect(self.db_path) as conn:
+            # 實戰中只保留最新預告，直接 replace 最乾淨
+            df.to_sql('dividends_calendar', conn, if_exists='replace', index=False)
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_div_ticker ON dividends_calendar(ticker)')
+            dbg.log("除權息行事曆已更新至資料庫。")
+
+    def save_earnings_calendar(self, df: pd.DataFrame):
+        """將法說會日程寫入資料庫"""
+        if df.empty: return
+        with sqlite3.connect(self.db_path) as conn:
+            df.to_sql('earnings_calendar', conn, if_exists='replace', index=False)
+            conn.execute('CREATE INDEX IF NOT EXISTS idx_earn_ticker ON earnings_calendar(ticker)')
+            dbg.log("法說會行事曆已更新至資料庫。")
+
+    def get_upcoming_dividend(self, ticker: str, current_date: str) -> dict | None:
+        """
+        查詢該標的在指定日期「之後」最近一次的除權息資訊。
+        回傳範例: {'ex_date': '2026-07-15', 'cash_dividend': 5.5}
+        """
+        query = f"""
+            SELECT ex_date, cash_dividend
+            FROM dividends_calendar
+            WHERE ticker = ? AND ex_date >= ?
+            ORDER BY ex_date ASC
+            LIMIT 1
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=(ticker, current_date))
+            if not df.empty:
+                return df.iloc[0].to_dict()
+        return None
+
+    def get_days_to_next_earnings(self, ticker: str, current_date: str) -> int | None:
+        """
+        計算距離下一次法說會還有幾天。
+        若無即將到來的法說會，回傳 None。
+        """
+        from datetime import datetime  # 確保有 import
+        query = f"""
+            SELECT earnings_date
+            FROM earnings_calendar
+            WHERE ticker = ? AND earnings_date >= ?
+            ORDER BY earnings_date ASC
+            LIMIT 1
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=(ticker, current_date))
+            if not df.empty:
+                earnings_date_str = df.iloc[0]['earnings_date']
+                d1 = datetime.strptime(current_date, "%Y-%m-%d")
+                d2 = datetime.strptime(earnings_date_str, "%Y-%m-%d")
+                return (d2 - d1).days
+        return None

@@ -10,8 +10,9 @@ from bt.const import AccountCol, TradeDecision
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from const import GlobalParams
-from data.const import StockCol, TimeUnit
-from data.params import DataLimit
+from data.const import StockCol
+from data.fetcher import Fetcher
+from data.updater import DataUpdater
 from debug import dbg
 from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol, TradingMode
 from ml.engine import QuantAIEngine
@@ -63,6 +64,20 @@ class IDSSController:
         prediction_result = self.engine.predict_today(mode=TradingMode.SWING, is_t_minus_1_sim=GlobalParams.IS_T_MINUS_1_SIM)
         if not prediction_result:
             return {"status": "error", "message": "預測失敗，缺乏最新市場資料"}
+
+        # 取得系統當前判定的目標日期
+        current_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
+
+        # 除權息假跌破護盾 (在放上黑板之前執行)
+        div_info = self.engine.db.get_upcoming_dividend(self.ticker, current_date)
+        dividend_warning = ""
+        # 判斷「今天」是否剛好是除權息交易日，且手上有股票
+        if div_info and div_info.get('ex_date') == current_date and current_position > 0:
+            cash_div = div_info.get('cash_dividend', 0.0)
+            avg_cost = max(0.0, avg_cost - cash_div)
+            dividend_warning = f"\n\n💰 **[除權息校正]** 今日為 {self.ticker} 除息日 (配發現金 {cash_div} 元)。為防止系統觸發假跌破停損，您的持倉成本已自動從帳面上扣除配息，下調至 {avg_cost:.2f} 元。"
+            dbg.log(f"[{self.ticker}] 觸發除權息護盾！成本下修 {cash_div} 元。")
+
 
         # 2. 設定投資性格與行為樹
         strategy_config = PersonaFactory.get_config(persona)
@@ -117,14 +132,23 @@ class IDSSController:
         dbg.log(f"\n🧠 啟動行為樹戰術決策 (波段模式)...")
         tree.tick(bb)
 
-        # 🌟 動作結束後，將最新的持倉同步回 Account
+        # 動作結束後，將最新的持倉同步回 Account
         account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].shares = bb.position
         account.sub_portfolios[AccountCol.DUMMY_SP.value].positions[self.ticker].avg_cost = bb.avg_cost
 
-        # ... (智慧定價與 LLM 覆盤邏輯完全不動) ...
-        bb.gemini_reasoning = ""
+        bb.gemini_reasoning = dividend_warning # 帶入剛才的除息警告 (如果有)
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
+
+        # 法說會避險 (覆蓋行為樹的決策)
+        days_to_earnings = self.engine.db.get_days_to_next_earnings(self.ticker, current_date)
+
+        if action_str == TradeDecision.BUY.value and days_to_earnings is not None and 0 <= days_to_earnings <= 3:
+            # 強制推翻 AI 的買進決策！
+            action_str = TradeDecision.HOLD.value
+            bb.action_decision = TradeDecision.HOLD # 覆蓋黑板狀態
+            bb.gemini_reasoning += f"\n\n🚨 **[事件避險]** 距離本檔股票的法說會/財報公佈僅剩 **{days_to_earnings} 天**。為防範財報地雷引發的無預警跳空大跌，系統已強制撤銷買進決策，改為【觀望】。君子不立危牆之下。"
+            dbg.log(f"[{self.ticker}] 觸發法說會避險！強制取消 BUY 訊號。")
 
         if action_str in [TradeDecision.BUY.value, TradeDecision.SELL.value] and current_price > 0:
             df_recent = self.engine.db.get_daily_data(self.ticker).tail(20)
@@ -202,7 +226,12 @@ class IDSSController:
 
         elif action_str == TradeDecision.HOLD.value:
             hold_reason = f"\n\n\n**[觀望判定]** "
-            if bb.prob_market_safe < 0.4:
+
+            # 優先判斷是不是被法說會護盾強制壓下來的
+            if days_to_earnings is not None and 0 <= days_to_earnings <= 3:
+                hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率高達 {bb.prob_final:.0%}，仍強制退回空手觀望，確保資金絕對安全。"
+
+            elif bb.prob_market_safe < 0.4:
                 if current_position > 0: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
                 else: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
             elif bb.prob_final <= 0.3 and current_position == 0:
@@ -236,8 +265,6 @@ class IDSSController:
             bb.oracle = self.engine.oracle
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
             report_node.tick(bb)
-
-        bb.gemini_reasoning += "\n\n---\n**【系統免責聲明】**：本系統之「智慧定價」並未包含除權息預告。若今日為該標的之「除權息交易日」，其實際平盤基準價將大幅低於昨日收盤價，請務必手動取消或重新計算掛單價格，切勿盲目追價！"
 
         final_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
 
@@ -274,10 +301,13 @@ class IDSSController:
 
             APIKey.REPORT.value: bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
+
     def sync_market_data(self) -> bool:
         dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
         try:
-            success = self.engine.update_market_data(period=DataLimit.DAILY_MAX_YEAR, unit=TimeUnit.YEAR)
+            updater = DataUpdater(self.engine.db, Fetcher())
+            success = updater.update_market_data(ticker=self.ticker, force_sync=True)
+
             if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
             else: dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
             return success
