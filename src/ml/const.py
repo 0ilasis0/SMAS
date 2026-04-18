@@ -45,6 +45,7 @@ class FeatureCol(StrEnum):
     CLOSE_CHANGE = "close_change"
     BB_WIDTH = "bb_width"
     RETURN_5D = "return_5d"
+    RETURN_10D = "return_10d"
 
     # K線與量價微結構特徵
     K_UPPER = "k_upper"         # 上影線比例
@@ -52,6 +53,15 @@ class FeatureCol(StrEnum):
     K_BODY = "k_body"           # 實體K線比例
     BUY_POWER = "buy_power"     # 當日買盤力道 (收盤價位置)
     RS_5D = "rs_5d"             # 個股與大盤的相對強弱
+    RS_10D = "rs_10d"
+
+    # 轉折與極值特徵
+    DIST_TO_20D_HIGH = "dist_to_20d_high"
+    DIST_TO_20D_LOW = "dist_to_20d_low"
+    KD_K = "kd_k"
+    KD_D = "kd_d"
+    KD_CROSS = "kd_cross"
+    GAP_RATIO = "gap_ratio"
 
     # 三個不同維度特徵
     OBV = "obv"

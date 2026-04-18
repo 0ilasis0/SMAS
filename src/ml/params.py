@@ -11,7 +11,7 @@ class SessionConfig:
     dl_model_type: DLModelType = DLModelType.HYBRID
     rnn_type: RNNType = RNNType.LSTM
     # 除非重新尋找模型超參數，否則不可調整 lookahead
-    lookahead: int = 20
+    lookahead: int = 10
 
 @dataclass(frozen=True)
 class EntryQualityCriteria:
@@ -43,6 +43,11 @@ class IndicatorParams:
     MACD_FAST: int = 12
     MACD_SLOW: int = 26
     MACD_SIGNAL: int = 9
+
+    # 轉折與極值特徵參數 (Reversal & Extremes)
+    DONCHIAN_WINDOW: int = 20  # 區間高低點 (Donchian Channel) 的計算天數
+    KD_RSV_WINDOW: int = 9     # KD 指標的 RSV 計算天數 (經典參數為 9)
+    KD_SMOOTH: int = 3         # KD 指標的平滑天數 (經典參數為 3，代表 1/3 權重)
 
 
 @dataclass(frozen=True)

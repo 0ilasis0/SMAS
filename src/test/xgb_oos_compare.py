@@ -50,13 +50,13 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
 
         # --- ⬇️ 注入 Optuna 的最新參數 ⬇️ ---
         'max_depth': 3,
-        'min_child_weight': 2,
-        'learning_rate': 0.0364,
-        'subsample': 0.8465,
-        'colsample_bytree': 0.7124,
-        'gamma': 1.2192,
-        'reg_alpha': 0.0039,
-        'reg_lambda': 0.0076
+        'min_child_weight': 4,
+        'learning_rate': 0.0525,
+        'subsample': 0.6458,
+        'colsample_bytree': 0.665,
+        'gamma': 0.3570,
+        'reg_alpha': 0.8397,
+        'reg_lambda': 0.1526
     }
 
     report_data = []
