@@ -33,6 +33,8 @@ class Blackboard:
     gemini_reasoning: str = ""     # Gemini 產出的分析報告
     sentiment_score: int = LLMParams.DEFAULT_SENTIMENT_SCORE
     sentiment_reason: str = ""     # 新聞情緒理由
+    # 專門用來放給 LLM 聽的強制命令 (不包含在報表中)
+    system_directives: list[str] = field(default_factory=list)
 
     last_trade_shares: int = 0
     last_trade_profit: float = 0.0

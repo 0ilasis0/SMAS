@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 
@@ -7,12 +6,8 @@ from base import MathTool
 from bt.blackboard import Blackboard
 from bt.const import BlackboardKey, BTAction, TradeDecision
 from bt.core import ActionNode, NodeState
-from bt.params import LLMParams, TaxRate
+from bt.params import TaxRate
 from debug import dbg
-from ml.const import OracleCol
-
-if TYPE_CHECKING:
-    from ml.model.llm_oracle import GeminiOracle
 
 
 @dataclass(frozen=True)
@@ -176,76 +171,75 @@ class GenerateGeminiReportNode(ActionNode):
         super().__init__(name)
         self.oracle = oracle
 
-    def tick(self, blackboard: Blackboard) -> NodeState:
-        dbg.log("正在打包決策脈絡，準備生成 AI 覆盤報告...")
-
-        active_oracle: "GeminiOracle" | None = getattr(blackboard, BlackboardKey.ORACLE.value, self.oracle)
-
-        if not active_oracle:
-            dbg.war("⚠️ [Debug 警告] 找不到 Gemini Oracle 實體！將強制降級為『模擬報告』。請確認 API Key 是否載入，且有綁定至 Blackboard。")
-        else:
-            dbg.log("✅ [Debug 確認] 成功偵測到 Gemini Oracle 實體，準備呼叫真實 AI 模型！")
-
-        action_val = blackboard.action_decision
-
-        trade_info_str = ""
-        if action_val == TradeDecision.BUY:
-            trade_info_str = f"- 實際執行動作：系統已成功【買進】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
-        elif action_val == TradeDecision.SELL:
-            action_type = "全數出清" if blackboard.position == 0 else "部分減碼"
-            trade_info_str = f"- 實際執行動作：系統已成功【{action_type}】 {blackboard.last_trade_shares} 股，建議掛單價 {blackboard.last_trade_price:.2f} 元。"
-        elif action_val == TradeDecision.HOLD:
-            trade_info_str = "- 實際執行動作：系統判定維持現狀【觀望 (HOLD)】。"
-        else:
-            trade_info_str = f"- 實際執行動作：未知狀態 ({action_val})。"
-
-        score = getattr(blackboard, OracleCol.SCORE.value, LLMParams.DEFAULT_SENTIMENT_SCORE)
-        reason = getattr(blackboard, OracleCol.REASON.value, '無相關新聞或未啟用 LLM')
-
-        pricing_logic = getattr(blackboard, 'gemini_reasoning', '')
-
-        action_upper = str(action_val).upper()
-        prompt = f"""
-        【最高指令】：你是一個只負責「事後覆盤」的量化分析助理。
-        系統【已經】做出了最終交易決策，你絕對不可以質疑、修改或建議更改該決策。你的唯一任務是根據以下數據，寫出一份 100 字左右的專業、客觀的繁體中文盤後報告。
-
-        【當前決策事實 (不可竄改)】
-        - 股票代號：{blackboard.ticker}
-        - 系統最終決策：{action_upper}
-        {trade_info_str}
-        - 目前總持股：{blackboard.position} 股 (剩餘現金：{blackboard.cash:.2f} 元)
-
-        【AI 模型內部視角】
-        - 總指揮 (Meta-Learner) 綜合勝率：{blackboard.prob_final:.2%}
-        - 左腦 (XGBoost 技術面)：{blackboard.prob_xgb:.2%}
-        - 右腦 (DL 深度學習 K 線)：{blackboard.prob_dl:.2%}
-        - 第三腦 (Market Brain) 安全度：{getattr(blackboard, 'prob_market_safe', 1.0):.2%}
-        - LLM 新聞情緒：{score} 分 (1-10分)。判讀理由：{reason}
-
-        【演算法智慧定價考量】
-        {pricing_logic}
-
-        【報告撰寫指引】
-        1. 破題直接說明系統今天執行了什麼動作 ({action_upper})。
-        2. 綜合技術面勝率、大盤雷達、新聞情緒，以及「智慧定價的掛單考量」，簡述「為什麼系統會觸發這個動作與定價」。
-        3. 語氣保持冷靜、客觀的法人機構風格，不使用強烈情緒化字眼。
-        """
-
-        try:
-            if active_oracle:
-                final_report = active_oracle.generate_report(prompt)
-            else:
-                final_report = f"【模擬 AI 覆盤報告】\n系統今日對 {blackboard.ticker} 執行 {action_upper}。主要驅動力來自綜合勝率達 {blackboard.prob_final:.2%}，且大盤防禦雷達顯示環境安全。儘管新聞情緒呈現 {score} 分 ({reason})，系統仍依紀律執行既定策略..."
-
-            if pricing_logic:
-                blackboard.gemini_reasoning = f"{final_report}\n{pricing_logic}"
-            else:
-                blackboard.gemini_reasoning = final_report
-
-            dbg.log(f"📝 報告生成完畢：\n{final_report}")
+    def tick(self, bb: "Blackboard") -> NodeState:
+        # 1. 確認是否有啟用 LLM 引擎
+        oracle = self.oracle or bb.get(BlackboardKey.ORACLE.value)
+        if not oracle:
+            dbg.war(f"[{bb.ticker}] 未啟用 LLM Oracle，跳過戰報生成，保留系統原始日誌。")
             return NodeState.SUCCESS
 
+        dbg.log(f"[{bb.ticker}] 正在將決策資料封裝送往 Gemini 撰寫專業戰報...")
+
+        # ==========================================
+        # 步驟 A：建構 Control Plane (系統最高權限指令)
+        # ==========================================
+        # 這是寫死在後端、絕對不可被竄改的「大腦潛意識」
+        base_system_prompt = (
+            "你是一位頂尖的量化基金經理人與市場分析師。\n"
+            "你的任務是根據我（系統）提供的【量化決策黑板資料】，撰寫一份專業、簡潔、具備行動力的投資戰報。\n"
+            "【嚴格紀律與防幻覺規則】：\n"
+            "1. 你絕對不可竄改、懷疑或反駁系統給出的「最終決策 (BUY/SELL/HOLD)」、「預期掛單價」與「機率數字」。\n"
+            "2. 你的工作是『潤飾與解釋』這個決策，讓一般投資人能看懂，而不是『重新決策』。\n"
+            "3. 語氣要果斷、冷靜、充滿華爾街數據感，拒絕模稜兩可的廢話與投資警語（系統已有免責聲明）。"
+        )
+
+        # 從黑板提取動態塞入的「總裁指令」(例如：洗盤警告、法說會避險)
+        dynamic_directives = "\n".join(bb.system_directives) if hasattr(bb, 'system_directives') else ""
+
+        final_system_instruction = base_system_prompt
+        if dynamic_directives:
+            final_system_instruction += f"\n\n【🚨 總裁特級動態指令 (最高執行權限)】：\n{dynamic_directives}"
+
+        # ==========================================
+        # 步驟 B：建構 Data Plane (供 LLM 閱讀的特徵資料)
+        # ==========================================
+        # 這是送進去讓 LLM "閱讀" 的客觀資料，它不能違背上面 System Prompt 的規範
+        user_prompt = f"""
+        請根據以下系統輸出的資料，生成今日戰報：
+
+        【標的資訊】
+        - 股票代號：{bb.ticker}
+        - 今日參考價：{getattr(bb, 'current_price', '未知')}
+        - 20 日月乖離率：{getattr(bb, 'bias_20', 0):.2%}
+
+        【最終戰術決策】
+        - 行動指令：{getattr(bb, 'action_decision', '未知')}
+        - 系統建議掛單價：{getattr(bb, 'last_trade_price', '未知')}
+
+        【AI 雙腦預測勝率】
+        - 綜合終極勝率：{getattr(bb, 'prob_final', 0):.0%}
+        - XGBoost 動能預測勝率：{getattr(bb, 'prob_xgb', 0):.0%}
+        - LSTM 序列預測勝率：{getattr(bb, 'prob_dl', 0):.0%}
+        - 大盤環境安全度：{getattr(bb, 'prob_market_safe', 0):.0%}
+
+        【量化系統邏輯推演理由 (原始輸出，請潤飾此段)】
+        {getattr(bb, 'gemini_reasoning', '無特別理由')}
+        """
+
+        # ==========================================
+        # 步驟 C：呼叫 Oracle API 並寫回黑板
+        # ==========================================
+        try:
+            report_text = oracle.generate_report(
+                system_instruction=final_system_instruction,
+                user_prompt=user_prompt
+            )
+
+            # 將 Gemini 寫好的優美戰報，覆寫回黑板原本冷硬的 gemini_reasoning 欄位，供 UI 讀取
+            bb.gemini_reasoning = report_text
+
         except Exception as e:
-            dbg.error(f"Gemini 報告生成節點發生例外: {e}")
-            blackboard.gemini_reasoning = "模組發生例外，無法生成真實報告。"
-            return NodeState.FAILURE
+            dbg.error(f"Gemini 戰報生成失敗: {e}")
+            bb.gemini_reasoning = f"【AI 戰報生成失敗，顯示系統原始邏輯】\n\n{bb.gemini_reasoning}"
+
+        return NodeState.SUCCESS

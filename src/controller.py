@@ -42,14 +42,26 @@ class IDSSController:
         return False
 
     def _get_tw_tick_price(self, price: float) -> float:
-        """台股專屬：依據股價級距計算合理的跳動單位 (Tick Size)"""
-        if price < 10: tick = 0.01
-        elif price < 50: tick = 0.05
-        elif price < 100: tick = 0.10
-        elif price < 500: tick = 0.50
-        elif price < 1000: tick = 1.00
-        else: tick = 5.00
-        return round(round(price / tick) * tick, 2)
+        """台股專屬：依據股價級距計算合理的跳動單位，並防範跨級距邊界問題"""
+        def get_tick(p: float) -> float:
+            if p < 10: return 0.01
+            elif p < 50: return 0.05
+            elif p < 100: return 0.10
+            elif p < 500: return 0.50
+            elif p < 1000: return 1.00
+            else: return 5.00
+
+        # 取得當前價格的 Tick
+        tick = get_tick(price)
+        # 初步計算出的對齊價格
+        rounded_price = round(round(price / tick) * tick, 2)
+
+        # 如果對齊後的價格「跨級距」了，用新的級距重新對齊一次
+        new_tick = get_tick(rounded_price)
+        if new_tick != tick:
+            rounded_price = round(round(price / new_tick) * new_tick, 2)
+
+        return rounded_price
 
     def execute_decision(self,
         available_cash: float,
@@ -131,12 +143,15 @@ class IDSSController:
         action_str = bb.action_decision.value if hasattr(bb.action_decision, 'value') else str(bb.action_decision)
         trade_price = 0.0
 
+        # 攔截旗標
+        is_earnings_intercepted = False
         # 法說會避險
         days_to_earnings = self.engine.db.get_days_to_next_earnings(self.ticker, current_date)
 
         if action_str == TradeDecision.BUY.value and days_to_earnings is not None and 0 <= days_to_earnings <= strategy_config.earnings_shield_days:
             action_str = TradeDecision.HOLD.value
             bb.action_decision = TradeDecision.HOLD
+            is_earnings_intercepted = True
             bb.gemini_reasoning += f"\n\n🚨 **[事件避險]** 距離本檔股票的法說會/財報公佈僅剩 **{days_to_earnings} 天**。為防範財報地雷引發的無預警跳空大跌，系統已強制撤銷買進決策，改為【觀望】。君子不立危牆之下。"
             dbg.log(f"[{self.ticker}] 觸發法說會避險！強制取消 BUY 訊號。")
 
@@ -198,7 +213,6 @@ class IDSSController:
                     bb.gemini_reasoning += pricing_prefix + f"屬常規震盪格局，建議耐心掛「偏低價」等待盤中自然拉回成交 (建議買價: {trade_price:.2f})。"
 
             elif action_str == TradeDecision.SELL.value:
-
                 if bb.prob_final <= strategy_config.pricing_sell_extreme_prob or market_safe < strategy_config.hold_weak_threshold:
                     raw_price = expected_open_price - (strategy_config.sell_panic_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
@@ -213,6 +227,7 @@ class IDSSController:
                     raw_price = expected_open_price + (strategy_config.sell_strong_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股依然強勢，建議掛「偏高價」等待盤中衝高時優雅出脫 (建議賣價: {trade_price:.2f})。"
+
                 else:
                     raw_price = expected_open_price + (strategy_config.sell_normal_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
@@ -223,34 +238,46 @@ class IDSSController:
         elif action_str == TradeDecision.HOLD.value:
             hold_reason = f"\n\n\n**[觀望判定]** "
 
-            if days_to_earnings is not None and 0 <= days_to_earnings <= strategy_config.earnings_shield_days and bb.action_decision == TradeDecision.HOLD:
-                 hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率極高，仍強制退回空手觀望，防範財報地雷，確保資金絕對安全。"
+            if is_earnings_intercepted:
+                 hold_reason += f"系統已啟動【法說會避險機制】強制攔截交易。即便原模型算定勝率極高 ({bb.prob_final:.0%})，仍強制退回空手觀望，防範財報地雷，確保資金絕對安全。"
+
+            elif days_to_earnings is not None and 0 <= days_to_earnings <= strategy_config.earnings_shield_days:
+                 hold_reason += f"加上距離法說會僅剩 {days_to_earnings} 天，市場觀望氣氛濃厚，空手等待財報開出為最佳策略。"
+
             elif bb.prob_market_safe < strategy_config.hold_danger_threshold:
                 if current_position > 0: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，但訊號未達停損閥值。強烈建議嚴格控管既有部位風險，跌破支撐果斷離場。"
                 else: hold_reason += f"大盤系統風險高 (安全度 {bb.prob_market_safe:.0%})，目前空手，系統強制壓抑交易衝動，以資金避險優先。"
+
             elif bb.prob_final <= strategy_config.hold_weak_threshold and current_position == 0:
                 hold_reason += f"綜合技術面偏空 (勝率 {bb.prob_final:.0%})，具備下跌風險。因帳上無庫存，維持空手觀望。"
+
             elif bb.prob_final < strategy_config.hold_neutral_threshold and current_position == 0:
                 hold_reason += f"個股動能不足 (勝率 {bb.prob_final:.0%})，處於盤整期，不具建倉優勢，建議保留現金實力。"
+
             elif bb.prob_final >= strategy_config.hold_wait_threshold and current_position > 0:
                 hold_reason += f"個股勝率適中 ({bb.prob_final:.0%})，趨勢未明，建議既有部位續抱觀察，靜待表態。"
+
             else:
                 hold_reason += f"動能訊號未達閥值 (勝率 {bb.prob_final:.0%})，建議維持現狀，避免耗損交易成本。"
 
             bb.gemini_reasoning += hold_reason
             bb.last_trade_price = 0.0
 
+        # 洗盤風險評估指令
         atr_ratio = prediction_result.get(FeatureCol.ATR_RATIO.value, 0.0)
         trend_strength = prediction_result.get(FeatureCol.TREND_STRENGTH.value, 0.0)
 
         if bb.prob_final < strategy_config.wash_risk_win_rate and atr_ratio > strategy_config.wash_risk_atr_ratio:
-            warning_msg = (
-                f"\n\n🚨 **[總裁特級指令]** 目前個股真實波幅 (ATR Ratio) 高達 {atr_ratio:.2%}，"
-                f"且趨勢強度呈現不穩 ({trend_strength:.2f})，AI 綜合勝率偏低 ({bb.prob_final:.0%})。"
-                f"請你在戰報的開頭，以強烈的語氣加上一段『⚠️ 總裁警告』，明確告訴使用者："
-                f"『量化模型偵測到該股目前處於高波動的洗盤階段。由於未來極易觸發停損機制（接刀子風險），AI 已主動下修買進評分。強烈建議目前以保護資金為主，空手觀望，等待波動率收斂且底打好後再行評估。』"
+            # 寫給「人類」看的理由
+            bb.gemini_reasoning += f"\n\n🚨 量化系統偵測到該股目前處於高波動洗盤階段 (ATR Ratio: {atr_ratio:.2%}，趨勢強度: {trend_strength:.2f})，接刀風險極高。"
+
+            # 寫給「LLM (Gemini)」聽的強制指令 (進入 System Instruction)
+            directive = (
+                f"【最高權限指令】：在你的戰報開頭，必須以強烈的語氣加上一段『⚠️ 總裁警告』，明確告訴使用者："
+                f"『量化模型偵測到該股目前處於高波動的洗盤階段。由於未來極易觸發停損機制，AI 已主動下修買進評分。強烈建議目前以保護資金為主，空手觀望。』"
             )
-            bb.gemini_reasoning += warning_msg
+
+            bb.system_directives.append(directive)
 
         if should_run_llm:
             dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
