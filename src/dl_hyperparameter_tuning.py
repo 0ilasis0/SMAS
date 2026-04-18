@@ -1,7 +1,7 @@
 import numpy as np
 import optuna
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score
 
 from data.const import MacroTicker
 from debug import dbg
@@ -12,23 +12,25 @@ from ml.params import DLHyperParams
 from ml.trainers.dl_trainer import DLTrainer
 from path import PathConfig
 
+dbg.toggle()
+
 MAX_CONSECUTIVE_FAILURES = 3
 consecutive_failures = 0
 
-def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
+def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_days: int = 240):
     global consecutive_failures
 
-    dbg.log("\n" + "="*60)
-    dbg.log("🎯 啟動 Optuna 全域超參數尋優 (Global Hyperparameter Tuning)")
-    dbg.log(f"   - 考場標的: {len(test_tickers)} 檔")
-    dbg.log(f"   - OOS 隔離: {oos_days} 天")
-    dbg.log("="*60)
+    print("\n" + "="*60)
+    print("🎯 啟動 Optuna 全域超參數尋優 (Global Hyperparameter Tuning)")
+    print(f"   - 考場標的: {len(train_tickers)} 檔")
+    print(f"   - OOS 隔離: {oos_days} 天")
+    print("="*60)
 
     def objective(trial: optuna.Trial):
         global consecutive_failures
 
         suggested_channels = trial.suggest_categorical("CNN_OUT_CHANNELS", [8, 16, 32])
-        suggested_hidden = trial.suggest_categorical("LSTM_HIDDEN", [16, 32])
+        suggested_hidden = trial.suggest_categorical("LSTM_HIDDEN", [16, 32, 64])
 
         suggested_lr = trial.suggest_float("LEARNING_RATE", 1e-4, 5e-3, log=True)
         suggested_dropout = trial.suggest_float("DROPOUT", 0.2, 0.5)
@@ -41,7 +43,7 @@ def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
 
         ticker_aucs = []
 
-        for step, ticker in enumerate(test_tickers):
+        for step, ticker in enumerate(train_tickers):
             try:
                 engine = QuantAIEngine(ticker=ticker, oos_days=oos_days,
                                        dl_model_type=DLModelType.HYBRID, rnn_type=RNNType.LSTM)
@@ -77,10 +79,10 @@ def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
                     dbg.war(f"Trial {trial.number}: {ticker} 標籤不平衡，觸發剪枝。")
                     raise optuna.TrialPruned()
 
-                auc = roc_auc_score(df_eval['true'], df_eval['prob'])
-                ticker_aucs.append(auc)
+                pr_auc = average_precision_score(df_eval['true'], df_eval['prob'])
+                ticker_aucs.append(pr_auc)
 
-                trial.report(auc, step)
+                trial.report(pr_auc, step)
                 if trial.should_prune():
                     raise optuna.TrialPruned()
 
@@ -114,16 +116,17 @@ def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
         if not ticker_aucs:
             return 0.0
 
-        mean_auc = np.mean(ticker_aucs)
-        std_auc = np.std(ticker_aucs)
+        mean_pr_auc = np.mean(ticker_aucs)
+        std_pr_auc = np.std(ticker_aucs)
 
-        penalty_factor = 0.5
-        final_score = mean_auc - (penalty_factor * std_auc)
+        penalty_factor = 0.1
+        final_score = mean_pr_auc - (penalty_factor * std_pr_auc)
 
-        trial.set_user_attr("mean_auc", float(mean_auc))
-        trial.set_user_attr("std_auc", float(std_auc))
+        trial.set_user_attr("mean_pr_auc", float(mean_pr_auc))
+        trial.set_user_attr("std_pr_auc", float(std_pr_auc))
 
         return final_score
+
     # 在您的目錄下建立一個 sqlite 資料庫檔案
     sqlite_path = PathConfig.RESULT_REPORT / "optuna_tuning.db"
     sqlite_path.parent.mkdir(parents=True, exist_ok=True)
@@ -140,29 +143,35 @@ def tune_global_hyperparameters(test_tickers: list, oos_days: int = 240):
         pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=1)
     )
 
-    dbg.log(f"🚀 開始尋優！紀錄存於: {sqlite_path.name}")
-    target_trials = 50
+    print(f"🚀 開始尋優！紀錄存於: {sqlite_path.name}")
     current_trials = len(study.trials)
     remaining_trials = target_trials - current_trials
 
     if remaining_trials > 0:
-        dbg.log(f"目前資料庫已有 {current_trials} 筆紀錄，準備補跑剩餘的 {remaining_trials} 筆...")
+        print(f"目前資料庫已有 {current_trials} 筆紀錄，準備補跑剩餘的 {remaining_trials} 筆...")
         study.optimize(objective, n_trials=remaining_trials, show_progress_bar=True, n_jobs=1)
     else:
-        dbg.log(f"資料庫中已經有 {current_trials} 筆紀錄，已達到或超過目標 {target_trials} 筆，不需再跑！")
+        print(f"資料庫中已經有 {current_trials} 筆紀錄，已達到或超過目標 {target_trials} 筆，不需再跑！")
 
-    dbg.log("\n" + "="*60)
-    dbg.log("🏆 Optuna 尋優完成！")
-    dbg.log(f"最高評分 (Mean AUC - Penalty): {study.best_value:.4f}")
-    dbg.log("請將以下最佳參數手動更新至您的 `ml/params.py`：")
+    print("\n" + "="*60)
+    print("🏆 Optuna 尋優完成！")
+    print(f"最高評分 (Mean AUC - Penalty): {study.best_value:.4f}")
+    print("請將以下最佳參數手動更新至您的 `ml/params.py`：")
     for key, value in study.best_params.items():
         if isinstance(value, float):
-            dbg.log(f"    {key} = {value:.6f}")
+            print(f"    {key} = {value:.6f}")
         else:
-            dbg.log(f"    {key} = {value}")
-    dbg.log("="*60)
+            print(f"    {key} = {value}")
+    print("="*60)
 
 if __name__ == "__main__":
-    test_tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
+    train_tickers = [
+        "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
+        "2382.TW", "2377.TW", "3231.TW", "2324.TW", "2301.TW",
+        "2603.TW", "2881.TW", "2409.TW", "3481.TW", "2344.TW",
+        "2455.TW", "2388.TW", "1519.TW"
+    ]
 
-    tune_global_hyperparameters(test_tickers=test_tickers)
+    target_trials = 50
+
+    tune_global_hyperparameters(train_tickers=train_tickers, target_trials=target_trials)

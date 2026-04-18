@@ -64,11 +64,15 @@ def update_xgb_backtest_models(train_tickers: list, lookahead: int, oos_days: in
 if __name__ == "__main__":
     from ml.params import SessionConfig
     lookahead = SessionConfig.lookahead
+    oos_days = 240
 
     train_tickers = [
-        "0052.TW", "2324.TW","3006.TW", "2301.TW",
-        "3481.TW", "9958.TW", "2344.TW",
-        "2382.TW", "2377.TW", "2454.TW", "1519.TW" "2337.TW",
+        "0052.TW", "2324.TW","3006.TW", "2301.TW", "4916.TW",
+        "3481.TW", "9958.TW", "2344.TW", "2455.TW", "2481.TW",
+        "2382.TW", "2377.TW", "2454.TW", "1519.TW", "2337.TW",
+        "2330.TW", "0050.TW", "2317.TW", "2388.TW", "3563.TW",
+        "2603.TW", "2409.TW", "2881.TW", "3231.TW", '2313.TW',
+        "4919.TW"
     ]
 
-    update_xgb_backtest_models(train_tickers=train_tickers, lookahead=lookahead)
+    update_xgb_backtest_models(train_tickers=train_tickers, lookahead=lookahead, oos_days=oos_days)

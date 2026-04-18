@@ -54,7 +54,7 @@ class DLFeatureEngine:
             else:
                 adj_price = data[col] * adj_factor if col != StockCol.ADJ_CLOSE else data[col]
                 prev_adj_price = data[col].shift(1) * adj_factor.shift(1) if col != StockCol.ADJ_CLOSE else data[col].shift(1)
-                new_features[feat_name] = np.log(adj_price / (prev_adj_price + 1e-9))
+                new_features[feat_name] = np.log((adj_price + 1e-9) / (prev_adj_price + 1e-9))
             dl_features.append(feat_name)
 
         ai_vision_col = str(StockCol.ADJ_CLOSE)

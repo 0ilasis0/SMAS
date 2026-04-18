@@ -284,13 +284,15 @@ if __name__ == "__main__":
     target_total_trials = 2000
     initial_cash: int = 2_000_000
 
-    test_tickers = [
-        "2330.TW", "0050.TW", "2317.TW", "2388.TW",
-        "2603.TW", "2409.TW", "2881.TW", "3231.TW"
+    train_tickers = [
+        "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
+        "2382.TW", "2377.TW", "3231.TW", "2324.TW", "2301.TW",
+        "2603.TW", "2881.TW", "2409.TW", "3481.TW", "2344.TW",
+        "2455.TW", "2388.TW", "1519.TW"
     ]
 
     run_optimization(
-        test_tickers=test_tickers,
+        test_tickers=train_tickers,
         target_persona = target_persona,
         target_total_trials=target_total_trials,
         initial_cash=initial_cash

@@ -49,16 +49,17 @@ class IndicatorParams:
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
+    n_estimators: int = 100
+    random_state: int = 42              # 固定亂數種子，確保結果可重現
+    n_jobs: int = 1
     max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
     min_child_weight: int = 3
     learning_rate: float = 0.0992
-    n_estimators: int = 100
     subsample: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
     colsample_bytree: float = 0.7472    # 每次建樹只用 80% 的特徵
     gamma: float = 3.4100
     reg_alpha: float = 2.2545
     reg_lambda: float = 0.8625
-    random_state: int = 42              # 固定亂數種子，確保結果可重現
 
 @dataclass(frozen=True)
 class TrainConfig:

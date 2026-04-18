@@ -17,6 +17,7 @@ from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
 from path import PathConfig
 
+dbg.toggle()
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -30,7 +31,7 @@ def set_seed(seed=42):
     elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
         torch.mps.manual_seed(seed)
 
-def run_model_comparison(tickers: list, init_cash: int, oos_days: int = 240):
+def run_model_comparison(test_tickers: list, init_cash: int, oos_days: int = 240):
     set_seed(42)
 
     model_configs = [
@@ -47,19 +48,19 @@ def run_model_comparison(tickers: list, init_cash: int, oos_days: int = 240):
     details_path = Path(PathConfig.EXPERIMENT_DETAILS)
     summary_path = Path(PathConfig.EXPERIMENT_SUMMARY)
 
-    dbg.log("\n" + "="*60)
-    dbg.log("🚀 IDSS 深度學習架構 A/B 測試啟動 (含 ML 核心指標)")
-    dbg.log("="*60)
+    print("\n" + "="*60)
+    print("🚀 IDSS 深度學習架構 A/B 測試啟動 (含 ML 核心指標)")
+    print("="*60)
 
-    for ticker in tickers:
-        dbg.log(f"\n\n{'='*50}\n📊 開始處理標的: {ticker}\n{'='*50}")
+    for ticker in test_tickers:
+        print(f"\n\n{'='*50}\n📊 開始處理標的: {ticker}\n{'='*50}")
 
         for config in model_configs:
             model_name = config["name"]
             dl_type = config["dl_type"]
             rnn_type = config["rnn"]
 
-            dbg.log(f"\n🧪 正在測試架構: 【{model_name}】")
+            print(f"\n🧪 正在測試架構: 【{model_name}】")
 
             # 提前宣告變數，防止 finally 清理時發生 UnboundLocalError
             ai_engine = None
@@ -134,7 +135,7 @@ def run_model_comparison(tickers: list, init_cash: int, oos_days: int = 240):
                 }
                 experiment_results.append(record)
 
-                dbg.log(f"✅ {model_name} | DL_AUC: {record['DL_AUC']} | 報酬率: {record['Return(%)']}% | MDD: {record['MDD(%)']}%")
+                print(f"✅ {model_name} | DL_AUC: {record['DL_AUC']} | 報酬率: {record['Return(%)']}% | MDD: {record['MDD(%)']}%")
 
                 # 即時寫入詳細報告，避免中斷時資料遺失
                 df_results = pd.DataFrame(experiment_results)
@@ -172,12 +173,15 @@ def run_model_comparison(tickers: list, init_cash: int, oos_days: int = 240):
     summary_path.parent.mkdir(parents=True, exist_ok=True)
     df_summary.to_csv(summary_path, index=False, encoding="utf-8-sig")
 
-    dbg.log(f"\n🎉 實驗完成！")
-    dbg.log(f"📄 各標的詳細報表已輸出至: {details_path}")
-    dbg.log(f"🏆 模型綜合戰力總結已輸出至: {summary_path}")
+    print(f"\n🎉 實驗完成！")
+    print(f"📄 各標的詳細報表已輸出至: {details_path}")
+    print(f"🏆 模型綜合戰力總結已輸出至: {summary_path}")
 
 if __name__ == "__main__":
-    tickers = ["2330.TW", "2603.TW", "2881.TW", "2409.TW", "2344.TW", "2388.TW"]
+    test_tickers = [
+        "3006.TW", "4916.TW", "9958.TW", "2481.TW",
+        "2337.TW", "3563.TW", "2313.TW", "4919.TW"
+    ]
     init_cash = 2_000_000
 
-    run_model_comparison(tickers=tickers, init_cash=init_cash)
+    run_model_comparison(test_tickers=test_tickers, init_cash=init_cash)

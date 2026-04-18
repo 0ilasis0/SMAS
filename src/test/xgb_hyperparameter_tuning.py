@@ -3,7 +3,7 @@ import optuna
 import pandas as pd
 import xgboost as xgb
 from optuna.storages import JournalFileStorage, JournalStorage
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 from tqdm import tqdm
 
@@ -30,21 +30,23 @@ dbg.toggle()
 def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
     param = {
         'objective': 'binary:logistic',
-        'eval_metric': 'auc',
+        'eval_metric': 'aucpr',
         'random_state': 42,
-        'n_jobs': 1, # 限制 XGBoost 單核心運作，將多核算力交給外層的 Optuna 分配
-        'n_estimators': 1000,
-        'early_stopping_rounds': EARLY_STOP,
+        'n_jobs': 1,
 
-        # 配合嚴格 ATR 標籤，放寬一點深度，並加強雜訊過濾
+        # 強迫 AI 必須認真讀完 100 棵樹，不准中途放棄罷工！
+        'n_estimators': 100,
+        # 'early_stopping_rounds': EARLY_STOP, (這行刪除或註解掉)
+
+        # 恢復稍微激進一點的搜索空間
         'max_depth': trial.suggest_int('max_depth', 3, 6),
-        'min_child_weight': trial.suggest_int('min_child_weight', 1, 10),
-        'learning_rate': trial.suggest_float('learning_rate', 0.05, 0.2, log=True),
-        'subsample': trial.suggest_float('subsample', 0.5, 0.9),
-        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.5, 0.9),
-        'gamma': trial.suggest_float('gamma', 1.0, 4.0),
-        'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 5.0, log=True),
-        'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 5.0, log=True),
+        'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+        'learning_rate': trial.suggest_float('learning_rate', 0.03, 0.15, log=True),
+        'subsample': trial.suggest_float('subsample', 0.6, 0.9),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 0.9),
+        'gamma': trial.suggest_float('gamma', 0.0, 2.0),
+        'reg_alpha': trial.suggest_float('reg_alpha', 1e-3, 2.0, log=True),
+        'reg_lambda': trial.suggest_float('reg_lambda', 1e-3, 2.0, log=True),
     }
 
     tscv = TimeSeriesSplit(n_splits=N_SPLITS)
@@ -54,27 +56,24 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
         X_tr, X_val = X_train.iloc[train_index], X_train.iloc[val_index]
         y_tr, y_val = y_train.iloc[train_index], y_train.iloc[val_index]
 
-        # 防禦機制：確保訓練集與驗證集都有兩種標籤
         if len(np.unique(y_tr)) < 2 or len(np.unique(y_val)) < 2:
-            val_aucs.append(0.5)
-            continue
+            continue # 不要塞 0.5 誤導它，直接跳過無效的 Fold
 
-        # 動態計算正負樣本權重 (因為現在是嚴格標籤，正樣本會變少)
         pos_count = max(sum(y_tr == 1), 1)
         neg_count = max(sum(y_tr == 0), 1)
         dynamic_scale_pos_weight = neg_count / pos_count
 
         model = xgb.XGBClassifier(**param, scale_pos_weight=dynamic_scale_pos_weight)
 
-        model.fit(
-            X_tr, y_tr,
-            eval_set=[(X_val, y_val)],
-            verbose=False
-        )
+        # 移除了 eval_set，因為我們關閉了 early_stopping
+        model.fit(X_tr, y_tr, verbose=False)
 
+        # ===== PR-AUC (平均精度) =====
         preds = model.predict_proba(X_val)[:, 1]
-        auc = roc_auc_score(y_val, preds)
-        val_aucs.append(auc)
+
+        # 使用 average_precision_score 來逼迫模型注重「買進精準度」
+        pr_auc = average_precision_score(y_val, preds)
+        val_aucs.append(pr_auc)
 
         current_mean_auc = np.mean(val_aucs)
         trial.report(current_mean_auc, step)
@@ -85,14 +84,16 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
     if not val_aucs:
         return 0.0
 
-    # 金融風險調整評分 (平滑化變異帶來的風險)
+    # 🌟 關鍵修改 2：改變計分公式！
+    # 取消嚴厲的變異數懲罰。我們改看「最近兩個時間段 (最近期) 的表現」加上「整體平均」
+    recent_auc = np.mean(val_aucs[-2:]) # 越近期的市場表現越重要
     mean_auc = np.mean(val_aucs)
-    std_auc = np.std(val_aucs)
-    penalty_factor = 0.5
-    final_score = mean_auc - (penalty_factor * std_auc)
+
+    # 讓模型偏好在近期市場能考高分的參數
+    final_score = (mean_auc * 0.4) + (recent_auc * 0.6)
 
     trial.set_user_attr("mean_auc", float(mean_auc))
-    trial.set_user_attr("std_auc", float(std_auc))
+    trial.set_user_attr("recent_auc", float(recent_auc))
 
     return final_score
 
@@ -100,15 +101,15 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
 # ==============================================================================
 # 2. 尋優主程式
 # ==============================================================================
-def run_optimization(target_total_trials: int, test_tickers: list, oos_days: int = 240):
+def run_optimization(target_total_trials: int, train_tickers: list, oos_days: int = 240):
     print("="*60)
     print("🚀 XGBoost 金融防過擬合尋優引擎啟動")
     print("="*60)
 
-    print(f"⏳ 正在從資料庫萃取 {len(test_tickers)} 檔標的特徵資料...")
+    print(f"⏳ 正在從資料庫萃取 {len(train_tickers)} 檔標的特徵資料...")
     df_list = []
 
-    for ticker in test_tickers:
+    for ticker in train_tickers:
         try:
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
             macro_tickers = [e.value for e in MacroTicker]
@@ -208,13 +209,14 @@ def run_optimization(target_total_trials: int, test_tickers: list, oos_days: int
     print("="*60)
 
 if __name__ == "__main__":
-    test_tickers = [
-        "0052.TW", "2324.TW","3006.TW", "2301.TW",
-        "3481.TW", "9958.TW", "2344.TW",
-        "2382.TW", "2377.TW", "2454.TW", "1519.TW" "2337.TW",
+    train_tickers = [
+        "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
+        "2382.TW", "2377.TW", "3231.TW", "2324.TW", "2301.TW",
+        "2603.TW", "2881.TW", "2409.TW", "3481.TW", "2344.TW",
+        "2455.TW", "2388.TW", "1519.TW"
     ]
 
     # 強烈建議：對於 XGBoost 來說 300 次已經逼近全域最佳解了
-    target_total_trials = 1200
+    target_total_trials = 600
 
-    run_optimization(target_total_trials=target_total_trials, test_tickers=test_tickers)
+    run_optimization(target_total_trials=target_total_trials, train_tickers=train_tickers)
