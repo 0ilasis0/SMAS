@@ -1,12 +1,5 @@
 from bt.actions import ExecuteBuyNode, ExecuteHoldNode, ExecuteSellNode
-from bt.conditions import (CheckBuySignalNode, CheckCooldownNode,
-                           CheckEntryCountLimitNode, CheckGapLimitNode,
-                           CheckHasPositionNode, CheckNotOverheatedNode,
-                           CheckNotPartialTakenNode,
-                           CheckSellSentimentFilterNode, CheckSellSignalNode,
-                           CheckSentimentFilterNode, CheckStopLossNode,
-                           CheckTakeProfitNode, CheckTrailingStopNode,
-                           CheckTrendFilterNode)
+from bt.conditions import *
 from bt.core import Inverter, Selector, Sequence
 from bt.strategy_config import StrategyConfig
 
