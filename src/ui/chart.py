@@ -27,7 +27,6 @@ def render_chart():
             df_recent = get_cached_market_data(current_ticker)
 
             if not df_recent.empty:
-                # 建立水平排列的按鈕，作為快速對焦功能
                 window_map = {
                     "近 1 個月": 20,
                     "近 3 個月": 60,
@@ -50,42 +49,53 @@ def render_chart():
                 initial_start_date = visible_df.index[0]
                 end_date = visible_df.index[-1]
 
-                # 這樣可以確保最後一根 K 線右側有留白，不被軸線或捲軸遮住
                 padded_end_date = end_date + pd.Timedelta(days=1)
 
                 fig = go.Figure()
 
-                # 繪圖時使用完整 df_recent，這樣拉桿才能往回拉到 3 年前
-                fig.add_trace(go.Candlestick(x=df_recent.index,
-                                             open=df_recent[StockCol.OPEN.value],
-                                             high=df_recent[StockCol.HIGH.value],
-                                             low=df_recent[StockCol.LOW.value],
-                                             close=df_recent[StockCol.CLOSE.value],
-                                             increasing_line_color=Color.RED.value,
-                                             decreasing_line_color=Color.GREEN.value,
-                                             name='K線'))
+                # --- 建立 K 線圖 ---
+                custom_hovertemplate = (
+                    "日期: %{x|%Y-%m-%d}<br>" +
+                    "開盤: %{open:.2f}<br>" +
+                    "最高: %{high:.2f}<br>" +
+                    "最低: %{low:.2f}<br>" +
+                    "收盤: %{close:.2f}<br>" +
+                    "<extra></extra>"
+                )
 
-                # 計算完整均線
+                fig.add_trace(go.Candlestick(
+                    x=df_recent.index,
+                    open=df_recent[StockCol.OPEN.value],
+                    high=df_recent[StockCol.HIGH.value],
+                    low=df_recent[StockCol.LOW.value],
+                    close=df_recent[StockCol.CLOSE.value],
+                    increasing_line_color=Color.RED.value,
+                    decreasing_line_color=Color.GREEN.value,
+                    name='K線',
+                    hovertemplate=custom_hovertemplate # 套用自訂提示框
+                ))
+
+                # --- 建立均線 ---
                 ma5 = df_recent[StockCol.CLOSE.value].rolling(window=5).mean().bfill()
                 ma20 = df_recent[StockCol.CLOSE.value].rolling(window=20).mean().bfill()
                 ma60 = df_recent[StockCol.CLOSE.value].rolling(window=60).mean().bfill()
                 ma240 = df_recent[StockCol.CLOSE.value].rolling(window=240).mean().bfill()
 
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE.value, width=1.2), name='5MA'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE.value, width=1.2), name='20MA'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE.value, width=1.2), name='60MA'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE.value, width=1.2), name='240MA'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE.value, width=1.2), name='5MA', hoverinfo='none'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE.value, width=1.2), name='20MA', hoverinfo='none'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE.value, width=1.2), name='60MA', hoverinfo='none'))
+                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE.value, width=1.2), name='240MA', hoverinfo='none'))
 
-                # 假日斷點處理
+
+                # --- 假日斷點處理 ---
                 all_dates = pd.date_range(start=df_recent.index.min(), end=df_recent.index.max())
                 missing_dates = all_dates.difference(df_recent.index)
                 missing_dates_str = missing_dates.strftime('%Y-%m-%d').tolist()
 
-                # Y 軸區間計算 (基於使用者選擇的對焦區間)
+                # --- Y 軸區間計算 ---
                 local_max = visible_df[StockCol.HIGH.value].max()
                 local_min = visible_df[StockCol.LOW.value].min()
 
-                # 包含 240MA 以免在趨勢中斷頭
                 visible_ma240 = ma240.iloc[-lookback_days:]
                 if not visible_ma240.dropna().empty:
                     local_max = max(local_max, visible_ma240.max())
@@ -95,10 +105,10 @@ def render_chart():
                 padding = amplitude * 0.10 if amplitude != 0 else local_max * 0.05
                 y_range = [local_min - padding, local_max + padding]
 
-                # 計算資料的絕對邊界 (給予前後各 2 天的緩衝)
                 min_date = df_recent.index.min() - pd.Timedelta(days=2)
                 max_date = df_recent.index.max() + pd.Timedelta(days=3)
 
+                # --- 圖表佈局設定 ---
                 fig.update_layout(
                     margin=dict(l=0, r=0, t=10, b=0),
                     height=550,
@@ -106,15 +116,17 @@ def render_chart():
                     xaxis_rangeslider_thickness=0.08,
                     legend=dict(orientation="h", yanchor="top", y=0.98, xanchor="left", x=0.01, bgcolor="rgba(255, 255, 255, 0.6)"),
                     dragmode='pan',
+                    hovermode="x unified", # 啟用十字準星的統一提示框模式
                     xaxis=dict(
                         rangebreaks=[dict(values=missing_dates_str)],
                         range=[initial_start_date, padded_end_date],
                         showgrid=True,
-                        gridcolor="rgba(200, 200, 200, 0.2)"
+                        gridcolor="rgba(200, 200, 200, 0.2)",
+                        hoverformat="%Y-%m-%d" # 設定十字準星在 X 軸上顯示的日期格式
                     ),
                     yaxis=dict(
                         range=y_range,
-                        fixedrange=True, # 鎖定 Y 軸，只能在 X 軸平移
+                        fixedrange=True,
                         showgrid=True,
                         gridcolor="rgba(200, 200, 200, 0.2)",
                         zeroline=False

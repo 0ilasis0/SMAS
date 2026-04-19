@@ -260,7 +260,7 @@ class DLTrainer:
 
         except RuntimeError as re:
             error_details = traceback.format_exc()
-            dbg.error(f"💀 DL 模型結構不匹配 (Shape Mismatch)！\n您可能修改了特徵數量 (num_features={num_features}) 或 Time Steps，導致舊的權重檔塞不進去。\n請至 UI 介面點擊「強制深度重訓」！\n追蹤:\n{error_details}")
+            dbg.error(f"💀 DL 模型結構不匹配 (Shape Mismatch)！\n您可能修改了特徵數量 (num_features={num_features}) 或 Time Steps，導致舊的權重檔塞不進去。\n請至 UI 介面點擊「全域模型訓練」！\n追蹤:\n{error_details}")
             return None
 
         except Exception as e:

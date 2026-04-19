@@ -218,7 +218,7 @@ def system_settings_dialog():
     st.markdown("#### 🤖 AI 引擎維運 (MLOps)")
     st.caption("定期讓所有模型吸收最新市場 K 線與趨勢。建議於**每週末**執行一次。過程可能需要數分鐘。")
 
-    if st.button("🔄 執行全域深度重訓", type="primary", use_container_width=True):
+    if st.button("🔄 執行全域模型訓練", type="primary", use_container_width=True):
         st.session_state[SessionKey.IS_GLOBAL_TRAINING.value] = True
         st.rerun()
 

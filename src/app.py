@@ -73,7 +73,7 @@ def run_mlops_pipeline(ticker: str):
 
 
 def run_global_mlops_pipeline():
-    """執行全域 MLOps：走訪自選股清單，全部重新抓資料並深度重訓"""
+    """執行全域 MLOps：走訪自選股清單，全部重新抓資料並所有模型重新訓練"""
     # 從所有組合包中提取出不重複的股票清單 (聯集)
     account: "Account" = st.session_state.get(SessionKey.PORTFOLIO.value)
     if not account: return
@@ -95,7 +95,7 @@ def run_global_mlops_pipeline():
     progress_bar = st.progress(0, text="準備啟動 MLOps 全域管線...")
 
     try:
-        with st.status("🔄 全域深度重訓執行中 (週末 MLOps 管線)...", expanded=True) as status:
+        with st.status("🔄 全域模型訓練執行中 (週末 MLOps 管線)...", expanded=True) as status:
             for idx, ticker in enumerate(watch_list):
                 current_step = idx + 1
 
@@ -123,8 +123,8 @@ def run_global_mlops_pipeline():
                     st.error(f"❌ [{ticker}] 訓練失敗: {e}")
 
             # 完成後將進度條推滿
-            progress_bar.progress(1.0, text="🎉 所有模型訓練完畢！")
-            status.update(label="🎉 所有自選股模型深度重訓完畢！系統已吸收最新市場趨勢。", state="complete", expanded=False)
+            progress_bar.progress(1.0, text="🎉 全域模型訓練完畢！")
+            status.update(label="🎉 所有自選股模型訓練完畢！系統已吸收最新市場趨勢。", state="complete", expanded=False)
             time.sleep(2)
             progress_bar.empty()
     finally:
