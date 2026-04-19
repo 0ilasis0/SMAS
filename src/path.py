@@ -16,10 +16,10 @@ def _resource_path(*paths):
     """
     if getattr(sys, "frozen", False):
         # exe 打包後使用的路徑
-        base_path = Path(sys.executable).resolve().parent.parent
+        base_path = Path(sys.executable).resolve().parent
     else:
         # 開發環境使用的路徑
-        base_path = Path(__file__).resolve().parent.parent.parent
+        base_path = Path(__file__).resolve().parent.parent
 
     return base_path.joinpath(*paths)
 
