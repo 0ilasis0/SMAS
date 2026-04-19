@@ -3,7 +3,7 @@ import os
 
 import streamlit as st
 
-from bt.account import Account, Position, SubPortfolio
+from bt.account import Account, AccountCol, Position, SubPortfolio
 from bt.const import TradeDecision
 from path import PathConfig
 from ui.const import EncodingConst, PortfolioCol
@@ -20,17 +20,9 @@ def load_portfolio() -> Account:
         with open(PathConfig.PORTFOLIO, "r", encoding=EncodingConst.UTF8.value) as f:
             data = json.load(f)
 
-        # 1. 判斷是「舊版單一帳戶格式」還是「新版多組合包格式」
-        if PortfolioCol.POSITIONS.value in data and "sub_portfolios" not in data:
-            st.toast("🔄 偵測到舊版資產資料，正在自動升級為「組合包」架構...", icon="🛠️")
-            account = _migrate_legacy_to_v2(data)
-            # 升級後立即存檔，確保下次讀取是新版
-            save_portfolio(account)
-            return account
-
-        # 2. 讀取新版 (v2) 格式
-        account.total_cash = data.get("total_cash", 0.0)
-        sp_data = data.get("sub_portfolios", {})
+        # 讀取檔案
+        account.total_cash = data.get(AccountCol.TOTAL_CASH.value, 0.0)
+        sp_data = data.get(AccountCol.SUB_PORTFOLIOS.value, {})
 
         for sp_id, sp_dict in sp_data.items():
             sp = SubPortfolio(
@@ -89,9 +81,9 @@ def save_portfolio(account: Account):
         os.makedirs(os.path.dirname(PathConfig.PORTFOLIO), exist_ok=True)
 
         data_to_save = {
-            "version": "2.0",
-            "total_cash": account.total_cash,
-            "sub_portfolios": {}
+            AccountCol.VERSION.value: "2.0",
+            AccountCol.TOTAL_CASH.value: account.total_cash,
+            AccountCol.SUB_PORTFOLIOS.value: {}
         }
 
         for sp_id, sp in account.sub_portfolios.items():
@@ -110,7 +102,7 @@ def save_portfolio(account: Account):
                     PortfolioCol.HISTORY.value: pos.history
                 }
 
-            data_to_save["sub_portfolios"][sp_id] = sp_dict
+            data_to_save[AccountCol.SUB_PORTFOLIOS.value][sp_id] = sp_dict
 
         with open(PathConfig.PORTFOLIO, "w", encoding=EncodingConst.UTF8.value) as f:
             json.dump(data_to_save, f, ensure_ascii=False, indent=4)

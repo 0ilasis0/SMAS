@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from debug import dbg
+
 if TYPE_CHECKING:
     from ml.const import DLModelType, RNNType
 
-def resource_path(*paths):
+def _resource_path(*paths):
     """
     取得外部資源路徑：
     - 打包成 exe 時：使用 exe 同目錄
@@ -14,34 +16,43 @@ def resource_path(*paths):
     """
     if getattr(sys, "frozen", False):
         # exe 打包後使用的路徑
-        base_path = Path(sys.executable).resolve().parent
+        base_path = Path(sys.executable).resolve().parent.parent
     else:
         # 開發環境使用的路徑
-        base_path = Path(__file__).resolve().parent.parent
+        base_path = Path(__file__).resolve().parent.parent.parent
 
     return base_path.joinpath(*paths)
 
 
 @dataclass(frozen = True)
-class PathBase:
-    processed = resource_path("data", "processed")
-    model = resource_path("data", "processed", "model")
-    raw = resource_path("data", "raw")
+class _PathBase:
+    processed = _resource_path("data", "processed")
+    model = _resource_path("data", "processed", "model")
+    report = _resource_path("data", "processed", "report")
+    raw = _resource_path("data", "raw")
+
+    @classmethod
+    def get_all_paths(cls):
+        return [v for _, v in vars(cls).items() if isinstance(v, Path)]
 
 @dataclass(frozen = True)
 class PathConfig:
-    RESULT_REPORT = PathBase.processed / "report"
-    EXPERIMENT_DETAILS = PathBase.processed / "report" / "experiment_detail.csv"
-    EXPERIMENT_SUMMARY = PathBase.processed / "report" / "experiment_summary.csv"
-    ALL_STOCKS_PERSONA = PathBase.processed / "report" / "all_stocks_persona.csv"
-    SUMMARY_PERSONA = PathBase.processed / "report" / "summary_persona.csv"
-    SETTINGS = PathBase.processed / "settings.json"
-    PORTFOLIO = PathBase.processed / "portfolio.json"
-    CACHE_FILE = PathBase.processed / "update_cache.json"
-    IDSS_DATA = PathBase.processed / "idss_data.db"
-    LLM_CACHE = PathBase.processed / "llm_cache.db"
-    GEMINI_KEY = PathBase.raw / "key.env"
-    MODEL_DIR = PathBase.model
+    MODEL_DIR = _PathBase.model
+    RESULT_REPORT = _PathBase.report
+    EXPERIMENT_DETAILS = _PathBase.report / "experiment_detail.csv"
+    EXPERIMENT_SUMMARY = _PathBase.report / "experiment_summary.csv"
+    ALL_STOCKS_PERSONA = _PathBase.report / "all_stocks_persona.csv"
+    SUMMARY_PERSONA = _PathBase.report/ "summary_persona.csv"
+    SETTINGS = _PathBase.processed / "settings.json"
+    PORTFOLIO = _PathBase.processed / "portfolio.json"
+    CACHE_FILE = _PathBase.processed / "update_cache.json"
+    IDSS_DATA = _PathBase.processed / "idss_data.db"
+    LLM_CACHE = _PathBase.processed / "llm_cache.db"
+    GEMINI_KEY = _PathBase.raw / "key.env"
+
+    @classmethod
+    def get_all(cls):
+        return [e for e in cls]
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:
@@ -73,14 +84,34 @@ class PathConfig:
 
     @classmethod
     def get_market_model_path(cls, oos_days: int = 0) -> Path:
-        cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+        if not cls.MODEL_DIR.exists():
+            cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
+            dbg.log(f"建立新資料夾: {cls.MODEL_DIR}")
+
         oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
         return cls.MODEL_DIR / f"universal_market_model{oos_suffix}.joblib"
 
     @classmethod
     def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str, oos_days: int = 0) -> Path:
         """通用路徑生成邏輯 """
-        base_dir.mkdir(parents=True, exist_ok=True)
+        if not base_dir.exists():
+            base_dir.mkdir(parents=True, exist_ok=True)
+            dbg.log(f"建立新資料夾: {base_dir}")
+
         clean_ticker = ticker.split('.')[0]
         oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
         return base_dir / f"{clean_ticker}{suffix}{oos_suffix}{ext}"
+
+
+def setup_filesystem():
+    """
+    確保所有靜態路徑的「資料夾」都存在。
+    """
+    try:
+        for d in _PathBase.get_all_paths():
+            if not d.exists():
+                d.mkdir(parents=True, exist_ok=True)
+                dbg.log(f"[系統初始化] 建立新資料夾: {d}")
+
+    except Exception as e:
+        dbg.error(f"路徑系統初始化警告: {e}")

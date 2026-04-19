@@ -57,7 +57,6 @@ class Account:
     """
     total_cash: float = 0.0
     sub_portfolios: Dict[str, SubPortfolio] = field(default_factory=dict)
-    # positions: Dict[str, Position] = field(default_factory=dict)
 
     @property
     def unallocated_cash(self) -> float:
