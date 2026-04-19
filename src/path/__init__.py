@@ -1,1 +1,1 @@
-from .core import PathConfig, setup_filesystem
+from .core import PathConfig

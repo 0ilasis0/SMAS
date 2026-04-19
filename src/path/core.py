@@ -115,3 +115,5 @@ def setup_filesystem():
 
     except Exception as e:
         dbg.error(f"路徑系統初始化警告: {e}")
+
+setup_filesystem()
