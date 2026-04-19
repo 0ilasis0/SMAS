@@ -25,7 +25,7 @@ def _resource_path(*paths):
 
 
 @dataclass(frozen = True)
-class _PathBase:
+class _PathFile:
     processed = _resource_path("data", "processed")
     model = _resource_path("data", "processed", "model")
     report = _resource_path("data", "processed", "report")
@@ -37,18 +37,18 @@ class _PathBase:
 
 @dataclass(frozen = True)
 class PathConfig:
-    MODEL_DIR = _PathBase.model
-    RESULT_REPORT = _PathBase.report
-    EXPERIMENT_DETAILS = _PathBase.report / "experiment_detail.csv"
-    EXPERIMENT_SUMMARY = _PathBase.report / "experiment_summary.csv"
-    ALL_STOCKS_PERSONA = _PathBase.report / "all_stocks_persona.csv"
-    SUMMARY_PERSONA = _PathBase.report/ "summary_persona.csv"
-    SETTINGS = _PathBase.processed / "settings.json"
-    PORTFOLIO = _PathBase.processed / "portfolio.json"
-    CACHE_FILE = _PathBase.processed / "update_cache.json"
-    IDSS_DATA = _PathBase.processed / "idss_data.db"
-    LLM_CACHE = _PathBase.processed / "llm_cache.db"
-    GEMINI_KEY = _PathBase.raw / "key.env"
+    MODEL_DIR = _PathFile.model
+    RESULT_REPORT = _PathFile.report
+    EXPERIMENT_DETAILS = _PathFile.report / "experiment_detail.csv"
+    EXPERIMENT_SUMMARY = _PathFile.report / "experiment_summary.csv"
+    ALL_STOCKS_PERSONA = _PathFile.report / "all_stocks_persona.csv"
+    SUMMARY_PERSONA = _PathFile.report/ "summary_persona.csv"
+    SETTINGS = _PathFile.processed / "settings.json"
+    PORTFOLIO = _PathFile.processed / "portfolio.json"
+    CACHE_FILE = _PathFile.processed / "update_cache.json"
+    IDSS_DATA = _PathFile.processed / "idss_data.db"
+    LLM_CACHE = _PathFile.processed / "llm_cache.db"
+    GEMINI_KEY = _PathFile.raw / "key.env"
 
     @classmethod
     def get_all(cls):
@@ -108,7 +108,7 @@ def setup_filesystem():
     確保所有靜態路徑的「資料夾」都存在。
     """
     try:
-        for d in _PathBase.get_all_paths():
+        for d in _PathFile.get_all_paths():
             if not d.exists():
                 d.mkdir(parents=True, exist_ok=True)
                 dbg.log(f"[系統初始化] 建立新資料夾: {d}")
