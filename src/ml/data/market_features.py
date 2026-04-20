@@ -21,6 +21,8 @@ class MarketFeatureEngine:
     def process_pipeline(self, df_market: pd.DataFrame, is_training: bool = True) -> pd.DataFrame:
         if df_market.empty: return pd.DataFrame()
 
+        df_market.columns = [str(c).strip().lower() for c in df_market.columns]
+
         dbg.log("開始計算 LightGBM 大盤防禦特徵...")
         data = df_market.copy()
         ai_vision_col = str(StockCol.ADJ_CLOSE)
@@ -33,14 +35,15 @@ class MarketFeatureEngine:
         # ==========================================
         # 2. 美股衍生特徵 (無未來函數對齊版)
         # ==========================================
-        sox_close_col = MarketFeatureCol.SOX_CLOSE.value
+        sox_close_col = f"{MacroTicker.SOX.value.replace('^', '')}_close".lower()
         if sox_close_col in data.columns:
             data[MarketFeatureCol.SOX_RET_1D] = data[sox_close_col].pct_change()
             data[MarketFeatureCol.SOX_RET_5D] = data[sox_close_col].pct_change(periods=5)
             # 台美相對強弱差 (Spread)。若費半暴跌但台股抗跌，數值會大於 0
             data[MarketFeatureCol.SOX_TWII_SPREAD] = twii_ret_1d - data[MarketFeatureCol.SOX_RET_1D]
         else:
-            dbg.war("警告：未發現 SOX_close 欄位，費半相關特徵將補 0。")
+            dbg.war(f"警告：未發現 {sox_close_col} 欄位，費半相關特徵將補 0。")
+            dbg.log(f"目前可用的欄位有: {data.columns.tolist()}")
             data[MarketFeatureCol.SOX_RET_1D] = 0.0
             data[MarketFeatureCol.SOX_RET_5D] = 0.0
             data[MarketFeatureCol.SOX_TWII_SPREAD] = 0.0
@@ -90,7 +93,7 @@ class MarketFeatureEngine:
 
         # === VIX 恐慌指數 ===
         # 假設您的 DB 會把 ^VIX 變成 VIX_close
-        vix_col = f"{MacroTicker.VIX.value.replace('^', '')}_close"
+        vix_col = f"{MacroTicker.VIX.value.replace('^', '')}_close".lower()
         if vix_col in data.columns:
             data[MarketFeatureCol.VIX_CLOSE] = data[vix_col]
             vix_ma20 = data[vix_col].rolling(20).mean()
@@ -101,7 +104,7 @@ class MarketFeatureEngine:
 
         # === 台幣匯率 (外資動向) ===
         # 假設您的 DB 會把 TWD=X 變成 TWD=X_close
-        twd_col = f"{MacroTicker.USDTWD.value}_close"
+        twd_col = f"{MacroTicker.USDTWD.value}_close".lower()
         if twd_col in data.columns:
             data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
         else:

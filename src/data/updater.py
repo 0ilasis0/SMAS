@@ -21,31 +21,6 @@ class DataUpdater:
         self.fetcher = fetcher
         self.cache_file = Path(PathConfig.CACHE_FILE)
 
-    def _needs_update(self, cache_key: str) -> bool:
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        if not self.cache_file.exists(): return True
-        try:
-            with open(self.cache_file, 'r', encoding='utf-8') as f:
-                cache = json.load(f)
-            return cache.get(cache_key) != today_str
-        except Exception:
-            return True
-
-    def _mark_updated(self, cache_key: str):
-        today_str = datetime.now().strftime('%Y-%m-%d')
-        cache = {}
-        if self.cache_file.exists():
-            try:
-                with open(self.cache_file, 'r', encoding='utf-8') as f:
-                    cache = json.load(f)
-            except Exception: pass
-        cache[cache_key] = today_str
-        try:
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            dbg.war(f"無法寫入更新快取檔: {e}")
-
     def update_market_data(self, ticker: str, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
         if force_wipe:
             dbg.log(f"🧹 [資料清洗] 正在清空 {ticker} 舊版歷史資料庫...")
@@ -96,3 +71,28 @@ class DataUpdater:
             dbg.log("⚡ [事件日曆] 今日已同步過證交所事件，跳過網路抓取。")
 
         return success
+
+    def _needs_update(self, cache_key: str) -> bool:
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        if not self.cache_file.exists(): return True
+        try:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+            return cache.get(cache_key) != today_str
+        except Exception:
+            return True
+
+    def _mark_updated(self, cache_key: str):
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        cache = {}
+        if self.cache_file.exists():
+            try:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
+                    cache = json.load(f)
+            except Exception: pass
+        cache[cache_key] = today_str
+        try:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(cache, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            dbg.war(f"無法寫入更新快取檔: {e}")
