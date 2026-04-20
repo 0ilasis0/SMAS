@@ -55,8 +55,8 @@ class MetaLearner:
         try:
             honest_aucs = cross_val_score(
                 self.model,
-                X_meta.values,
-                y_meta.values,
+                X_meta,
+                y_meta,
                 cv=tscv,
                 scoring='roc_auc'
             )
@@ -77,7 +77,7 @@ class MetaLearner:
         dbg.log("開始訓練最終上線版 Meta-Learner 模型...")
 
         # 訓練邏輯迴歸
-        self.model.fit(X_meta.values, y_meta.values)
+        self.model.fit(X_meta, y_meta)
 
         # 觀察大腦權重分配
         weights = self.model.coef_[0]
@@ -122,5 +122,8 @@ class MetaLearner:
         prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)
         prob_dl = MathTool.clamp(prob_dl, 0.0, 1.0)
 
-        X_new = np.array([[prob_xgb, prob_dl]])
+        X_new = pd.DataFrame(
+            [[prob_xgb, prob_dl]],
+            columns=[SignalCol.PROB_XGB, SignalCol.PROB_DL]
+        )
         return self.model.predict_proba(X_new)[0, 1]
