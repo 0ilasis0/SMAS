@@ -18,38 +18,38 @@ class StrategyConfig:
     """行為樹策略的基礎超參數容器 (已更新為 Optuna 尋優後的最強 MODERATE 基準)"""
 
     # ================= 防守與出場參數 =================
-    stop_loss_tolerance: float = -0.10           # 強制停損容忍度 (原: -0.09)
-    trailing_stop_drawdown: float = -0.1         # 移動停損回落容忍度 (原: -0.10)
-    stop_loss_sell_ratio: float = 0.8            # 觸發停損時的賣出比例 (原: 0.8)
+    stop_loss_tolerance: float = -0.09           # 強制停損容忍度，稍微收緊 (原: -0.10)
+    trailing_stop_drawdown: float = -0.12        # 移動停損回落容忍度，放寬以防洗盤 (原: -0.10)
+    stop_loss_sell_ratio: float = 0.8            # 觸發停損時的賣出比例維持不變 (原: 0.80)
 
-    sell_signal_threshold: float = 0.27          # AI 勝率低迷預警門檻 (原: 0.30)
-    warning_sell_ratio: float = 0.7              # AI 預警時的戰術減碼比例 (原: 0.3)
+    sell_signal_threshold: float = 0.28          # AI 勝率低迷預警門檻 (原: 0.27)
+    warning_sell_ratio: float = 0.3              # AI 預警時的減碼比例大幅下降，不再輕易下車 (原: 0.70)
 
-    take_profit_target: float = 0.18             # 極端停利目標 (原: 0.13)
-    take_profit_sell_ratio: float = 1.0          # 觸發極端停利時的減碼比例 (原: 1.0)
+    take_profit_target: float = 0.20             # 極端停利目標拉高至 20% (原: 0.18)
+    take_profit_sell_ratio: float = 0.3          # 觸發停利時只賣 30%，讓利潤奔跑 (原: 1.0)
 
     # ================= 進攻與資金控管參數 =================
-    max_entries: int = 1                         # 單一波段最大加碼次數 (原: 2)
-    max_gap_ratio: float = 0.05                  # 低價股的跳空容忍度 (原: 0.04)
+    max_entries: int = 2                         # 單一波段最大加碼次數恢復為 2 (原: 1)
+    max_gap_ratio: float = 0.07                  # 跳空容忍度放寬至 7% (原: 0.05)
 
-    strong_buy_threshold: float = 0.55           # 強烈買進訊號門檻 (原: 0.51)
-    strong_buy_capital_ratio: float = 0.7        # 強烈買進時動用的資金比例 (原: 1.0)
+    strong_buy_threshold: float = 0.54           # 強烈買進訊號門檻大幅降低 (原: 0.55)
+    strong_buy_capital_ratio: float = 0.75        # 只要達標，直接 100% 資金重壓 (原: 0.70)
 
-    conservative_buy_threshold: float = 0.5      # 保守買進訊號門檻 (原: 0.50)
-    conservative_buy_capital_ratio: float = 0.40 # 保守買進時動用的資金比例 (原: 0.3)
+    conservative_buy_threshold: float = 0.50     # 保守買進訊號門檻 (原: 0.50)
+    conservative_buy_capital_ratio: float = 0.3 # 試水溫維持動用 30% 資金 (原: 0.40)
 
     # ================= 大盤防禦雷達門檻 =================
-    safe_threshold: float = 0.45                 # 大盤安全度門檻 (原: 0.44)
-    cooldown_days: int = 3                       # 交易冷卻天數
+    safe_threshold: float = 0.51                 # 大盤安全度門檻稍微提高 (原: 0.45)
+    cooldown_days: int = 2                       # 交易冷卻天數縮短 (原: 3)
 
-    max_return_5d: float = 0.23                  # 5日漲幅過熱門檻 (原: 0.36)
-    max_bias_20: float = 0.2                     # 20日乖離率過熱門檻 (原: 0.20)
+    max_return_5d: float = 0.17                  # 5日漲幅過熱門檻極度收緊，絕不追高 (原: 0.23)
+    max_bias_20: float = 0.23                    # 20日乖離率過熱門檻微調 (原: 0.20)
 
     # ================= 動態水位風控參數 =================
-    # 買進風險懲罰 (原: heavy=0.15, light=0.12)
-    buy_risk: RiskWeights = field(default_factory=lambda: RiskWeights(heavy=0.15, light=0.1))
-    # 賣出風險敏感 (原: heavy=0.10, light=0.03)
-    sell_risk: RiskWeights = field(default_factory=lambda: RiskWeights(heavy=0.1, light=0.05))
+    # 買進風險懲罰：倉位重時的買進懲罰加重至 0.20，防禦度極高 (原: heavy=0.15, light=0.10)
+    buy_risk: RiskWeights = field(default_factory=lambda: RiskWeights(heavy=0.20, light=0.09))
+    # 賣出風險敏感：倉位重時的賣出敏感度提高至 0.17 (原: heavy=0.10, light=0.05)
+    sell_risk: RiskWeights = field(default_factory=lambda: RiskWeights(heavy=0.17, light=0.06))
 
     # ================= LLM 總開關 =================
     enable_llm_oracle: bool = False
@@ -108,36 +108,41 @@ class PersonaFactory:
     @staticmethod
     def get_config(persona: TradingPersona) -> StrategyConfig:
         if persona == TradingPersona.AGGRESSIVE:
-            # 🚀 激進型：關閉防護罩，放寬買進門檻，拉開停利損空間
+            # 激進型：策略特徵：單次重擊不加碼、超寬的停利空間讓利潤奔跑、遇到危險分批撤退。
             return StrategyConfig(
-                # [防守參數]
-                stop_loss_tolerance=-0.20,         # 容忍 20% 虧損 (原: -0.15)
-                trailing_stop_drawdown=-0.18,      # 回落 18% 才跑，給予極大震盪空間 (原: -0.10)
-                take_profit_target=0.25,           # 賺 25% 才開始停利 (原: 0.20)
-                take_profit_sell_ratio=1.0,        # 停利時一次全賣 (原: 0.30)
-                stop_loss_sell_ratio=1.0,          # 停損時一次全賣
-                sell_signal_threshold=0.32,        # AI 預警門檻
-                warning_sell_ratio=0.70,           # AI 預警時賣出 70%
+                # ================= [防守參數] =================
+                stop_loss_tolerance=-0.18,         # 容忍 18% 虧損 (原: -0.20)
+                trailing_stop_drawdown=-0.20,      # 回落 20% 才跑，給予極端震盪空間 (原: -0.18)
+                take_profit_target=0.33,           # 賺 33% 才開始停利，超級讓利潤奔跑 (原: 0.25)
+                take_profit_sell_ratio=0.5,        # 停利時只賣一半，剩下的繼續凹 (原: 1.0)
+                stop_loss_sell_ratio=0.8,          # 停損時賣 80% 留點火種 (原: 1.0)
+                sell_signal_threshold=0.32,        # AI 預警門檻維持不變 (原: 0.32)
+                warning_sell_ratio=0.30,           # AI 預警時只小幅度減碼 30% (原: 0.70)
 
-                # [進攻參數]
-                max_entries=3,                     # 允許加碼 3 次
-                max_gap_ratio=0.02,                # 跳空容忍度
-                strong_buy_threshold=0.50,         # 勝率 50% 就敢重壓 All-in (原: 0.57)
-                strong_buy_capital_ratio=0.75,     # 重壓 100 % 資金
-                conservative_buy_threshold=0.48,   # 勝率 48% 就敢試水溫 (原: 0.52)
-                conservative_buy_capital_ratio=0.3,# 試水溫只用 30% 資金
+                # ================= [進攻參數] =================
+                max_entries=4,                     # ⚠️ AI 判定激進型不該分批加碼，直接單次定勝負 (原: 3)
+                max_gap_ratio=0.10,                # 完全無視跳空風險，容忍 10% 缺口 (原: 0.02)
 
-                # [大盤防禦參數]
-                safe_threshold=0.44,               # 幾乎無視大盤，44% 安全度就上 (原: 0.40)
-                cooldown_days=3,                   # 停損後冷卻 3 天 (原: 1)
-                max_return_5d=0.30,                # 5日漲幅過熱門檻 (原: 0.40)
-                max_bias_20=0.20,                  # 20日乖離過熱門檻
+                # ⚠️ AI 判定激進型的強弱買進門檻不需區分，統一為 46% 就直接進場
+                strong_buy_threshold=0.50,         # 勝率 46% 就敢重壓 (原: 0.50)
+                conservative_buy_threshold=0.45,   # (原: 0.48)
 
-                # [動態風控水位參數]
-                buy_risk=RiskWeights(heavy=0.10, light=0.05), # 倉位重時的買進懲罰 (原: heavy=0.07, light=0.04)
-                sell_risk=RiskWeights(heavy=0.11, light=0.10),# 倉位重時的賣出敏感度
+                strong_buy_capital_ratio=0.75,     # 重壓 80% 資金 (原: 0.75)
+                conservative_buy_capital_ratio=0.3, # (原: 0.30)
 
-                # [定價參數]
+                # ================= [大盤防禦參數] =================
+                safe_threshold=0.47,               # 激進型反而要求大盤要過半安全 (0.51) 才肯出手 (原: 0.44)
+                cooldown_days=1,                   # 停損後隔天馬上可以再戰 (原: 3)
+                max_return_5d=0.22,                # 5日漲幅超過 22% 就不追高 (原: 0.30)
+                max_bias_20=0.14,                  # 20日乖離超過 14% 就不追高 (原: 0.20)
+
+                # ================= [動態風控水位參數] =================
+                # 買進懲罰大幅提高，代表 AI 不希望在倉位重的時候繼續無腦買
+                buy_risk=RiskWeights(heavy=0.30, light=0.14), # (原: heavy=0.10, light=0.05)
+                # 賣出敏感度降低，代表 AI 傾向抱住獲利，不受一點風吹草動就賣出
+                sell_risk=RiskWeights(heavy=0.05, light=0.03),# (原: heavy=0.11, light=0.10)
+
+                # ================= [智慧定價參數 (手動設定)] =================
                 buy_panic_discount_atr=0.5,      # 別人恐慌接刀要折價 1.2，激進型只要折價 0.5 就敢搶反彈
                 buy_strong_discount_atr=0.0,     # 勝率高時，直接掛「平盤價 (0 折價)」全力追擊
                 buy_normal_discount_atr=0.3,     # 常規震盪也只等微幅拉回 0.3 ATR 就買
@@ -145,7 +150,7 @@ class PersonaFactory:
                 sell_normal_premium_atr=0.1,     # 常規轉弱時，幾乎平盤就趕快逃命
                 pricing_buy_strong_prob=0.58,    # 只要勝率 58% 就認定是強勢股，啟動追價模式
 
-                # [LLM 參數保留手動設定]
+                # ================= [LLM 參數保留手動設定] =================
                 min_sentiment_score=4,
             )
 

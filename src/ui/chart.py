@@ -54,13 +54,11 @@ def render_chart():
                 fig = go.Figure()
 
                 # --- 建立 K 線圖 ---
-                custom_hovertemplate = (
-                    "日期: %{x|%Y-%m-%d}<br>" +
-                    "開盤: %{open:.2f}<br>" +
-                    "最高: %{high:.2f}<br>" +
-                    "最低: %{low:.2f}<br>" +
-                    "收盤: %{close:.2f}<br>" +
-                    "<extra></extra>"
+                custom_hover_text = (
+                    "開盤: " + df_recent[StockCol.OPEN.value].map("{:.2f}".format) + "<br>" +
+                    "最高: " + df_recent[StockCol.HIGH.value].map("{:.2f}".format) + "<br>" +
+                    "最低: " + df_recent[StockCol.LOW.value].map("{:.2f}".format) + "<br>" +
+                    "收盤: " + df_recent[StockCol.CLOSE.value].map("{:.2f}".format)
                 )
 
                 fig.add_trace(go.Candlestick(
@@ -72,7 +70,8 @@ def render_chart():
                     increasing_line_color=Color.RED.value,
                     decreasing_line_color=Color.GREEN.value,
                     name='K線',
-                    hovertemplate=custom_hovertemplate # 套用自訂提示框
+                    text=custom_hover_text,
+                    hoverinfo="x+text"
                 ))
 
                 # --- 建立均線 ---

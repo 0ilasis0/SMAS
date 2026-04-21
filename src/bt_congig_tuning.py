@@ -280,7 +280,7 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
-    target_persona = "aggressive"
+    target_persona = "conservative"
     target_total_trials = 2000
     initial_cash: int = 2_000_000
 
