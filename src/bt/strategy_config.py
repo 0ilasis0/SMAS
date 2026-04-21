@@ -123,7 +123,6 @@ class PersonaFactory:
                 max_entries=4,                     # ⚠️ AI 判定激進型不該分批加碼，直接單次定勝負 (原: 3)
                 max_gap_ratio=0.10,                # 完全無視跳空風險，容忍 10% 缺口 (原: 0.02)
 
-                # ⚠️ AI 判定激進型的強弱買進門檻不需區分，統一為 46% 就直接進場
                 strong_buy_threshold=0.50,         # 勝率 46% 就敢重壓 (原: 0.50)
                 conservative_buy_threshold=0.45,   # (原: 0.48)
 
@@ -157,34 +156,38 @@ class PersonaFactory:
         elif persona == TradingPersona.CONSERVATIVE:
             # 🛡️ 保守型：草木皆兵，極度要求大盤環境安全
             return StrategyConfig(
-                # [防守參數]
-                stop_loss_tolerance=-0.08,         # 跌 8% 停損
-                trailing_stop_drawdown=-0.08,      # 回落 8% 停損 (原: -0.05)
-                take_profit_target=0.15,           # 賺 11% 開始停利 (原: 0.10)
-                take_profit_sell_ratio=0.75,       # 停利時賣掉 50% (原: 0.50)
-                stop_loss_sell_ratio=0.75,         # 停損時賣75% (原: 1.00)
-                sell_signal_threshold=0.44,        # AI 勝率低於 25% 預警 (原: 0.44)
-                warning_sell_ratio=0.75,           # 預警時戰術減碼 50% (原: 1.00，不再一次性清倉)
+                # ================= [防守參數] =================
+                stop_loss_tolerance=-0.15,         # 跌 5% 就強制停損 (原: -0.08)
+                trailing_stop_drawdown=-0.08,      # ⚠️ 極度神經質：只要回落 1% 就立刻停損逃命 (原: -0.08)
+                take_profit_target=0.15,           # 只要賺 8% 就滿足，開始停利 (原: 0.15)
+                take_profit_sell_ratio=0.75,       # 停利時一次賣掉 70% 鎖住獲利 (原: 0.75)
+                stop_loss_sell_ratio=0.75,         # 停損時賣掉 80% (原: 0.75)
+                sell_signal_threshold=0.44,        # AI 勝率低於 37% 就預警 (原: 0.44)
+                warning_sell_ratio=0.30,           # 預警時先微幅減碼 30% 觀察 (原: 0.75)
 
-                # [進攻參數]
-                max_entries=1,                     # 允許加碼 1 次 (原: 2)
-                max_gap_ratio=0.03,                # 跳空容忍度極低，不買跳空股 (原: 0.07)
-                strong_buy_threshold=0.59,         # 要求 61% 勝率才重倉 (原: 0.59)
-                strong_buy_capital_ratio=1.0,     # 強烈買進動用 80% 資金 (原: 0.80)
-                conservative_buy_threshold=0.54,   # 要求 54% 勝率試水溫 (原: 0.52)
-                conservative_buy_capital_ratio=0.40,# 保守買進動用 40% 資金
+                # ================= [進攻參數] =================
+                max_entries=1,                     # 絕不攤平加碼，買一次定生死 (原: 1)
+                max_gap_ratio=0.09,                # 意外地放寬了跳空容忍度至 9% (原: 0.03)
 
-                # [大盤防禦參數]
-                safe_threshold=0.47,               # 大盤安全度大於 47% 才出手
-                cooldown_days=3,                   # 冷卻天數維持 3 天
-                max_return_5d=0.16,                # 5日漲幅過熱門檻，大降溫不追高 (原: 0.37)
-                max_bias_20=0.23,                  # 20日乖離過熱門檻 (原: 0.15)
+                strong_buy_threshold=0.58,         # 要求勝率高達 58% 才敢重倉 (原: 0.59)
+                strong_buy_capital_ratio=0.80,     # 重倉只敢動用 80% 資金，絕對不 All-in (原: 1.0)
 
-                # [動態風控水位參數]
-                buy_risk=RiskWeights(heavy=0.10, light=0.14),  # 買進風險權重 (原: heavy=0.20, light=0.09)
-                sell_risk=RiskWeights(heavy=0.11, light=0.09), # 賣出風險權重 (原: heavy=0.05, light=0.04)
+                conservative_buy_threshold=0.555,   # 要求 56% 勝率才肯試水溫 (原: 0.54)
+                conservative_buy_capital_ratio=0.5,# 試水溫動用 50% 資金 (原: 0.40)
 
-                # [定價參數]
+                # ================= [大盤防禦參數] =================
+                safe_threshold=0.54,               # ⚠️ 大盤安全度必須高達 54% 才肯出手 (原: 0.47)
+                cooldown_days=4,                   # 停損後冷卻期拉長到 4 天 (原: 3)
+                max_return_5d=0.30,                # 5日漲幅門檻放寬 (原: 0.16)
+                max_bias_20=0.14,                  # ⚠️ 嚴格限制：20日乖離超過 14% 絕對不追高 (原: 0.23)
+
+                # ================= [動態風控水位參數] =================
+                # 買進風險權重 (原: heavy=0.10, light=0.14)
+                buy_risk=RiskWeights(heavy=0.20, light=0.15),  # 倉位重時極度懲罰買進訊號
+                # 賣出風險權重 (原: heavy=0.11, light=0.09)
+                sell_risk=RiskWeights(heavy=0.18, light=0.05), # 倉位重時對賣出訊號極度敏感
+
+                # ================= [定價參數 (維持您原本的手動設定)] =================
                 buy_panic_discount_atr=1.8,      # 大盤恐慌時，掛在極度深淵 (折價 1.8 ATR) 等天上掉禮物
                 buy_strong_discount_atr=0.5,     # 就算勝率極高，也堅持要拉回 0.5 ATR 才肯買
                 buy_normal_discount_atr=1.0,     # 常規震盪時，掛在地板價 (折價 1.0 ATR) 死等
