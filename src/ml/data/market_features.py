@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 import pandas as pd
 
@@ -114,25 +116,19 @@ class MarketFeatureEngine:
         # 4. 標籤：預測未來是否會有「大跌」 (Danger = 1)
         # ==========================================
         if is_training:
-            # 取得還原權值 (防止大盤除權息導致的假跌幅)
-            adj_factor = data[ai_vision_col] / (data[StockCol.CLOSE] + 1e-9)
-            adj_low = data[StockCol.LOW] * adj_factor
+            # 取得未來的收盤價 (看 N 天後的結果)
+            future_close = data[ai_vision_col].shift(-self.lookahead)
 
-            # 未來 N 天內的最低點 (MAE)
-            future_low_min = adj_low.rolling(window=self.lookahead, min_periods=1).min().shift(-self.lookahead)
+            # 取得未來的 20日均線 (月線是多空分水嶺)
+            future_ma20 = data[ai_vision_col].rolling(20).mean().shift(-self.lookahead)
 
-            # 計算大盤專屬的動態停損線
-            # 我們可以直接利用前面已經算好的 true_range
-            atr = true_range.rolling(window=self.risk_criteria.ATR_LOOKBACK).mean()
+            # 取得未來的 5日報酬率 (是否處於下跌趨勢)
+            future_ret_5d = data[ai_vision_col].pct_change(5).shift(-self.lookahead)
 
-            # 門檻：跌破 [目前收盤價 - (1.5倍大盤ATR)]
-            danger_price_threshold = data[ai_vision_col] - (atr * self.risk_criteria.CRASH_THRESHOLD_ATR)
-
-            # 判定危險：只要未來最低點跌破這個動態門檻，標記為 Danger (1)
-            danger_condition = future_low_min < danger_price_threshold
+            danger_condition = (future_close < future_ma20) | (future_ret_5d < -0.01)
 
             data[MarketFeatureCol.TARGET_DANGER] = danger_condition.astype('Int64')
-            data.loc[future_low_min.isna(), MarketFeatureCol.TARGET_DANGER] = pd.NA
+            data.loc[future_close.isna(), MarketFeatureCol.TARGET_DANGER] = pd.NA
 
         # ==========================================
         # 5. 清理回傳

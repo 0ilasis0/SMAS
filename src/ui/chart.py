@@ -78,13 +78,10 @@ def render_chart():
                 ma5 = df_recent[StockCol.CLOSE.value].rolling(window=5).mean().bfill()
                 ma20 = df_recent[StockCol.CLOSE.value].rolling(window=20).mean().bfill()
                 ma60 = df_recent[StockCol.CLOSE.value].rolling(window=60).mean().bfill()
-                ma240 = df_recent[StockCol.CLOSE.value].rolling(window=240).mean().bfill()
 
                 fig.add_trace(go.Scatter(x=df_recent.index, y=ma5, line=dict(color=Color.ORANGE.value, width=1.2), name='5MA', hoverinfo='none'))
                 fig.add_trace(go.Scatter(x=df_recent.index, y=ma20, line=dict(color=Color.PURPLE.value, width=1.2), name='20MA', hoverinfo='none'))
                 fig.add_trace(go.Scatter(x=df_recent.index, y=ma60, line=dict(color=Color.BLUE.value, width=1.2), name='60MA', hoverinfo='none'))
-                fig.add_trace(go.Scatter(x=df_recent.index, y=ma240, line=dict(color=Color.WHITE.value, width=1.2), name='240MA', hoverinfo='none'))
-
 
                 # --- 假日斷點處理 ---
                 all_dates = pd.date_range(start=df_recent.index.min(), end=df_recent.index.max())
@@ -95,10 +92,10 @@ def render_chart():
                 local_max = visible_df[StockCol.HIGH.value].max()
                 local_min = visible_df[StockCol.LOW.value].min()
 
-                visible_ma240 = ma240.iloc[-lookback_days:]
-                if not visible_ma240.dropna().empty:
-                    local_max = max(local_max, visible_ma240.max())
-                    local_min = min(local_min, visible_ma240.min())
+                visible_ma60 = ma60.iloc[-lookback_days:]
+                if not visible_ma60.dropna().empty:
+                    local_max = max(local_max, visible_ma60.max())
+                    local_min = min(local_min, visible_ma60.min())
 
                 amplitude = local_max - local_min
                 padding = amplitude * 0.10 if amplitude != 0 else local_max * 0.05
