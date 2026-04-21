@@ -1,6 +1,6 @@
 {
     "version": "2.0",
-    "total_cash": 194616.0,
+    "total_cash": 325139.0,
     "sub_portfolios": {
         "current": {
             "name": "current",
@@ -48,6 +48,11 @@
                     "shares": 0,
                     "avg_cost": 0.0,
                     "history": []
+                },
+                "2388.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
                 }
             }
         },
@@ -79,8 +84,8 @@
         },
         "ME": {
             "name": "ME",
-            "use_shared_cash": true,
-            "allocated_cash": 0.0,
+            "use_shared_cash": false,
+            "allocated_cash": 195523.0,
             "watch_tickers": [
                 "0052.TW",
                 "2388.TW",
@@ -100,21 +105,6 @@
                             "fee": 62,
                             "tax": 0,
                             "total": 43862.0
-                        }
-                    ]
-                },
-                "2388.TW": {
-                    "shares": 2000,
-                    "avg_cost": 50.872,
-                    "history": [
-                        {
-                            "date": "2026-04-16 16:57:40",
-                            "action": "buy",
-                            "price": 50.8,
-                            "shares": 2000,
-                            "fee": 144,
-                            "tax": 0,
-                            "total": 101744.0
                         }
                     ]
                 },

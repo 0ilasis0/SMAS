@@ -131,6 +131,6 @@ if __name__ == "__main__":
     # ]
 
     # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
-    Persona = [TradingPersona.MODERATE]
+    Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE]
 
     run_multi_stock_backtest(Persona=Persona, test_tickers=test_tickers, initial_cash=initial_cash)
