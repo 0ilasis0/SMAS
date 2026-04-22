@@ -175,10 +175,10 @@ class GenerateGeminiReportNode(ActionNode):
         # 1. 確認是否有啟用 LLM 引擎
         oracle = self.oracle or bb.get(BlackboardKey.ORACLE.value)
         if not oracle:
-            dbg.war(f"[{bb.ticker}] 未啟用 LLM Oracle，跳過戰報生成，保留系統原始日誌。")
+            dbg.war(f"[{bb.ticker}] 未啟用 LLM Oracle，跳過財報生成，保留系統原始日誌。")
             return NodeState.SUCCESS
 
-        dbg.log(f"[{bb.ticker}] 正在將決策資料封裝送往 Gemini 撰寫專業戰報...")
+        dbg.log(f"[{bb.ticker}] 正在將決策資料封裝送往 Gemini 撰寫專業財報...")
 
         # ==========================================
         # 步驟 A：建構 Control Plane (系統最高權限指令)
@@ -186,7 +186,7 @@ class GenerateGeminiReportNode(ActionNode):
         # 這是寫死在後端、絕對不可被竄改的「大腦潛意識」
         base_system_prompt = (
             "你是一位頂尖的量化基金經理人與市場分析師。\n"
-            "你的任務是根據我（系統）提供的【量化決策黑板資料】，撰寫一份專業、簡潔、具備行動力的投資戰報。\n"
+            "你的任務是根據我（系統）提供的【量化決策黑板資料】，撰寫一份專業、簡潔、具備行動力的投資財報。\n"
             "【嚴格紀律與防幻覺規則】：\n"
             "1. 你絕對不可竄改、懷疑或反駁系統給出的「最終決策 (BUY/SELL/HOLD)」、「預期掛單價」與「機率數字」。\n"
             "2. 你的工作是『潤飾與解釋』這個決策，讓一般投資人能看懂，而不是『重新決策』。\n"
@@ -205,10 +205,7 @@ class GenerateGeminiReportNode(ActionNode):
         # ==========================================
         # 這是送進去讓 LLM "閱讀" 的客觀資料，它不能違背上面 System Prompt 的規範
         user_prompt = f"""
-        【系統提示】
-        無須列出戰報日期時間
-
-        請根據以下系統輸出的資料，生成今日戰報：
+        請根據以下系統輸出的資料，生成財報：
 
         【標的資訊】
         - 股票代號：{bb.ticker}
@@ -238,11 +235,11 @@ class GenerateGeminiReportNode(ActionNode):
                 user_prompt=user_prompt
             )
 
-            # 將 Gemini 寫好的優美戰報，覆寫回黑板原本冷硬的 gemini_reasoning 欄位，供 UI 讀取
+            # 將 Gemini 寫好的優美財報，覆寫回黑板原本冷硬的 gemini_reasoning 欄位，供 UI 讀取
             bb.gemini_reasoning = report_text
 
         except Exception as e:
-            dbg.error(f"Gemini 戰報生成失敗: {e}")
-            bb.gemini_reasoning = f"【AI 戰報生成失敗，顯示系統原始邏輯】\n\n{bb.gemini_reasoning}"
+            dbg.error(f"Gemini 財報生成失敗: {e}")
+            bb.gemini_reasoning = f"【AI 財報生成失敗，顯示系統原始邏輯】\n\n{bb.gemini_reasoning}"
 
         return NodeState.SUCCESS

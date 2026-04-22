@@ -301,7 +301,7 @@ def main():
             cash_source_str = "系統活資金" if current_sp.use_shared_cash else "組合包專屬資金"
             st.info(f"💼 **目前庫存**：空手觀望中。可用 {cash_source_str}：{usable_cash:,.0f} 元")
 
-        if st.button("🚀 產生今日 AI 決策與戰報", type="primary", use_container_width=True, disabled=is_training):
+        if st.button("🚀 產生今日 AI 決策與財報", type="primary", use_container_width=True, disabled=is_training):
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
                 ctrl_live = st.session_state.get(SessionKey.CTRL_LIVE.value)
 

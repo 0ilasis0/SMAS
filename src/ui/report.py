@@ -10,7 +10,7 @@ from ui.const import APIKey
 
 
 def render_report(result: dict):
-    """將戰報渲染邏輯獨立，保持主程式乾淨"""
+    """將財報渲染邏輯獨立，保持主程式乾淨"""
 
     if result.get(APIKey.STATUS.value) != "success":
         st.error(f"❌ 發生錯誤: {result.get(APIKey.MESSAGE.value, '未知錯誤')}")
@@ -28,14 +28,14 @@ def render_report(result: dict):
             now_tw = datetime.now(tw_tz)
             target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
 
-            # 如果戰報日期就是「今天」
+            # 如果財報日期就是「今天」
             if target_date == now_tw.date():
                 market_open = now_tw.replace(hour=9, minute=0, second=0, microsecond=0)
                 market_close = now_tw.replace(hour=13, minute=30, second=0, microsecond=0)
 
                 # 判斷是否正處於盤中 (09:00 ~ 13:30)
                 if market_open <= now_tw <= market_close:
-                    status_text = f"以 {target_date_str} **盤中即時資料**為基準，動態評估今日走勢 (⚠️ 提示：盤中 K 線尚未定型易生雜訊，建議於 13:00 後產出最終戰報)"
+                    status_text = f"以 {target_date_str} **盤中即時資料**為基準，動態評估今日走勢 (⚠️ 提示：盤中 K 線尚未定型易生雜訊，建議於 13:00 後產出最終財報)"
                 elif now_tw > market_close:
                     status_text = f"以 {target_date_str} **收盤資料**為基準，預測下個交易日走勢"
         except Exception:
@@ -89,5 +89,5 @@ def render_report(result: dict):
     sentiment_color = Color.RED.value if score >= 7 else Color.GREEN.value if score <= 3 else Color.ORANGE.value
     st.info(f"**情緒分數：:{sentiment_color}[{score} / 10]** \n\n**判讀理由：** {sentiment[OracleCol.REASON.value]}")
 
-    st.markdown("### 🤖 總裁戰報")
+    st.markdown("### 🤖 總裁財報")
     st.warning(result[APIKey.REPORT.value], icon="💡")

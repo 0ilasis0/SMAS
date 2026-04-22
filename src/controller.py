@@ -275,14 +275,14 @@ class IDSSController:
             directive = (
                 f"【系統風險警報】：系統底層的量化模型已偵測到該股進入「高波動洗盤階段」"
                 f"(當前 ATR Ratio 高達 {atr_ratio:.2%}，趨勢強度僅 {trend_strength:.2f})。\n"
-                f"【你的任務】：請在戰報的開頭，設立一個『⚠️ 總裁警告』區塊。請消化上述的高波動數據，"
+                f"【你的任務】：請在財報的開頭，設立一個『⚠️ 總裁警告』區塊。請消化上述的高波動數據，"
                 f"用你專業、冷靜且強烈的口吻，警告投資人此時進場極易被洗盤停損，並強烈建議目前應以「保護資金、空手觀望」為主。"
             )
 
             bb.system_directives.append(directive)
 
         if should_run_llm:
-            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫戰報...")
+            dbg.log("\n啟動盤後覆盤：將智慧定價與決策結果交由 Gemini 撰寫財報...")
             bb.oracle = self.engine.oracle
             report_node = GenerateGeminiReportNode(oracle=self.engine.oracle)
             report_node.tick(bb)
