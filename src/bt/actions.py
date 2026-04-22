@@ -205,6 +205,9 @@ class GenerateGeminiReportNode(ActionNode):
         # ==========================================
         # 這是送進去讓 LLM "閱讀" 的客觀資料，它不能違背上面 System Prompt 的規範
         user_prompt = f"""
+        【系統提示】
+        無須列出戰報日期時間
+
         請根據以下系統輸出的資料，生成今日戰報：
 
         【標的資訊】
