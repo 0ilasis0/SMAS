@@ -205,7 +205,7 @@ class GenerateGeminiReportNode(ActionNode):
         # ==========================================
         # 這是送進去讓 LLM "閱讀" 的客觀資料，它不能違背上面 System Prompt 的規範
         user_prompt = f"""
-        請根據以下系統輸出的資料，生成財報：
+        請根據以下系統輸出的資料，生成財報(無須日期)：
 
         【標的資訊】
         - 股票代號：{bb.ticker}

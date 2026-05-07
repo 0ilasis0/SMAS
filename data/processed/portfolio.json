@@ -1,11 +1,11 @@
 {
     "version": "2.0",
-    "total_cash": 325139.0,
+    "total_cash": 4522108.0,
     "sub_portfolios": {
         "丞": {
             "name": "丞",
             "use_shared_cash": false,
-            "allocated_cash": 195523.0,
+            "allocated_cash": 119413.0,
             "watch_tickers": [
                 "0052.TW",
                 "2388.TW",
@@ -14,7 +14,12 @@
                 "4958.TW",
                 "2303.TW",
                 "3563.TW",
-                "2337.TW"
+                "2337.TW",
+                "2313.TW",
+                "3189.TW",
+                "2436.TW",
+                "6138.TWO",
+                "3035.TW"
             ],
             "positions": {
                 "0052.TW": {
@@ -56,21 +61,67 @@
                     "shares": 0,
                     "avg_cost": 0.0,
                     "history": []
+                },
+                "3189.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "3563.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2436.TW": {
+                    "shares": 1000,
+                    "avg_cost": 77.31,
+                    "history": [
+                        {
+                            "date": "2026-04-28 12:09:16",
+                            "action": "buy",
+                            "price": 77.2,
+                            "shares": 1000,
+                            "fee": 110,
+                            "tax": 0,
+                            "total": 77310.0
+                        }
+                    ]
+                },
+                "2337.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2330.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "3035.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "3005.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
                 }
             }
         },
         "媽": {
             "name": "媽",
             "use_shared_cash": false,
-            "allocated_cash": 129616.0,
+            "allocated_cash": 402695.0,
             "watch_tickers": [
                 "2337.TW",
-                "2313.TW"
+                "2313.TW",
+                "2388.TW"
             ],
             "positions": {
                 "2337.TW": {
-                    "shares": 2000,
-                    "avg_cost": 135.192,
+                    "shares": 0,
+                    "avg_cost": 0.0,
                     "history": [
                         {
                             "date": "2026-04-16 17:05:03",
@@ -80,59 +131,34 @@
                             "fee": 384,
                             "tax": 0,
                             "total": 270384.0
+                        },
+                        {
+                            "date": "2026-04-24 11:39:44",
+                            "action": "sell",
+                            "price": 133.0,
+                            "shares": 2000,
+                            "fee": 379,
+                            "tax": 798,
+                            "total": 264823.0
                         }
                     ]
-                }
-            }
-        },
-        "預設0": {
-            "name": "預設0",
-            "use_shared_cash": false,
-            "allocated_cash": 0.0,
-            "watch_tickers": [
-                "2388.TW",
-                "0052.TW",
-                "3481.TW",
-                "2330.TW",
-                "2409.TW",
-                "2324.TW",
-                "0050.TW",
-                "2481.TW",
-                "2603.TW",
-                "2881.TW",
-                "3006.TW",
-                "2301.TW",
-                "4916.TW",
-                "2317.TW",
-                "3563.TW",
-                "2313.TW",
-                "2337.TW",
-                "2344.TW",
-                "2382.TW",
-                "2454.TW",
-                "2455.TW",
-                "3231.TW",
-                "4919.TW",
-                "9958.TW",
-                "1519.TW"
-            ],
-            "positions": {
-                "0050.TW": {
-                    "shares": 0,
-                    "avg_cost": 0.0,
-                    "history": []
-                },
-                "2409.TW": {
-                    "shares": 0,
-                    "avg_cost": 0.0,
-                    "history": []
-                },
-                "2337.TW": {
-                    "shares": 0,
-                    "avg_cost": 0.0,
-                    "history": []
                 },
                 "2388.TW": {
+                    "shares": 2000,
+                    "avg_cost": 50.872,
+                    "history": [
+                        {
+                            "date": "2026-04-24 10:46:55",
+                            "action": "buy",
+                            "price": 50.8,
+                            "shares": 2000,
+                            "fee": 144,
+                            "tax": 0,
+                            "total": 101744.0
+                        }
+                    ]
+                },
+                "2313.TW": {
                     "shares": 0,
                     "avg_cost": 0.0,
                     "history": []

@@ -3,7 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from data.const import MacroTicker, TimeUnit
-from data.event_fetcher import TWSEEventFetcher
+from data.event_fetcher import HybridEventFetcher
 from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
@@ -58,7 +58,7 @@ class DataUpdater:
         event_cache_key = "corporate_events_twse"
         if force_wipe or force_sync or self._needs_update(event_cache_key):
             dbg.log("[事件日曆] 正在同步證交所除權息與法說會資料...")
-            event_fetcher = TWSEEventFetcher()
+            event_fetcher = HybridEventFetcher()
 
             df_div = event_fetcher.fetch_upcoming_dividends()
             if not df_div.empty: self.db.save_dividends_calendar(df_div)
