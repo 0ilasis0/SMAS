@@ -122,7 +122,6 @@ class XGBTrainer:
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        # 先轉成 Path 物件來建立資料夾
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
         final_model.save_model(str(save_path_obj))
@@ -132,7 +131,6 @@ class XGBTrainer:
     @staticmethod
     def load_inference_model(model_path: Path | str) -> xgb.XGBClassifier:
         try:
-            # 確保型態為 Path
             model_path = Path(model_path)
 
             if not model_path.exists():
