@@ -55,20 +55,22 @@ class DataUpdater:
                     dbg.war(f"[{m_ticker}] 總經資料更新失敗。")
 
         # ================== 3. 企業事件更新 ==================
-        event_cache_key = "corporate_events_twse"
-        if force_wipe or force_sync or self._needs_update(event_cache_key):
-            dbg.log("[事件日曆] 正在同步證交所除權息與法說會資料...")
+        event_cache_key = f"events_{ticker}"
+        if force_wipe or self._needs_update(event_cache_key):
+            dbg.log(f"[{ticker}] [事件日曆] 正在同步除權息與法說會資料...")
+
             event_fetcher = HybridEventFetcher()
+            # 傳入 ticker，同時取得除權息與法說會 DataFrame
+            df_div, df_earn = event_fetcher.fetch_upcoming_events(ticker)
 
-            df_div = event_fetcher.fetch_upcoming_dividends()
-            if not df_div.empty: self.db.save_dividends_calendar(df_div)
-
-            df_earn = event_fetcher.fetch_upcoming_earnings()
-            if not df_earn.empty: self.db.save_earnings_calendar(df_earn)
+            if not df_div.empty:
+                self.db.save_dividends_calendar(df_div)
+            if not df_earn.empty:
+                self.db.save_earnings_calendar(df_earn)
 
             self._mark_updated(event_cache_key)
         else:
-            dbg.log("⚡ [事件日曆] 今日已同步過證交所事件，跳過網路抓取。")
+            dbg.log(f"⚡ [{ticker}] [事件日曆] 今日已同步過該股事件，跳過網路抓取。")
 
         return success
 
