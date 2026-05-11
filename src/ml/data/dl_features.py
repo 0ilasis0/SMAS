@@ -22,6 +22,7 @@ class DLFeatureEngine:
         self.lookahead = lookahead
         self.time_steps = time_steps
         self.entry_criteria = entry_criteria
+        # 額外的 19 天歷史緩衝(暖機期)
         self.max_warmup = 19
 
     def process_pipeline(self, df: pd.DataFrame, is_training: bool = True):
@@ -39,6 +40,7 @@ class DLFeatureEngine:
             dbg.war(f"資料量不足。需要 {min_required_len} 筆 (含暖機期)，目前僅有 {len(df)} 筆。")
             return None, None, None
 
+        # 拿「過去」補「現在」
         data = df.copy().ffill()
 
         adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
