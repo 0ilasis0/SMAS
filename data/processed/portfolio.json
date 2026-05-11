@@ -19,7 +19,9 @@
                 "3189.TW",
                 "2436.TW",
                 "6138.TWO",
-                "3035.TW"
+                "3035.TW",
+                "3037.TW",
+                "3605.TW"
             ],
             "positions": {
                 "0052.TW": {
@@ -103,6 +105,16 @@
                     "history": []
                 },
                 "3005.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2313.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
+                },
+                "2388.TW": {
                     "shares": 0,
                     "avg_cost": 0.0,
                     "history": []
