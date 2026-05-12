@@ -16,7 +16,7 @@ from path import PathConfig
 
 try:
     from ml.params import TrainConfig
-    EARLY_STOP = TrainConfig.EARLY_STOP_ROUND
+    EARLY_STOP = TrainConfig.ML_EARLY_STOP_ROUND
     N_SPLITS = TrainConfig.N_SPLITS
 except ImportError:
     EARLY_STOP = 50

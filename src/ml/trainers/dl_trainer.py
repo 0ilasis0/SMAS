@@ -53,9 +53,10 @@ class DLTrainer:
         tscv = TimeSeriesSplit(n_splits=n_splits, gap=lookahead)
         oof_predictions = pd.Series(index=original_index, dtype=float)
 
+        # 帶入 DataManager 裡定義的指標總數
+        num_features = X_raw.shape[2]
         cv_accuracies, cv_aucs = [], []
         best_epochs = []
-        num_features = X_raw.shape[2]
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X_raw)):
             split_point = len(val_idx) // 2
@@ -88,9 +89,6 @@ class DLTrainer:
             es_loader = self._create_dataloader(X_es, y_es, shuffle=False)
             test_loader = self._create_dataloader(X_test, y_test, shuffle=False)
 
-            pos_weight_val = MLTool.calculate_scale_weight(y_train)
-            pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
-
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
@@ -98,35 +96,49 @@ class DLTrainer:
                 rnn_type=self.rnn_type
             ).to(self.device)
 
+            # 負責衡量模型的預測與實際答案之間的距離
+            pos_weight_val = MLTool.calculate_scale_weight(y_train)
+            pos_weight_tensor = torch.tensor([pos_weight_val], dtype=torch.float32).to(self.device)
             criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight_tensor)
+
+            # 優化器
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+            # 當學習不下去時，自動調整學習率
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer, mode='min', factor=DLHyperParams.SCHEDULER_FACTOR, patience=DLHyperParams.SCHEDULER_PATIENCE
             )
 
             best_val_loss = float('inf')
             patience_counter = 0
-            best_model_wts = copy.deepcopy(model.state_dict())
             best_epoch_for_fold = 0
+            best_model_wts = copy.deepcopy(model.state_dict())
 
             # --- Training Loop ---
             for epoch in range(self.epochs):
+                # 把模型內部的某些零件切換到 「訓練模式」
                 model.train()
                 for X_batch, y_batch in train_loader:
                     X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+                    # 讓優化器把上一輪的紀錄擦乾淨
                     optimizer.zero_grad()
                     loss = criterion(model(X_batch), y_batch)
+                    # 將剛才算出的 Loss 沿著計算圖往回推，算出每一個權重對這個誤差的「貢獻度」
                     loss.backward()
+                    # 檢查修正參數的力道是否過大；如果是，則按比例縮小力道
                     nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                    # 依照backward指示更新權重
                     optimizer.step()
 
                 # --- Validation (Early Stopping) ---
                 model.eval()
                 val_loss = 0.0
+
+                # 現在不需要記錄任何微分資訊，請把資源通通省下來
                 with torch.no_grad():
                     # 只看 es_loader (提早停止驗證集)
                     for X_v, y_v in es_loader:
                         X_v, y_v = X_v.to(self.device), y_v.to(self.device)
+                        # 將這一批次的預測誤差轉化為純數值並累加，同時切斷與運算圖的連結以保護記憶體
                         val_loss += criterion(model(X_v), y_v).item()
 
                 avg_val_loss = val_loss / len(es_loader)
@@ -137,7 +149,7 @@ class DLTrainer:
                     best_model_wts = copy.deepcopy(model.state_dict())
                 else:
                     patience_counter += 1
-                    if patience_counter >= TrainConfig.EARLY_STOP_ROUND:
+                    if patience_counter >= TrainConfig.DL_EARLY_STOP_ROUND:
                         break
 
                 scheduler.step(avg_val_loss)
@@ -222,6 +234,7 @@ class DLTrainer:
         return final_scaler
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
+        ''' y跟X釘在一起並轉成tensor後打包 '''
         X_tensor = torch.tensor(X, dtype=torch.float32)
         if y is not None:
             y_tensor = torch.tensor(y, dtype=torch.float32)

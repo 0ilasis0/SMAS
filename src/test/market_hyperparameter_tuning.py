@@ -80,7 +80,7 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
         # 確保參數字典乾淨無衝突
         model = lgb.LGBMClassifier(**param, scale_pos_weight=scale_pos_weight)
 
-        callbacks = [lgb.early_stopping(stopping_rounds=TrainConfig.EARLY_STOP_ROUND, verbose=False)]
+        callbacks = [lgb.early_stopping(stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND, verbose=False)]
 
         model.fit(
             X_tr, y_tr,

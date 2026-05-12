@@ -72,7 +72,8 @@ class TrainConfig:
     N_SPLITS_MAX: int = 8
     N_SPLITS_MIN: int = 3
 
-    EARLY_STOP_ROUND = 50
+    ML_EARLY_STOP_ROUND = 25
+    DL_EARLY_STOP_ROUND = 10
 
 @dataclass(frozen=True)
 class DLHyperParams:
@@ -93,30 +94,30 @@ class DLHyperParams:
 @dataclass
 class MarketLGBMConfig:
     """LightGBM 大盤防禦模型超參數配置 - Optuna 優化版本"""
-    objective: str = 'binary'
-    metric: str = 'auc'
-    boosting_type: str = 'gbdt'
+    OBJECTIVE: str = 'binary'
+    METRIC: str = 'auc'
+    BOOSTING_TYPE: str = 'gbdt'
 
     # 核心結構參數
-    max_depth: int = 3               # 原本: 4
-    num_leaves: int = 4              # 新增: 限制葉子數以防過擬合
-    min_child_samples: int = 16      # 新增: 確保每個節點有足夠樣本
-    min_split_gain: float = 0.7      # 新增: 極高門檻，強迫模型只抓強訊號 (4.4533)
+    MAX_DEPTH: int = 3               # 原本: 4
+    NUM_LEAVES: int = 4              # 新增: 限制葉子數以防過擬合
+    MIN_CHILD_SAMPLES: int = 16      # 新增: 確保每個節點有足夠樣本
+    MIN_SPLIT_GAIN: float = 0.7      # 新增: 極高門檻，強迫模型只抓強訊號 (4.4533)
 
     # 學習與正則化
-    learning_rate: float = 0.01      # 0.0029
-    n_estimators: int = 100          # 原本: 100 (註: 配合低學習率，實盤可視情況增加)
-    subsample: float = 0.7428        # 原本: 0.8
-    colsample_bytree: float = 0.4491 # 原本: 0.8 (對應 feature_fraction)
+    LEARNING_RATE: float = 0.01      # 0.0029
+    N_ESTIMATORS: int = 100          # 原本: 100 (註: 配合低學習率，實盤可視情況增加)
+    SUBSAMPLE: float = 0.7428        # 原本: 0.8
+    COLSAMPLE_BYTREE: float = 0.4491 # 原本: 0.8 (對應 feature_fraction)
 
     # 防震盪正則化
-    reg_alpha: float = 2.0228        # 新增: L1 正則化
-    reg_lambda: float = 0.3432       # 新增: L2 正則化
-    max_bin: int = 255               # 新增: 特徵分桶數
+    REG_ALPHA: float = 2.0228        # 新增: L1 正則化
+    REG_LAMBDA: float = 0.3432       # 新增: L2 正則化
+    MAX_BIN: int = 255               # 新增: 特徵分桶數
 
-    random_state: int = 42
-    verbose: int = -1
-    early_stopping_rounds: int = 30
+    RANDOM_STATE: int = 42
+    VERBOSE: int = -1
+    EARLY_STOP_ROUNDS: int = 30
 
     def to_dict(self) -> Dict[str, Any]:
         """轉換為 LightGBM 吃的字典格式，並排除非原生參數"""

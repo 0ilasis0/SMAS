@@ -123,7 +123,7 @@ def run_market_comparison(lookahead: int, oos_days: int = 240):
 
         # 確保 Validation Set 至少有包含崩盤標籤才能做早停
         if len(np.unique(y_val)) > 1:
-            callbacks = [lgb.early_stopping(stopping_rounds=TrainConfig.EARLY_STOP_ROUND, verbose=False)]
+            callbacks = [lgb.early_stopping(stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND, verbose=False)]
             model_opt.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], callbacks=callbacks)
         else:
             print("⚠️ Validation 區間無崩盤事件，取消早停，退回固定樹量 200 棵...")

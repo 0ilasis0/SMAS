@@ -60,7 +60,7 @@ class XGBTrainer:
             model = xgb.XGBClassifier(
                 **self.params,
                 scale_pos_weight=scale_weight,
-                early_stopping_rounds=TrainConfig.EARLY_STOP_ROUND
+                early_stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND
             )
 
             # 僅使用 X_val 進行 Early Stopping
