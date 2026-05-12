@@ -36,10 +36,10 @@ def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_day
         suggested_dropout = trial.suggest_float("DROPOUT", 0.2, 0.5)
 
         # 因為我們鎖定 n_jobs=1，這樣做百分之百安全，且不需要去動到任何底層的神經網路代碼！
-        DLHyperParams.CNN_OUT_CHANNELS = suggested_channels
-        DLHyperParams.RNN_HIDDEN = suggested_hidden
-        DLHyperParams.LEARNING_RATE = suggested_lr
-        DLHyperParams.DROPOUT = suggested_dropout
+        DLHyperParams.cnn_out_channels = suggested_channels
+        DLHyperParams.rnn_hidden = suggested_hidden
+        DLHyperParams.learning_rate = suggested_lr
+        DLHyperParams.dropout = suggested_dropout
 
         ticker_aucs = []
 

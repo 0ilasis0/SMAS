@@ -10,11 +10,11 @@ class CNN_RNN(nn.Module):
         super().__init__()
         self.rnn_type = rnn_type
 
-        cnn_out_channels = params.CNN_OUT_CHANNELS
-        rnn_hidden = params.RNN_HIDDEN
-        dropout_rate = params.DROPOUT
-        kernel_size = params.KERNEL_SIZE
-        num_layers = params.NUM_LAYERS
+        cnn_out_channels = params.cnn_out_channels
+        rnn_hidden = params.rnn_hidden
+        dropout_rate = params.dropout
+        kernel_size = params.kernel_size
+        num_layers = params.num_layers
 
         # --- CNN 區塊 (特徵降維去噪) ---
         # 輸入形狀預期: (Batch, num_features, Time_Steps)
@@ -77,8 +77,8 @@ class PureCNN1D(nn.Module):
     def __init__(self, num_features: int, time_steps: int, params: DLHyperParams = DLHyperParams):
         super().__init__()
 
-        cnn_out = params.CNN_OUT_CHANNELS
-        dropout_rate = params.DROPOUT
+        cnn_out = params.cnn_out_channels
+        dropout_rate = params.dropout
 
         # 第一層卷積
         self.conv1 = nn.Conv1d(in_channels=num_features, out_channels=cnn_out, kernel_size=3, padding=1)
@@ -116,7 +116,7 @@ class PureCNN1D(nn.Module):
 class DLModelFactory:
     ''' 模型工廠 (Model Factory) '''
     @staticmethod
-    def create(model_type: DLModelType, num_features: int, time_steps: int = DLHyperParams.TIME_STEPS, rnn_type: RNNType = RNNType.LSTM) -> nn.Module:
+    def create(model_type: DLModelType, num_features: int, time_steps: int = DLHyperParams.time_steps, rnn_type: RNNType = RNNType.LSTM) -> nn.Module:
         if model_type == DLModelType.HYBRID:
             return CNN_RNN(num_features=num_features, rnn_type=rnn_type)
         elif model_type == DLModelType.PURE_CNN:

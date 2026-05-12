@@ -43,7 +43,7 @@ class ModelPredictor:
                 return False
             engine.dl_scaler = joblib.load(str(scaler_path_obj))
 
-            dl_input_size = DLHyperParams.INPUT_SIZE
+            dl_input_size = DLHyperParams.input_size
             engine.dl_model = DLTrainer(engine.config.ticker, engine.config.dl_model_type, engine.config.rnn_type).load_inference_model(dl_input_size, engine.paths[ModelCol.DL])
 
             engine.meta_learner = MetaLearner(engine.config.ticker)
@@ -118,7 +118,7 @@ class ModelPredictor:
 
         target_idx = list(valid_index).index(target_date)
         X_dl_2d = X_dl_raw[[target_idx]].reshape(-1, X_dl_raw.shape[2])
-        X_dl_scaled = engine.dl_scaler.transform(X_dl_2d).reshape(1, DLHyperParams.TIME_STEPS, X_dl_raw.shape[2])
+        X_dl_scaled = engine.dl_scaler.transform(X_dl_2d).reshape(1, DLHyperParams.time_steps, X_dl_raw.shape[2])
 
         engine.dl_model.eval()
         with torch.no_grad():

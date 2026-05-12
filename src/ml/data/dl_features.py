@@ -16,7 +16,7 @@ class DLFeatureEngine:
     def __init__(
             self,
             lookahead: int,
-            time_steps: int = DLHyperParams.TIME_STEPS,
+            time_steps: int = DLHyperParams.time_steps,
             entry_criteria: EntryQualityCriteria = EntryQualityCriteria()
         ):
         self.lookahead = lookahead

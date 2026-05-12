@@ -30,13 +30,13 @@ class DLTrainer:
         dbg.log(f"DLTrainer 初始化 [{self.ticker} - {self.dl_model_type}]")
 
         if custom_hp:
-            self.batch_size = custom_hp.get(DLParamKey.BATCH_SIZE, DLHyperParams.BATCH_SIZE)
-            self.epochs = custom_hp.get(DLParamKey.EPOCHS, DLHyperParams.EPOCHS)
-            self.learning_rate = custom_hp.get(DLParamKey.LEARNING_RATE, DLHyperParams.LEARNING_RATE)
+            self.batch_size = custom_hp.get(DLParamKey.BATCH_SIZE, DLHyperParams.batch_size)
+            self.epochs = custom_hp.get(DLParamKey.EPOCHS, DLHyperParams.epochs)
+            self.learning_rate = custom_hp.get(DLParamKey.LEARNING_RATE, DLHyperParams.learning_rate)
         else:
-            self.batch_size = DLHyperParams.BATCH_SIZE
-            self.epochs = DLHyperParams.EPOCHS
-            self.learning_rate = DLHyperParams.LEARNING_RATE
+            self.batch_size = DLHyperParams.batch_size
+            self.epochs = DLHyperParams.epochs
+            self.learning_rate = DLHyperParams.learning_rate
 
         self.optimal_epochs = self.epochs
 
@@ -92,7 +92,7 @@ class DLTrainer:
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
-                time_steps=DLHyperParams.TIME_STEPS,
+                time_steps=DLHyperParams.time_steps,
                 rnn_type=self.rnn_type
             ).to(self.device)
 
@@ -105,7 +105,7 @@ class DLTrainer:
             optimizer = optim.Adam(model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
             # 當學習不下去時，自動調整學習率
             scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer, mode='min', factor=DLHyperParams.SCHEDULER_FACTOR, patience=DLHyperParams.SCHEDULER_PATIENCE
+                optimizer, mode='min', factor=DLHyperParams.scheduler_factor, patience=DLHyperParams.scheduler_patience
             )
 
             best_val_loss = float('inf')
@@ -209,7 +209,7 @@ class DLTrainer:
         model = DLModelFactory.create(
             model_type=self.dl_model_type,
             num_features=num_features,
-            time_steps=DLHyperParams.TIME_STEPS,
+            time_steps=DLHyperParams.time_steps,
             rnn_type=self.rnn_type
         ).to(self.device)
 
@@ -262,7 +262,7 @@ class DLTrainer:
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
-                time_steps=DLHyperParams.TIME_STEPS,
+                time_steps=DLHyperParams.time_steps,
                 rnn_type=self.rnn_type
             ).to(self.device)
 

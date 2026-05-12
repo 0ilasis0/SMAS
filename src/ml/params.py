@@ -52,19 +52,19 @@ class IndicatorParams:
 
 @dataclass(frozen=True)
 class XGBHyperParams:
-    OBJECTIVE: str = 'binary:logistic'  # 輸出 0~1 的機率
-    EVAL_METRIC: str = 'auc'            # 使用 AUC 評估模型排序能力
-    N_ESTIMATORS: int = 100
-    RANDOM_STATE: int = 42              # 固定亂數種子，確保結果可重現
-    N_JOBS: int = 1
-    MAX_DEPTH: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
-    MIN_CHILD_WEIGHT: int = 3
-    LEARNING_RATE: float = 0.0992
-    SUBSAMPLE: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
-    COLSAMPLE_BYTREE: float = 0.7472    # 每次建樹只用 80% 的特徵
-    GAMMA: float = 3.4100
-    REG_ALPHA: float = 2.2545
-    REG_LAMBDA: float = 0.8625
+    objective: str = 'binary:logistic'  # 輸出 0~1 的機率
+    eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
+    n_estimators: int = 100
+    random_state: int = 42              # 固定亂數種子，確保結果可重現
+    n_jobs: int = 1
+    max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
+    min_child_weight: int = 3
+    learning_rate: float = 0.0992
+    subsample: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
+    colsample_bytree: float = 0.7472    # 每次建樹只用 80% 的特徵
+    gamma: float = 3.4100
+    reg_alpha: float = 2.2545
+    reg_lambda: float = 0.8625
 
 @dataclass(frozen=True)
 class TrainConfig:
@@ -78,18 +78,18 @@ class TrainConfig:
 @dataclass(frozen=True)
 class DLHyperParams:
     """CNN-LSTM 深度學習超參數"""
-    INPUT_SIZE: int = 11
-    TIME_STEPS: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
-    CNN_OUT_CHANNELS: int = 32          # CNN 特徵提取後的維度
-    RNN_HIDDEN: int = 16                # RNN 隱藏層神經元數量
-    NUM_LAYERS: int = 1                 # LSTM/GRU 疊了幾層
-    BATCH_SIZE: int = 32
-    LEARNING_RATE: float = 0.004986
-    EPOCHS: int = 50
-    DROPOUT: float = 0.499119           # 隨機失活率
-    SCHEDULER_PATIENCE: int = 3
-    SCHEDULER_FACTOR: float = 0.5
-    KERNEL_SIZE: int = 2                # 降採樣的倍率
+    input_size: int = 11
+    time_steps: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
+    cnn_out_channels: int = 32          # CNN 特徵提取後的維度
+    rnn_hidden: int = 16                # RNN 隱藏層神經元數量
+    num_layers: int = 1                 # LSTM/GRU 疊了幾層
+    batch_size: int = 32
+    learning_rate: float = 0.004986
+    epochs: int = 50
+    dropout: float = 0.499119           # 隨機失活率
+    scheduler_patience: int = 3
+    scheduler_factor: float = 0.5
+    kernel_size: int = 2                # 降採樣的倍率
 
 @dataclass
 class MarketLGBMConfig:
