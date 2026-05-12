@@ -22,7 +22,7 @@ class MarketTrainer:
     def __init__(self, config: MarketLGBMConfig = None):
         self.config = config or MarketLGBMConfig()
         # 用來紀錄 CV 過程中得到的最佳迭代次數
-        self.optimal_trees = self.config.N_ESTIMATORS
+        self.optimal_trees = self.config.n_estimators
 
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         dbg.log(f"開始執行 LightGBM 大盤防禦模型 CV (Fold={n_splits}, Gap={lookahead})...")
@@ -95,7 +95,7 @@ class MarketTrainer:
         # 計算並保存平均最佳迭代次數，供 final_model 使用
         if best_iters:
             self.optimal_trees = int(np.mean(best_iters))
-            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵 (原設定 {self.config.N_ESTIMATORS} 棵)")
+            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵 (原設定 {self.config.n_estimators} 棵)")
 
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
