@@ -84,7 +84,7 @@ class DLHyperParams:
     rnn_hidden: int = 16                # RNN 隱藏層神經元數量
     num_layers: int = 1                 # LSTM/GRU 疊了幾層
     batch_size: int = 32
-    learning_rate: float = 0.004986
+    learning_rate: float = 0.0005
     epochs: int = 50
     dropout: float = 0.499119           # 隨機失活率
     scheduler_patience: int = 3
