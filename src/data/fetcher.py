@@ -1,5 +1,3 @@
-# sys/traceback 是為了防止 yfinance 找不到該套件
-import sys
 import time
 import traceback
 

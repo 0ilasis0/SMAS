@@ -17,7 +17,7 @@ class SessionConfig:
 class EntryQualityCriteria:
     ''' 進場品質準則 '''
     ATR_LOOKBACK: int = 14            # 波動率參考週期
-    PROFIT_TARGET_ATR: float = 3.0    # 獲利觸發倍數 (MFE)
+    PROFIT_TARGET_ATR: float = 1.8    # 獲利觸發倍數 (MFE)
     STOP_LOSS_ATR: float = 1.5        # 停損容忍倍數 (MAE)
 
 @dataclass(frozen=True)
@@ -54,17 +54,17 @@ class IndicatorParams:
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    n_estimators: int = 100
+    n_estimators: int = 1000
     random_state: int = 42              # 固定亂數種子，確保結果可重現
-    n_jobs: int = 1
+    n_jobs: int = -1
     max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
     min_child_weight: int = 3
-    learning_rate: float = 0.0992
-    subsample: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
-    colsample_bytree: float = 0.7472    # 每次建樹只用 80% 的特徵
-    gamma: float = 3.4100
-    reg_alpha: float = 2.2545
-    reg_lambda: float = 0.8625
+    learning_rate: float = 0.05
+    subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
+    colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
+    gamma: float = 0.5
+    reg_alpha: float = 1.0
+    reg_lambda: float = 1.0
 
 @dataclass(frozen=True)
 class TrainConfig:
@@ -73,7 +73,7 @@ class TrainConfig:
     N_SPLITS_MIN: int = 3
 
     ML_EARLY_STOP_ROUND = 25
-    DL_EARLY_STOP_ROUND = 10
+    DL_EARLY_STOP_ROUND = 20
 
 @dataclass(frozen=True)
 class DLHyperParams:
@@ -84,16 +84,16 @@ class DLHyperParams:
     rnn_hidden: int = 16                # RNN 隱藏層神經元數量
     num_layers: int = 1                 # LSTM/GRU 疊了幾層
     batch_size: int = 32
-    learning_rate: float = 0.0005
-    epochs: int = 50
-    dropout: float = 0.499119           # 隨機失活率
+    learning_rate: float = 0.0001
+    epochs: int = 100
+    dropout: float = 0.5                # 隨機失活率
     scheduler_patience: int = 3
     scheduler_factor: float = 0.5
     kernel_size: int = 2                # 降採樣的倍率
 
 @dataclass
 class MarketLGBMConfig:
-    """LightGBM 大盤防禦模型超參數配置 - Optuna 優化版本"""
+    """LightGBM 大盤防禦模型超參數配置"""
     objective: str = 'binary'
     metric: str = 'auc'
     boosting_type: str = 'gbdt'
