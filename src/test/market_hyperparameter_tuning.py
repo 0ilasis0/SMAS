@@ -30,7 +30,7 @@ lgb.register_logger(LGBMLoggerProxy())
 
 dbg.toggle()
 
-def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
+def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series, stop_rounds: int = 25):
     """大盤防禦專屬目標函數 (極簡主義 + 高度正則化)"""
 
     # 核心：嚴格限制樹的複雜度
@@ -80,7 +80,7 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
         # 確保參數字典乾淨無衝突
         model = lgb.LGBMClassifier(**param, scale_pos_weight=scale_pos_weight)
 
-        callbacks = [lgb.early_stopping(stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND, verbose=False)]
+        callbacks = [lgb.early_stopping(stopping_rounds=stop_rounds, verbose=False)]
 
         model.fit(
             X_tr, y_tr,

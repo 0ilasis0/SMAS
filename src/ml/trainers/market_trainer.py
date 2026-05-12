@@ -38,7 +38,7 @@ class MarketTrainer:
         best_iters = [] # 紀錄每個 Fold 的最佳停止點
         cv_importances = [] # 紀錄大盤特徵重要性
 
-        lgbm_params = self.config.to_dict()
+        lgbm_params = self.config.to_dict
 
         for fold, (train_index, val_index) in enumerate(tscv.split(X)):
             # 將原本的 val_index 切成兩半，前半做驗證，後半做測試
@@ -66,7 +66,7 @@ class MarketTrainer:
             model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
 
             callbacks = [
-                lgb.early_stopping(stopping_rounds=self.config.EARLY_STOP_ROUNDS, verbose=False)
+                lgb.early_stopping(stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND, verbose=False)
             ]
 
             # 這裡只給它看 X_val，絕不給它看 X_test
@@ -119,7 +119,7 @@ class MarketTrainer:
 
         scale_weight = MLTool.calculate_scale_weight(y)
 
-        lgbm_params = self.config.to_dict()
+        lgbm_params = self.config.to_dict
         lgbm_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)

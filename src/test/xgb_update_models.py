@@ -45,7 +45,7 @@ def update_xgb_backtest_models(train_tickers: list, lookahead: int, oos_days: in
 
             # 實例化 XGBTrainer (使用該個股的 Ticker)
             trainer = XGBTrainer(ticker=ticker, hp=hp)
-            trainer.optimal_trees = hp.n_estimators
+            trainer.optimal_trees = hp.N_ESTIMATORS
 
             # 取得專屬該個股的存檔路徑
             save_path = PathConfig.get_xgboost_model_path(ticker=ticker, oos_days=oos_days)

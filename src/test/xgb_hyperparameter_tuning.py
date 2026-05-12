@@ -16,10 +16,8 @@ from path import PathConfig
 
 try:
     from ml.params import TrainConfig
-    EARLY_STOP = TrainConfig.ML_EARLY_STOP_ROUND
     N_SPLITS = TrainConfig.N_SPLITS
 except ImportError:
-    EARLY_STOP = 50
     N_SPLITS = 5
 
 dbg.toggle()
@@ -36,7 +34,7 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
 
         # 強迫 AI 必須認真讀完 100 棵樹，不准中途放棄罷工！
         'n_estimators': 100,
-        # 'early_stopping_rounds': EARLY_STOP, (這行刪除或註解掉)
+        # 'early_stopping_rounds': 25, (這行刪除或註解掉)
 
         # 恢復稍微激進一點的搜索空間
         'max_depth': trial.suggest_int('max_depth', 3, 6),

@@ -52,19 +52,19 @@ class IndicatorParams:
 
 @dataclass(frozen=True)
 class XGBHyperParams:
-    objective: str = 'binary:logistic'  # 輸出 0~1 的機率
-    eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    n_estimators: int = 100
-    random_state: int = 42              # 固定亂數種子，確保結果可重現
-    n_jobs: int = 1
-    max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
-    min_child_weight: int = 3
-    learning_rate: float = 0.0992
-    subsample: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
-    colsample_bytree: float = 0.7472    # 每次建樹只用 80% 的特徵
-    gamma: float = 3.4100
-    reg_alpha: float = 2.2545
-    reg_lambda: float = 0.8625
+    OBJECTIVE: str = 'binary:logistic'  # 輸出 0~1 的機率
+    EVAL_METRIC: str = 'auc'            # 使用 AUC 評估模型排序能力
+    N_ESTIMATORS: int = 100
+    RANDOM_STATE: int = 42              # 固定亂數種子，確保結果可重現
+    N_JOBS: int = 1
+    MAX_DEPTH: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
+    MIN_CHILD_WEIGHT: int = 3
+    LEARNING_RATE: float = 0.0992
+    SUBSAMPLE: float = 0.6505           # 每次建樹只用 80% 的樣本 (增加泛化能力)
+    COLSAMPLE_BYTREE: float = 0.7472    # 每次建樹只用 80% 的特徵
+    GAMMA: float = 3.4100
+    REG_ALPHA: float = 2.2545
+    REG_LAMBDA: float = 0.8625
 
 @dataclass(frozen=True)
 class TrainConfig:
@@ -111,20 +111,17 @@ class MarketLGBMConfig:
     COLSAMPLE_BYTREE: float = 0.4491 # 原本: 0.8 (對應 feature_fraction)
 
     # 防震盪正則化
-    REG_ALPHA: float = 2.0228        # 新增: L1 正則化
-    REG_LAMBDA: float = 0.3432       # 新增: L2 正則化
-    MAX_BIN: int = 255               # 新增: 特徵分桶數
+    REG_ALPHA: float = 2.0228        # L1 正則化
+    REG_LAMBDA: float = 0.3432       # L2 正則化
+    MAX_BIN: int = 255               # 特徵分桶數
 
     RANDOM_STATE: int = 42
     VERBOSE: int = -1
-    EARLY_STOP_ROUNDS: int = 30
 
+    @property
     def to_dict(self) -> Dict[str, Any]:
         """轉換為 LightGBM 吃的字典格式，並排除非原生參數"""
-        data = asdict(self)
-        # 移除不屬於 LGBMClassifier 構造函數的參數
-        data.pop('early_stopping_rounds', None)
-        return data
+        return asdict(self)
 
 @dataclass(frozen=True)
 class MetaHyperParams:
