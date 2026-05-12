@@ -6,15 +6,15 @@ from ml.params import DLHyperParams
 
 class CNN_RNN(nn.Module):
     ''' 混合神經網路架構：1D-CNN 特徵萃取 + LSTM 趨勢記憶 '''
-    def __init__(self, num_features: int, rnn_type: RNNType):
+    def __init__(self, num_features: int, rnn_type: RNNType, params: DLHyperParams = DLHyperParams):
         super().__init__()
         self.rnn_type = rnn_type
 
-        cnn_out_channels = DLHyperParams.CNN_OUT_CHANNELS
-        rnn_hidden = DLHyperParams.LSTM_HIDDEN
-        dropout_rate = DLHyperParams.DROPOUT
-        kernel_size = DLHyperParams.KERNEL_SIZE
-        num_layers = DLHyperParams.NUM_LAYERS
+        cnn_out_channels = params.CNN_OUT_CHANNELS
+        rnn_hidden = params.RNN_HIDDEN
+        dropout_rate = params.DROPOUT
+        kernel_size = params.KERNEL_SIZE
+        num_layers = params.NUM_LAYERS
 
         # --- CNN 區塊 (特徵降維去噪) ---
         # 輸入形狀預期: (Batch, num_features, Time_Steps)
@@ -44,6 +44,9 @@ class CNN_RNN(nn.Module):
         self.fc = nn.Linear(rnn_hidden, 1)
 
     def forward(self, x):
+        '''
+        先用 CNN 橫向看局部的圖案，再用 RNN 縱向看整體的趨勢，最後整合所有資訊來猜測未來的方向
+        '''
         # 原始輸入 x: (Batch, Time_Steps, Features)
         # 轉換為 CNN 需要的形狀: (Batch, Features, Time_Steps)
         x = x.transpose(1, 2)
@@ -65,16 +68,17 @@ class CNN_RNN(nn.Module):
 
         # 輸出勝率
         logits = self.fc(last_time_step_out)
+        # 將32*1的矩陣改為32大小的List
         return logits.squeeze(-1)
 
 
 class PureCNN1D(nn.Module):
     ''' 極速輕量化純 1D-CNN '''
-    def __init__(self, num_features: int, time_steps: int):
+    def __init__(self, num_features: int, time_steps: int, params: DLHyperParams = DLHyperParams):
         super().__init__()
 
-        cnn_out = DLHyperParams.CNN_OUT_CHANNELS
-        dropout_rate = DLHyperParams.DROPOUT
+        cnn_out = params.CNN_OUT_CHANNELS
+        dropout_rate = params.DROPOUT
 
         # 第一層卷積
         self.conv1 = nn.Conv1d(in_channels=num_features, out_channels=cnn_out, kernel_size=3, padding=1)
@@ -82,7 +86,7 @@ class PureCNN1D(nn.Module):
         self.relu = nn.ReLU()
         self.pool1 = nn.MaxPool1d(kernel_size=2) # time_steps 減半
 
-        # 第二層卷積 (提取更深層特徵，通常通道數翻倍)
+        # 第二層卷積
         self.conv2 = nn.Conv1d(in_channels=cnn_out, out_channels=cnn_out * 2, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm1d(cnn_out * 2)
         self.pool2 = nn.MaxPool1d(kernel_size=2) # time_steps 再減半
@@ -110,7 +114,7 @@ class PureCNN1D(nn.Module):
 
 
 class DLModelFactory:
-    ''' 兵工廠 (Model Factory) '''
+    ''' 模型工廠 (Model Factory) '''
     @staticmethod
     def create(model_type: DLModelType, num_features: int, time_steps: int = DLHyperParams.TIME_STEPS, rnn_type: RNNType = RNNType.LSTM) -> nn.Module:
         if model_type == DLModelType.HYBRID:

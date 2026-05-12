@@ -80,15 +80,15 @@ class DLHyperParams:
     INPUT_SIZE: int = 11
     TIME_STEPS: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
     CNN_OUT_CHANNELS: int = 32          # CNN 特徵提取後的維度
-    LSTM_HIDDEN: int = 16               # LSTM 隱藏層神經元數量
-    NUM_LAYERS: int = 1
+    RNN_HIDDEN: int = 16                # RNN 隱藏層神經元數量
+    NUM_LAYERS: int = 1                 # LSTM/GRU 疊了幾層
     BATCH_SIZE: int = 32
     LEARNING_RATE: float = 0.004986
     EPOCHS: int = 50
-    DROPOUT: float = 0.499119
+    DROPOUT: float = 0.499119           # 隨機失活率
     SCHEDULER_PATIENCE: int = 3
     SCHEDULER_FACTOR: float = 0.5
-    KERNEL_SIZE: int = 2
+    KERNEL_SIZE: int = 2                # 降採樣的倍率
 
 @dataclass
 class MarketLGBMConfig:

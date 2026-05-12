@@ -37,7 +37,7 @@ def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_day
 
         # 因為我們鎖定 n_jobs=1，這樣做百分之百安全，且不需要去動到任何底層的神經網路代碼！
         DLHyperParams.CNN_OUT_CHANNELS = suggested_channels
-        DLHyperParams.LSTM_HIDDEN = suggested_hidden
+        DLHyperParams.RNN_HIDDEN = suggested_hidden
         DLHyperParams.LEARNING_RATE = suggested_lr
         DLHyperParams.DROPOUT = suggested_dropout
 

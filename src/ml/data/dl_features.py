@@ -99,6 +99,7 @@ class DLFeatureEngine:
 
         aligned_index = data.index[self.time_steps - 1:]
 
+        # 修剪開頭 time_steps 與尾端 lookahead
         if is_training:
             # 1. 還原權值避免高低點判斷失真
             current_adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
@@ -136,7 +137,7 @@ class DLFeatureEngine:
             y_all = target_condition.astype(int).values
             y = y_all[self.time_steps - 1:]
 
-            # 確保未來天數足夠才納入訓練
+            # 我們知道今天的股價，但我們還不知道 lookahead 日後的結果
             future_isna = data[ai_vision_col].shift(-self.lookahead).isna().values[self.time_steps - 1:]
             valid_mask = ~future_isna
 
