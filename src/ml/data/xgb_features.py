@@ -44,34 +44,36 @@ class XGBFeatureEngine:
         if df.empty: return df
 
         data = df.copy()
-        ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        ma_w = data[ai_vision_col].rolling(window=self.params.MA_WEEK).mean()
-        ma_m = data[ai_vision_col].rolling(window=self.params.MA_MONTH).mean()
-        ma_q = data[ai_vision_col].rolling(window=self.params.MA_QUARTER).mean()
-        ma_y = data[ai_vision_col].rolling(window=self.params.MA_YEAR).mean()
+        # TODO 如果過一陣子沒問題就刪除因為已經直接替換
+        # ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        data[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / (ma_w + 1e-9)
-        data[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
-        data[FeatureCol.BIAS_QUARTER] = (data[ai_vision_col] - ma_q) / (ma_q + 1e-9)
-        data[FeatureCol.BIAS_YEAR] = (data[ai_vision_col] - ma_y) / (ma_y + 1e-9)
+        ma_w = data[StockCol.ADJ_CLOSE].rolling(window=self.params.MA_WEEK).mean()
+        ma_m = data[StockCol.ADJ_CLOSE].rolling(window=self.params.MA_MONTH).mean()
+        ma_q = data[StockCol.ADJ_CLOSE].rolling(window=self.params.MA_QUARTER).mean()
+        ma_y = data[StockCol.ADJ_CLOSE].rolling(window=self.params.MA_YEAR).mean()
 
-        delta = data[ai_vision_col].diff()
+        data[FeatureCol.BIAS_WEEK] = (data[StockCol.ADJ_CLOSE] - ma_w) / (ma_w + 1e-9)
+        data[FeatureCol.BIAS_MONTH] = (data[StockCol.ADJ_CLOSE] - ma_m) / (ma_m + 1e-9)
+        data[FeatureCol.BIAS_QUARTER] = (data[StockCol.ADJ_CLOSE] - ma_q) / (ma_q + 1e-9)
+        data[FeatureCol.BIAS_YEAR] = (data[StockCol.ADJ_CLOSE] - ma_y) / (ma_y + 1e-9)
+
+        delta = data[StockCol.ADJ_CLOSE].diff()
         gain = delta.where(delta > 0, 0).ewm(alpha=1/self.params.RSI_PERIOD, adjust=False).mean()
         loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/self.params.RSI_PERIOD, adjust=False).mean()
         rs = gain / (loss + 1e-9)
         rsi_100 = 100 - (100 / (1 + rs))
         data[FeatureCol.RSI] = (rsi_100 - 50) / 50.0
 
-        ema_fast = data[ai_vision_col].ewm(span=self.params.MACD_FAST, adjust=False).mean()
-        ema_slow = data[ai_vision_col].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
-        data[FeatureCol.MACD] = (ema_fast - ema_slow) / (data[ai_vision_col] + 1e-9) * 100
+        ema_fast = data[StockCol.ADJ_CLOSE].ewm(span=self.params.MACD_FAST, adjust=False).mean()
+        ema_slow = data[StockCol.ADJ_CLOSE].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
+        data[FeatureCol.MACD] = (ema_fast - ema_slow) / (data[StockCol.ADJ_CLOSE] + 1e-9) * 100
         data[FeatureCol.MACD_SIGNAL] = data[FeatureCol.MACD].ewm(span=self.params.MACD_SIGNAL, adjust=False).mean()
 
-        rolling_std = data[ai_vision_col].rolling(window=self.params.MA_MONTH).std()
+        rolling_std = data[StockCol.ADJ_CLOSE].rolling(window=self.params.MA_MONTH).std()
         data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
-        price_diff = data[ai_vision_col].diff()
+        price_diff = data[StockCol.ADJ_CLOSE].diff()
         direction = np.sign(price_diff)
         direction = direction.fillna(0)
         raw_obv = (direction * data[StockCol.VOLUME]).cumsum()
@@ -83,9 +85,9 @@ class XGBFeatureEngine:
         low_close = (data[StockCol.LOW] - data[StockCol.CLOSE].shift()).abs()
         true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         atr_14 = true_range.rolling(window=14).mean()
-        data[FeatureCol.ATR_RATIO] = atr_14 / (data[ai_vision_col] + 1e-9)
+        data[FeatureCol.ATR_RATIO] = atr_14 / (data[StockCol.ADJ_CLOSE] + 1e-9)
 
-        ma10 = data[ai_vision_col].rolling(window=10).mean()
+        ma10 = data[StockCol.ADJ_CLOSE].rolling(window=10).mean()
         slope_10 = (ma10 - ma10.shift(5)) / (ma10.shift(5) + 1e-9)
         slope_20 = (ma_m - ma_m.shift(10)) / (ma_m.shift(10) + 1e-9)
         data[FeatureCol.TREND_STRENGTH] = slope_10.abs() + slope_20.abs()
@@ -122,9 +124,9 @@ class XGBFeatureEngine:
         data[FeatureCol.GAP_RATIO] = (data[StockCol.OPEN] - prev_close) / (prev_close + 1e-9)
 
         data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
-        data[FeatureCol.CLOSE_CHANGE] = data[ai_vision_col].pct_change()
-        data[FeatureCol.RETURN_5D] = data[ai_vision_col].pct_change(periods=5)
-        data[FeatureCol.RETURN_10D] = data[ai_vision_col].pct_change(periods=10)
+        data[FeatureCol.CLOSE_CHANGE] = data[StockCol.ADJ_CLOSE].pct_change()
+        data[FeatureCol.RETURN_5D] = data[StockCol.ADJ_CLOSE].pct_change(periods=5)
+        data[FeatureCol.RETURN_10D] = data[StockCol.ADJ_CLOSE].pct_change(periods=10)
 
         max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
         min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
@@ -140,7 +142,7 @@ class XGBFeatureEngine:
 
         if twii_close_col in data.columns:
             # 原本的 5D 相對強弱
-            stock_ma5 = data[ai_vision_col].rolling(window=5).mean()
+            stock_ma5 = data[StockCol.ADJ_CLOSE].rolling(window=5).mean()
             stock_ma20 = ma_m
             stock_momentum = (stock_ma5 - stock_ma20) / (stock_ma20 + 1e-9)
 
@@ -150,7 +152,7 @@ class XGBFeatureEngine:
             data[FeatureCol.RS_5D] = stock_momentum - twii_momentum
 
             # 10D 相對強弱
-            stock_ma10 = data[ai_vision_col].rolling(window=10).mean()
+            stock_ma10 = data[StockCol.ADJ_CLOSE].rolling(window=10).mean()
             stock_momentum_10 = (stock_ma10 - stock_ma20) / (stock_ma20 + 1e-9)
 
             twii_ma10 = data[twii_close_col].rolling(window=10).mean()
@@ -165,16 +167,17 @@ class XGBFeatureEngine:
     def _create_labels(self, df: pd.DataFrame, lookahead: int) -> pd.DataFrame:
         if df.empty: return df
         data = df.copy()
-        ai_vision_col = str(StockCol.ADJ_CLOSE)
+        # TODO 如果過一陣子沒問題就刪除因為已經直接替換
+        # ai_vision_col = str(StockCol.ADJ_CLOSE)
 
-        adj_factor = data[ai_vision_col] / (data[StockCol.CLOSE] + 1e-9)
+        adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
         adj_high = data[StockCol.HIGH] * adj_factor
         adj_low = data[StockCol.LOW] * adj_factor
 
         # 1. 計算真實波幅 ATR
         high_low = adj_high - adj_low
-        high_close = (adj_high - data[ai_vision_col].shift()).abs()
-        low_close = (adj_low - data[ai_vision_col].shift()).abs()
+        high_close = (adj_high - data[StockCol.ADJ_CLOSE].shift()).abs()
+        low_close = (adj_low - data[StockCol.ADJ_CLOSE].shift()).abs()
         true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
         atr = true_range.rolling(window=self.entry_criteria.ATR_LOOKBACK).mean()
 
@@ -182,8 +185,8 @@ class XGBFeatureEngine:
         target_atr = self.entry_criteria.PROFIT_TARGET_ATR
         stop_atr = self.entry_criteria.STOP_LOSS_ATR
 
-        target_profit_price = data[ai_vision_col] + (atr * target_atr)
-        stop_loss_price = data[ai_vision_col] - (atr * stop_atr)
+        target_profit_price = data[StockCol.ADJ_CLOSE] + (atr * target_atr)
+        stop_loss_price = data[StockCol.ADJ_CLOSE] - (atr * stop_atr)
 
         hit_target_day = pd.Series(np.inf, index=data.index)
         hit_stop_day = pd.Series(np.inf, index=data.index)
@@ -201,10 +204,10 @@ class XGBFeatureEngine:
 
         # 4. 終極連續獎勵引擎
         # 取得最後一天 (第 lookahead 天) 的收盤價來結算未達標的獲利
-        final_day_close = data[ai_vision_col].shift(-lookahead)
+        final_day_close = data[StockCol.ADJ_CLOSE].shift(-lookahead)
 
         # 結算時的實際 ATR 獲利倍數
-        realized_atr_multiple = (final_day_close - data[ai_vision_col]) / (atr + 1e-9)
+        realized_atr_multiple = (final_day_close - data[StockCol.ADJ_CLOSE]) / (atr + 1e-9)
 
         # 初始化獎勵陣列
         reward_scores = pd.Series(np.nan, index=data.index)
@@ -231,7 +234,7 @@ class XGBFeatureEngine:
         reward_scores.loc[mask_timeout] = timeout_scores
 
         # 過濾未來資料尚不足夠的尾端天數
-        valid_future_mask = data[ai_vision_col].shift(-lookahead).notna()
+        valid_future_mask = data[StockCol.ADJ_CLOSE].shift(-lookahead).notna()
 
         # 🌟 這裡不再轉換成 Int64，因為現在是 0.0 ~ 1.0 的浮點數了！
         data[FeatureCol.TARGET] = reward_scores.astype(float)

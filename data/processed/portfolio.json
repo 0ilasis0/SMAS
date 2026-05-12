@@ -118,6 +118,11 @@
                     "shares": 0,
                     "avg_cost": 0.0,
                     "history": []
+                },
+                "6770.TW": {
+                    "shares": 0,
+                    "avg_cost": 0.0,
+                    "history": []
                 }
             }
         },
@@ -128,7 +133,9 @@
             "watch_tickers": [
                 "2337.TW",
                 "2313.TW",
-                "2388.TW"
+                "2388.TW",
+                "6770.TW",
+                "2354.TW"
             ],
             "positions": {
                 "2337.TW": {

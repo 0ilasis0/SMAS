@@ -5,6 +5,7 @@ if 'warnings' not in sys.modules:
     sys.modules['warnings'] = warnings
 
 import time
+import traceback
 from typing import TYPE_CHECKING
 
 import streamlit as st
@@ -61,7 +62,11 @@ def run_mlops_pipeline(ticker: str):
 
             except Exception as e:
                 status.update(label="❌ 訓練過程中發生錯誤", state="error", expanded=True)
-                st.error(f"詳細錯誤: {e}")
+
+                st.error(f"錯誤摘要: {e}")
+                st.markdown("### 🔍 完整錯誤追蹤日誌 (Traceback)")
+                st.code(traceback.format_exc(), language="python")
+
                 if st.button("🔙 返回控制台"):
                     st.session_state[SessionKey.IS_TRAINING.value] = False
                     st.rerun()
