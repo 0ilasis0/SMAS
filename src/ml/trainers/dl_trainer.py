@@ -152,6 +152,7 @@ class DLTrainer:
                     if patience_counter >= TrainConfig.DL_EARLY_STOP_ROUND:
                         break
 
+                # 將誤差訊號回傳給控制器
                 scheduler.step(avg_val_loss)
 
             best_epochs.append(best_epoch_for_fold)

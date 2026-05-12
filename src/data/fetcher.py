@@ -1,4 +1,7 @@
+# sys/traceback 是為了防止 yfinance 找不到該套件
+import sys
 import time
+import traceback
 
 import pandas as pd
 import yfinance as yf
@@ -97,13 +100,13 @@ class Fetcher:
 
                 dbg.war(f"抓取回傳空資料，可能無資料或遭限流 (嘗試 {attempt + 1}/{self.MAX_RETRIES})")
             except Exception as e:
-                dbg.war(f"抓取發生例外錯誤: {e} (嘗試 {attempt + 1}/{self.MAX_RETRIES})")
+                dbg.war(f"抓取發生例外錯誤: {e} (嘗試 {attempt + 1}/{self.MAX_RETRIES}):\n{traceback.format_exc()}")
 
             if attempt < self.MAX_RETRIES - 1:
                 sleep_time = self.BACKOFF_FACTOR ** attempt
                 dbg.log(f"等待 {sleep_time} 秒後重試...")
                 time.sleep(sleep_time)
+            else:
+                dbg.error("已達最大重試次數，放棄抓取。")
 
-        dbg.error("已達最大重試次數，放棄抓取。")
         return pd.DataFrame()
-    
