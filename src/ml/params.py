@@ -17,7 +17,7 @@ class SessionConfig:
 class EntryQualityCriteria:
     ''' 進場品質準則 '''
     ATR_LOOKBACK: int = 14            # 波動率參考週期
-    PROFIT_TARGET_ATR: float = 1.8    # 獲利觸發倍數 (MFE)
+    PROFIT_TARGET_ATR: float = 1.6    # 獲利觸發倍數 (MFE)
     STOP_LOSS_ATR: float = 1.5        # 停損容忍倍數 (MAE)
 
 @dataclass(frozen=True)
@@ -54,12 +54,12 @@ class IndicatorParams:
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    n_estimators: int = 1000
+    n_estimators: int = 500
     random_state: int = 42              # 固定亂數種子，確保結果可重現
     n_jobs: int = -1
     max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
     min_child_weight: int = 3
-    learning_rate: float = 0.05
+    learning_rate: float = 0.005
     subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
     colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
     gamma: float = 0.5
@@ -72,7 +72,7 @@ class TrainConfig:
     N_SPLITS_MAX: int = 8
     N_SPLITS_MIN: int = 3
 
-    ML_EARLY_STOP_ROUND = 25
+    ML_EARLY_STOP_ROUND = 50
     DL_EARLY_STOP_ROUND = 20
 
 @dataclass(frozen=True)
@@ -85,7 +85,7 @@ class DLHyperParams:
     num_layers: int = 1                 # LSTM/GRU 疊了幾層
     batch_size: int = 32
     learning_rate: float = 0.0001
-    epochs: int = 100
+    epochs: int = 250
     dropout: float = 0.5                # 隨機失活率
     scheduler_patience: int = 3
     scheduler_factor: float = 0.5
@@ -105,8 +105,8 @@ class MarketLGBMConfig:
     min_split_gain: float = 0.7      # 新增: 極高門檻，強迫模型只抓強訊號 (4.4533)
 
     # 學習與正則化
-    learning_rate: float = 0.01      # 0.0029
-    n_estimators: int = 100          # 原本: 100 (註: 配合低學習率，實盤可視情況增加)
+    learning_rate: float = 0.005     # 0.0029
+    n_estimators: int = 500          # 原本: 100 (註: 配合低學習率，實盤可視情況增加)
     subsample: float = 0.7428        # 原本: 0.8
     colsample_bytree: float = 0.4491 # 原本: 0.8 (對應 feature_fraction)
 

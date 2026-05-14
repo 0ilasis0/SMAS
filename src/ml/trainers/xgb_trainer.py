@@ -25,7 +25,7 @@ class XGBTrainer:
         ):
         self.ticker = ticker
         self.params = asdict(hp)
-        self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS, 100)
+        self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS, XGBHyperParams.n_estimators)
 
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
@@ -89,7 +89,8 @@ class XGBTrainer:
 
         if best_iters:
             self.optimal_trees = int(np.mean(best_iters))
-            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵")
+            orignal_n_estimators = self.params.get(MLCol.N_ESTIMATORS, XGBHyperParams.n_estimators)
+            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵，原設定 {orignal_n_estimators}")
 
         avg_acc = np.mean(cv_accuracies) if cv_accuracies else 0
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0

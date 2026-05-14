@@ -236,8 +236,7 @@ class XGBFeatureEngine:
         # 過濾未來資料尚不足夠的尾端天數
         valid_future_mask = data[StockCol.ADJ_CLOSE].shift(-lookahead).notna()
 
-        # 把這些精緻的分數「重新二值化」
-        data[FeatureCol.TARGET] = (data[FeatureCol.TARGET] >= 0.5).astype(int)
+        data[FeatureCol.TARGET] = (reward_scores.astype(float) >= 0.5).astype(int)
         data.loc[~valid_future_mask, FeatureCol.TARGET] = pd.NA
 
         return data
