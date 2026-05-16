@@ -109,8 +109,8 @@ class BacktestEngine:
                 self.bb.prob_xgb = row[SignalCol.PROB_XGB.value]
                 self.bb.prob_dl = row[SignalCol.PROB_DL.value]
 
-                self.bb.bias_20 = row.get(FeatureCol.BIAS_MONTH.value, 0.0)
-                self.bb.return_5d = row.get(FeatureCol.RETURN_5D.value, 0.0)
+                self.bb.bias_month = row.get(FeatureCol.BIAS_MONTH.value, 0.0)
+                self.bb.bias_week = row.get(FeatureCol.BIAS_WEEK.value, 0.0)
 
                 # 清空前一天的決策紀錄
                 self.bb.action_decision = TradeDecision.HOLD

@@ -107,7 +107,7 @@ class ModelPredictor:
         if target_date not in df_xgb_clean.index:
             dbg.error(f"[{config.ticker}] XGBoost 缺失特徵，無法預測！")
             return None
-        prob_xgb = engine.xgb_model.predict_proba(df_xgb_clean.loc[[target_date], FeatureCol.get_features()])[0, 1]
+        prob_xgb = engine.xgb_model.predict_proba(df_xgb_clean.loc[[target_date], FeatureCol.get_xgb_features()])[0, 1]
 
         # 右腦推論
         dl_engine = DLFeatureEngine(config.lookahead)
@@ -167,9 +167,7 @@ class ModelPredictor:
             QuoteCol.REAL_LATEST_PRICE.value: real_latest_price,
             QuoteCol.AVG_5D_VOL.value: float(df_recent[StockCol.VOLUME].tail(5).mean()) if not pd.isna(df_recent[StockCol.VOLUME].tail(5).mean()) else 0.0,
             FeatureCol.BIAS_MONTH.value: float(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) else 0.0,
-            FeatureCol.RETURN_5D.value: float(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.RETURN_5D].iloc[-1]) else 0.0,
             FeatureCol.ATR_RATIO.value: float(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) else 0.0,
-            FeatureCol.TREND_STRENGTH.value: float(df_xgb_clean[FeatureCol.TREND_STRENGTH].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.TREND_STRENGTH].iloc[-1]) else 0.0
         }
 
     def generate_backtest_data(self) -> pd.DataFrame:
@@ -191,7 +189,7 @@ class ModelPredictor:
         # XGB
         xgb_engine = XGBFeatureEngine()
         df_xgb_clean = xgb_engine.process_pipeline(df_raw, config.lookahead, is_training=False)
-        prob_xgb_series = pd.Series(engine.xgb_model.predict_proba(df_xgb_clean[FeatureCol.get_features()])[:, 1], index=df_xgb_clean.index, name=SignalCol.PROB_XGB.value)
+        prob_xgb_series = pd.Series(engine.xgb_model.predict_proba(df_xgb_clean[FeatureCol.get_xgb_features()])[:, 1], index=df_xgb_clean.index, name=SignalCol.PROB_XGB.value)
 
         # DL
         dl_engine = DLFeatureEngine(config.lookahead)

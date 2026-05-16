@@ -1,5 +1,6 @@
 import time
 import traceback
+import zoneinfo
 
 import pandas as pd
 import yfinance as yf
@@ -9,6 +10,10 @@ from data.const import StockCol, TimeUnit, YfInterval
 from data.params import DataLimit
 from debug import dbg
 
+try:
+    _ = yf.Ticker("SPY").history(period="1d")
+except Exception:
+    pass
 
 class Fetcher:
 

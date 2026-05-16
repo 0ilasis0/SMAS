@@ -50,7 +50,7 @@ def build_trading_tree(config: StrategyConfig) -> Selector:
     attack_strategy = Sequence("進攻策略大門", [
         CheckCooldownNode(cooldown_days=config.cooldown_days),
         CheckTrendFilterNode(safe_threshold=config.safe_threshold),
-        CheckNotOverheatedNode(max_return_5d=config.max_return_5d, max_bias_20=config.max_bias_20),
+        CheckNotOverheatedNode(max_bias_5=config.max_return_5d, max_bias_20=config.max_bias_20),
         *ai_buy_conditions,
 
         # 通過所有防禦後，才進入選擇器分配力道

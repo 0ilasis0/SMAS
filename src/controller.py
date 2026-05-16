@@ -122,8 +122,8 @@ class IDSSController:
         bb.current_price = current_price
         bb.executable_price = current_price
         bb.daily_volume = prediction_result.get(QuoteCol.AVG_5D_VOL.value, 0.0)
-        bb.bias_20 = prediction_result.get(FeatureCol.BIAS_MONTH.value, 0.0)
-        bb.return_5d = prediction_result.get(FeatureCol.RETURN_5D.value, 0.0)
+        bb.bias_month = prediction_result.get(FeatureCol.BIAS_MONTH.value, 0.0)
+        bb.bias_week = prediction_result.get(FeatureCol.BIAS_WEEK.value, 0.0)
 
         if any(p < 0 for p in [bb.prob_final, bb.prob_xgb, bb.prob_dl, bb.prob_market_safe]):
             dbg.error(f"🚨 [致命錯誤] 檢測到 AI 引擎輸出異常機率值 ({GlobalParams.DEFAULT_ERROR})，神經網路可能已崩潰或特徵缺失！")
@@ -265,16 +265,16 @@ class IDSSController:
 
         # 洗盤風險評估指令
         atr_ratio = prediction_result.get(FeatureCol.ATR_RATIO.value, 0.0)
-        trend_strength = prediction_result.get(FeatureCol.TREND_STRENGTH.value, 0.0)
+        bias_month = bb.bias_month
 
         if bb.prob_final < strategy_config.wash_risk_win_rate and atr_ratio > strategy_config.wash_risk_atr_ratio:
             # 寫給「人類」看的理由
-            bb.gemini_reasoning += f"\n\n🚨 量化系統偵測到該股目前處於高波動洗盤階段 (ATR Ratio: {atr_ratio:.2%}，趨勢強度: {trend_strength:.2f})，接刀風險極高。"
+            bb.gemini_reasoning += f"\n\n🚨 量化系統偵測到該股目前處於高波動洗盤階段 (ATR Ratio: {atr_ratio:.2%}，月線乖離: {bias_month:.1%})，接刀風險極高。"
 
             # 寫給「LLM (Gemini)」聽的強制指令 (進入 System Instruction)
             directive = (
                 f"【系統風險警報】：系統底層的量化模型已偵測到該股進入「高波動洗盤階段」"
-                f"(當前 ATR Ratio 高達 {atr_ratio:.2%}，趨勢強度僅 {trend_strength:.2f})。\n"
+                f"(當前 ATR Ratio 高達 {atr_ratio:.2%}，月線乖離為 {bias_month:.1%})。\n"
                 f"【你的任務】：請在財報的開頭，設立一個『⚠️ 總裁警告』區塊。請消化上述的高波動數據，"
                 f"用你專業、冷靜且強烈的口吻，警告投資人此時進場極易被洗盤停損，並強烈建議目前應以「保護資金、空手觀望」為主。"
             )

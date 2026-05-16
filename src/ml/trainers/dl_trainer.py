@@ -59,35 +59,21 @@ class DLTrainer:
         best_epochs = []
 
         for fold, (train_idx, val_idx) in enumerate(tscv.split(X_raw)):
-            split_point = len(val_idx) // 2
-            early_stop_end = split_point - lookahead
-
-            if early_stop_end <= 0 or split_point >= len(val_idx):
-                dbg.war(f"Fold {fold+1}: 樣本數不足以切割三階段，跳過。")
-                continue
-
-            early_stop_idx = val_idx[:early_stop_end]
-            test_idx = val_idx[split_point:]
-
-            # 取出原始資料
             X_train_raw, y_train = X_raw[train_idx], y[train_idx]
-            X_es_raw, y_es = X_raw[early_stop_idx], y[early_stop_idx]
-            X_test_raw, y_test = X_raw[test_idx], y[test_idx]
+            X_val_raw, y_val = X_raw[val_idx], y[val_idx]
 
             scaler = RobustScaler()
 
-            # 將 3D (Batch, TimeSteps, Features) 壓平為 2D 讓 Scaler 學習
+            # 將 3D 壓平讓 Scaler 學習
             X_train_2d = X_train_raw.reshape(-1, num_features)
             scaler.fit(X_train_2d)
 
             # 轉換並膨脹回原來的 3D 形狀
             X_train = scaler.transform(X_train_2d).reshape(X_train_raw.shape)
-            X_es = scaler.transform(X_es_raw.reshape(-1, num_features)).reshape(X_es_raw.shape)
-            X_test = scaler.transform(X_test_raw.reshape(-1, num_features)).reshape(X_test_raw.shape)
+            X_val = scaler.transform(X_val_raw.reshape(-1, num_features)).reshape(X_val_raw.shape)
 
             train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
-            es_loader = self._create_dataloader(X_es, y_es, shuffle=False)
-            test_loader = self._create_dataloader(X_test, y_test, shuffle=False)
+            val_loader = self._create_dataloader(X_val, y_val, shuffle=False)
 
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
@@ -115,67 +101,59 @@ class DLTrainer:
 
             # --- Training Loop ---
             for epoch in range(self.epochs):
-                # 把模型內部的某些零件切換到 「訓練模式」
                 model.train()
                 for X_batch, y_batch in train_loader:
                     X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
-                    # 讓優化器把上一輪的紀錄擦乾淨
                     optimizer.zero_grad()
                     loss = criterion(model(X_batch), y_batch)
-                    # 將剛才算出的 Loss 沿著計算圖往回推，算出每一個權重對這個誤差的「貢獻度」
                     loss.backward()
-                    # 檢查修正參數的力道是否過大；如果是，則按比例縮小力道
                     nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    # 依照backward指示更新權重
                     optimizer.step()
 
                 # --- Validation (Early Stopping) ---
                 model.eval()
                 val_loss = 0.0
 
-                # 現在不需要記錄任何微分資訊，請把資源通通省下來
                 with torch.no_grad():
-                    # 只看 es_loader (提早停止驗證集)
-                    for X_v, y_v in es_loader:
+                    # 💡 使用放大的 val_loader，避免微氣候干擾
+                    for X_v, y_v in val_loader:
                         X_v, y_v = X_v.to(self.device), y_v.to(self.device)
-                        # 將這一批次的預測誤差轉化為純數值並累加，同時切斷與運算圖的連結以保護記憶體
                         val_loss += criterion(model(X_v), y_v).item()
 
-                avg_val_loss = val_loss / len(es_loader)
+                avg_val_loss = val_loss / len(val_loader)
                 if avg_val_loss < best_val_loss:
                     best_val_loss = avg_val_loss
                     patience_counter = 0
-                    best_epoch_for_fold = epoch + 1 # 紀錄最佳 Epoch
+                    best_epoch_for_fold = epoch + 1
                     best_model_wts = copy.deepcopy(model.state_dict())
                 else:
                     patience_counter += 1
                     if patience_counter >= TrainConfig.DL_EARLY_STOP_ROUND:
                         break
 
-                # 將誤差訊號回傳給控制器
                 scheduler.step(avg_val_loss)
 
             best_epochs.append(best_epoch_for_fold)
 
-            # --- 收集 OOF 預測 (只針對完全沒看過的 test_loader) ---
+            # --- 收集 OOF 預測 ---
             model.load_state_dict(best_model_wts)
             model.eval()
             test_preds = []
             with torch.no_grad():
-                for X_t, _ in test_loader:
+                for X_t, _ in val_loader:  # 直接對 val_loader 進行推論
                     preds = torch.sigmoid(model(X_t.to(self.device))).cpu().numpy()
                     test_preds.extend(np.atleast_1d(preds))
 
             test_preds = np.array(test_preds)
-            oof_predictions.iloc[test_idx] = test_preds
+            oof_predictions.iloc[val_idx] = test_preds
 
-            # --- 計算指標 (用 y_test 對答案) ---
+            # --- 計算指標 ---
             y_pred_binary = (test_preds > 0.5).astype(int)
-            acc = accuracy_score(y_test, y_pred_binary)
+            acc = accuracy_score(y_val, y_pred_binary)
             cv_accuracies.append(acc)
 
-            if len(np.unique(y_test)) > 1:
-                auc = roc_auc_score(y_test, test_preds)
+            if len(np.unique(y_val)) > 1:
+                auc = roc_auc_score(y_val, test_preds)
                 cv_aucs.append(auc)
                 auc_str = f"{auc:.4f}"
             else:

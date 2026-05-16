@@ -10,8 +10,8 @@ from ml.params import DLHyperParams, EntryQualityCriteria, IndicatorParams
 
 class DLFeatureEngine:
     """
-    專為時序深度學習模型 (CNN/LSTM) 設計的特徵工程 (純動能視角)。
-    僅負責生成原始特徵與 3D 滑動視窗，正規化 (Scaling) 交由 Trainer 在 CV 迴圈內處理以防止未來資料外洩。
+    專為時序深度學習模型 (CNN/LSTM) 設計的特徵工程 (原始 DNA 視角 - Path B)。
+    僅負責生成原始正交特徵與 3D 滑動視窗，正規化 (Scaling) 交由 Trainer 在 CV 迴圈內處理以防止未來資料外洩。
     """
     def __init__(
             self,
@@ -40,9 +40,10 @@ class DLFeatureEngine:
             dbg.war(f"資料量不足。需要 {min_required_len} 筆 (含暖機期)，目前僅有 {len(df)} 筆。")
             return None, None, None
 
-        # 拿「過去」補「現在」
+        # 拿「過去」補「現在」，確保時序連續性
         data = df.copy().ffill()
 
+        # 1. 還原並計算 OHLCV 的純粹對數報酬率 (模型的核心時序 DNA)
         adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
         target_cols = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.VOLUME, StockCol.ADJ_CLOSE]
 
@@ -54,13 +55,14 @@ class DLFeatureEngine:
             if col == StockCol.VOLUME:
                 new_features[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
             else:
+                # 正確運用 adj_factor 進行價格權值還原，避免除權息造成跳空偽訊號
                 adj_price = data[col] * adj_factor if col != StockCol.ADJ_CLOSE else data[col]
                 prev_adj_price = data[col].shift(1) * adj_factor.shift(1) if col != StockCol.ADJ_CLOSE else data[col].shift(1)
                 new_features[feat_name] = np.log((adj_price + 1e-9) / (prev_adj_price + 1e-9))
             dl_features.append(feat_name)
 
+        # 2. 輔助大局特徵：趨勢乖離與通道寬度 (提供絕對空間位置與波動縮放感)
         ai_vision_col = str(StockCol.ADJ_CLOSE)
-
         ma_w = data[ai_vision_col].rolling(window=IndicatorParams.MA_WEEK).mean()
         ma_m = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).mean()
         rolling_std = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).std()
@@ -69,58 +71,48 @@ class DLFeatureEngine:
         new_features[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
         new_features[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
-        # 加入 K 線型態幾何特徵 (上下影線與實體比例)
-        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
-        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
-        # 防呆：確保價格區間不為 0 (遇到一字線或漲跌停時)
-        price_range = (data[StockCol.HIGH] - data[StockCol.LOW]).clip(lower=0.01)
-
-        new_features[FeatureCol.K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
-        new_features[FeatureCol.K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
-        new_features[FeatureCol.K_BODY] = (data[StockCol.CLOSE] - data[StockCol.OPEN]) / price_range
-
         dl_features.extend([
-            FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH,
-            FeatureCol.K_UPPER, FeatureCol.K_LOWER, FeatureCol.K_BODY
+            FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH
         ])
 
+        # 💡 注意：此處已徹底移除 K_UPPER, K_LOWER, K_BODY，全面杜絕多重共線性
         data = data.assign(**new_features)
-
         data = data.replace([np.inf, -np.inf], np.nan)
         data = data.dropna(subset=dl_features)
 
         if len(data) < self.time_steps:
-            dbg.war("扣除暖機期後，資料量不足以建立滑動視窗。")
+            dbg.war("扣除暖機期與無效資料後，資料量不足以建立滑動視窗。")
             return None, None, None
 
+        # 3. 建立 3D 滑動視窗矩陣 (Batch, Time_Steps, Features)
         raw_features = data[dl_features].values
         X = sliding_window_view(raw_features, window_shape=self.time_steps, axis=0)
         X = np.transpose(X, (0, 2, 1))
 
         aligned_index = data.index[self.time_steps - 1:]
 
-        # 修剪開頭 time_steps 與尾端 lookahead
+        # 4. 標籤生成區塊
         if is_training:
-            # 1. 還原權值避免高低點判斷失真
+            # 還原高低點用於精準的屏障觸發判定
             current_adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
             adj_high = data[StockCol.HIGH] * current_adj_factor
             adj_low = data[StockCol.LOW] * current_adj_factor
 
-            # 2. 計算真實波幅 ATR
+            # 計算真實波幅 ATR
             high_low = adj_high - adj_low
             high_close = (adj_high - data[ai_vision_col].shift()).abs()
             low_close = (adj_low - data[ai_vision_col].shift()).abs()
             true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
             atr = true_range.rolling(window=self.entry_criteria.ATR_LOOKBACK).mean()
 
-            # 3. 動態設定目標與停損價位
+            # 動態設定停利目標 (1.6x ATR) 與停損價位 (1.5x ATR)
             target_profit_price = data[ai_vision_col] + (atr * self.entry_criteria.PROFIT_TARGET_ATR)
             stop_loss_price = data[ai_vision_col] - (atr * self.entry_criteria.STOP_LOSS_ATR)
 
             hit_target_day = pd.Series(np.inf, index=data.index)
             hit_stop_day = pd.Series(np.inf, index=data.index)
 
-            # 4. 實戰時間迴圈模擬器
+            # 實戰時間迴圈模擬器
             for i in range(1, self.lookahead + 1):
                 future_high = adj_high.shift(-i)
                 future_low = adj_low.shift(-i)
@@ -131,13 +123,13 @@ class DLFeatureEngine:
                 stop_mask = (future_low <= stop_loss_price) & (hit_stop_day == np.inf)
                 hit_stop_day.loc[stop_mask] = i
 
-            # 5. 終極標籤判定：有碰到目標，且比停損早碰到
+            # ➔ 貫徹特種部隊標籤法：只有先碰到目標、且未碰到停損才算成功突破
             target_condition = (hit_target_day != np.inf) & (hit_target_day < hit_stop_day)
 
             y_all = target_condition.astype(int).values
             y = y_all[self.time_steps - 1:]
 
-            # 我們知道今天的股價，但我們還不知道 lookahead 日後的結果
+            # 濾除未來時間不足 lookahead 天的尾端資料
             future_isna = data[ai_vision_col].shift(-self.lookahead).isna().values[self.time_steps - 1:]
             valid_mask = ~future_isna
 
@@ -149,6 +141,6 @@ class DLFeatureEngine:
             valid_index = aligned_index
 
         y_shape_str = str(y.shape) if y is not None else "None"
-        dbg.log(f"時序矩陣建立完成！ X 原始形狀: {X.shape}, y 形狀: {y_shape_str}")
+        dbg.log(f"時序矩陣建立完成！ X 原始形狀: {X.shape}, y 最終標籤形狀: {y_shape_str}")
 
         return X, y, valid_index

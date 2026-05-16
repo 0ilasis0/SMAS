@@ -49,8 +49,8 @@ class Blackboard:
     # 交易執行用的現實環境變數
     executable_price: float = 0.0
     daily_volume: float = 0.0
-    bias_20: float = 0.0
-    return_5d: float = 0.0
+    bias_week: float = 0.0
+    bias_month: float = 0.0
 
     # 波段交易記憶
     entry_count: int = 0                  # 紀錄這個波段總共「買進/加碼」了幾次

@@ -31,7 +31,7 @@ class XGBTrainer:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
         dbg.log(f"開始執行 XGBoost TimeSeriesSplit 交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
 
-        features = FeatureCol.get_features()
+        features = FeatureCol.get_xgb_features()
         X = df_clean[features]
         y = df_clean[FeatureCol.TARGET].astype(int)
 
@@ -41,19 +41,10 @@ class XGBTrainer:
         oof_predictions = pd.Series(index=X.index, dtype=float)
 
         for fold, (train_index, val_index) in enumerate(tscv.split(X)):
-            split_point = len(val_index) // 2
-            early_stop_end = split_point - lookahead
-
-            if early_stop_end <= 0 or split_point >= len(val_index):
-                dbg.war(f"Fold {fold+1}: 樣本不足以切割三階段，跳過。")
-                continue
-
-            early_stop_index = val_index[:early_stop_end]
-            test_index = val_index[split_point:]
-
+            # 移除極端的三階段切割，直接將 TimeSeriesSplit 分配的未來窗作為完整的驗證與評估集
+            # 這樣能顯著放大驗證集樣本數，徹底根除「最佳樹量=0」的暴斃現象
             X_train, y_train = X.iloc[train_index], y.iloc[train_index]
-            X_val, y_val = X.iloc[early_stop_index], y.iloc[early_stop_index]
-            X_test, y_test = X.iloc[test_index], y.iloc[test_index]
+            X_val, y_val = X.iloc[val_index], y.iloc[val_index]
 
             scale_weight = MLTool.calculate_scale_weight(y_train)
 
@@ -63,25 +54,25 @@ class XGBTrainer:
                 early_stopping_rounds=TrainConfig.ML_EARLY_STOP_ROUND
             )
 
-            # 僅使用 X_val 進行 Early Stopping
+            # 使用放寬後的完整驗證集進行 Early Stopping 監控
             model.fit(
                 X_train, y_train,
                 eval_set=[(X_val, y_val)],
                 verbose=False
             )
 
-            # 僅預測完全沒看過的 X_test
-            y_pred = model.predict(X_test)
-            y_pred_proba = model.predict_proba(X_test)[:, 1]
-            oof_predictions.iloc[test_index] = y_pred_proba
+            # 進行 Out-of-Fold (OOF) 的全面預測與評估
+            y_pred = model.predict(X_val)
+            y_pred_proba = model.predict_proba(X_val)[:, 1]
+            oof_predictions.iloc[val_index] = y_pred_proba
 
             best_iters.append(model.best_iteration)
 
-            acc = accuracy_score(y_test, y_pred)
+            acc = accuracy_score(y_val, y_pred)
             cv_accuracies.append(acc)
 
-            if len(np.unique(y_test)) > 1:
-                auc = roc_auc_score(y_test, y_pred_proba)
+            if len(np.unique(y_val)) > 1:
+                auc = roc_auc_score(y_val, y_pred_proba)
                 cv_aucs.append(auc)
                 dbg.log(f"Fold {fold+1}: Accuracy = {acc:.4f}, AUC = {auc:.4f} (最佳樹量: {model.best_iteration})")
 
@@ -90,27 +81,28 @@ class XGBTrainer:
         if best_iters:
             self.optimal_trees = int(np.mean(best_iters))
             orignal_n_estimators = self.params.get(MLCol.N_ESTIMATORS, XGBHyperParams.n_estimators)
-            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵，原設定 {orignal_n_estimators}")
+            dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵  (原設定 {orignal_n_estimators})")
 
         avg_acc = np.mean(cv_accuracies) if cv_accuracies else 0
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 
+        # 輸出核心特徵重要性排行 (有助於驗證瘦身後的特徵品質)
         # if cv_importances:
         #     avg_importance = np.mean(cv_importances, axis=0)
-            # importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+        #     importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-            # dbg.log("\n🏆 【XGBoost 核心預測特徵 (Top 10)】")
-            # for idx, (feat_name, imp_score) in enumerate(importance_series.head(10).items(), 1):
-            #     dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
-            # dbg.log("-" * 40)
+        #     dbg.log("\n🏆 【XGBoost 核心預測特徵 (Top 10)】")
+        #     for idx, (feat_name, imp_score) in enumerate(importance_series.head(10).items(), 1):
+        #         dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+        #     dbg.log("-" * 40)
 
         return oof_predictions.dropna()
 
     def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path):
         dbg.log(f"開始訓練最終上線版 XGBoost 模型 (動態樹量={self.optimal_trees})...")
 
-        features = FeatureCol.get_features()
+        features = FeatureCol.get_xgb_features()
         X = df_clean[features]
         y = df_clean[FeatureCol.TARGET].astype(int)
 

@@ -29,52 +29,68 @@ class DLModelType(StrEnum):
 # ==========================================
 class FeatureCol(StrEnum):
     """個股模型 (XGBoost/DL) 專用特徵"""
-    # 均線特徵
+
+    # --- 1. 均線特徵 (XGBoost 與 DL 共用的空間感) ---
     BIAS_WEEK = "bias_week"
     BIAS_MONTH = "bias_month"
     BIAS_QUARTER = "bias_quarter"
     BIAS_YEAR = "bias_year"
 
-    # 技術指標
-    RSI = "rsi"
+    # --- 2. 傳統技術指標 (僅 XGBoost 適用) ---
     MACD = "macd"
     MACD_SIGNAL = "macd_signal"
 
-    # 動能特徵
-    VOL_CHANGE = "vol_change"
-    CLOSE_CHANGE = "close_change"
-    BB_WIDTH = "bb_width"
-    RETURN_5D = "return_5d"
-    RETURN_10D = "return_10d"
-
-    # K線與量價微結構特徵
-    K_UPPER = "k_upper"         # 上影線比例
-    K_LOWER = "k_lower"         # 下影線比例
-    K_BODY = "k_body"           # 實體K線比例
-    BUY_POWER = "buy_power"     # 當日買盤力道 (收盤價位置)
-    RS_5D = "rs_5d"             # 個股與大盤的相對強弱
-    RS_10D = "rs_10d"
-
-    # 轉折與極值特徵
-    DIST_TO_20D_HIGH = "dist_to_20d_high"
-    DIST_TO_20D_LOW = "dist_to_20d_low"
+    # --- 3. 轉折與極值特徵 (僅 XGBoost 適用) ---
     KD_K = "kd_k"
     KD_D = "kd_d"
     KD_CROSS = "kd_cross"
     GAP_RATIO = "gap_ratio"
 
-    # 三個不同維度特徵
+    # --- 4. 大盤相對強弱 (僅 XGBoost 適用) ---
+    RS_5D = "rs_5d"
+    RS_10D = "rs_10d"
+
+    # --- 5. 量能、波動與 K線幾何 (僅 XGBoost 適用) ---
+    VOL_CHANGE = "vol_change"
+    CLOSE_CHANGE = "close_change"
     OBV = "obv"
     ATR_RATIO = "atr_ratio"
-    TREND_STRENGTH = "trend_strength"
+    K_UPPER = "k_upper"         # 上影線比例
+    K_LOWER = "k_lower"         # 下影線比例
 
-    # 標籤 (Label)
+    # --- 6. 原始 DNA (僅 LSTM 適用) ---
+    # 這些是 DLFeatureEngine 動態生成的對數報酬率
+    OPEN_LOG_CHG = "Open_log_chg"
+    HIGH_LOG_CHG = "High_log_chg"
+    LOW_LOG_CHG = "Low_log_chg"
+    CLOSE_LOG_CHG = "Adj Close_log_chg"
+    VOLUME_LOG_CHG = "Volume_log_chg"
+    BB_WIDTH = "bb_width"       # DL 專用波動率縮放
+
+    # --- 7. 標籤 (Label) ---
     TARGET = "target"
 
     @classmethod
-    def get_features(cls):
-        """回傳所有要餵給 AI 學習的特徵欄位清單 (排除 Target)"""
-        return [e.value for e in cls if e.value != cls.TARGET.value]
+    def get_xgb_features(cls):
+        """ XGBoost 專屬：精煉的技術指標與幾何特徵 """
+        return [
+            cls.BIAS_WEEK.value, cls.BIAS_MONTH.value, cls.BIAS_QUARTER.value, cls.BIAS_YEAR.value,
+            cls.MACD.value, cls.MACD_SIGNAL.value,
+            cls.KD_K.value, cls.KD_D.value, cls.KD_CROSS.value,
+            cls.VOL_CHANGE.value, cls.CLOSE_CHANGE.value, cls.GAP_RATIO.value,
+            cls.OBV.value, cls.ATR_RATIO.value,
+            cls.RS_5D.value, cls.RS_10D.value,
+            cls.K_UPPER.value, cls.K_LOWER.value
+        ]
+
+    @classmethod
+    def get_dl_features(cls):
+        """ LSTM 專屬：最純粹的正交原始特徵 """
+        return [
+            cls.OPEN_LOG_CHG.value, cls.HIGH_LOG_CHG.value, cls.LOW_LOG_CHG.value,
+            cls.CLOSE_LOG_CHG.value, cls.VOLUME_LOG_CHG.value,
+            cls.BIAS_WEEK.value, cls.BIAS_MONTH.value, cls.BB_WIDTH.value
+        ]
 
 class MarketFeatureCol(StrEnum):
     """大盤防禦模型 (Market Regime) 專用特徵"""
