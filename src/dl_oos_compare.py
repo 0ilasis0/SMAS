@@ -37,22 +37,22 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     print("="*70)
 
     BASELINE_PARAMS = {
-        'CNN_OUT_CHANNELS': 16,
-        'LSTM_HIDDEN': 32,
-        'LEARNING_RATE': 0.002,
-        'DROPOUT': 0.2,
+        'CNN_OUT_CHANNELS': 32,
+        'RNN_HIDDEN': 16,
+        'LEARNING_RATE': 0.0001,
+        'DROPOUT': 0.5,
         'BATCH_SIZE': 32,
-        'EPOCHS': 50
+        'EPOCHS': 250
     }
 
     # 請替換為您的 Optuna 結果
     OPTIMIZED_PARAMS = {
-        'CNN_OUT_CHANNELS': 32,
-        'LSTM_HIDDEN': 16,
-        'LEARNING_RATE': 0.004986,
-        'DROPOUT': 0.499119,
+        'CNN_OUT_CHANNELS': 8,
+        'RNN_HIDDEN': 16,
+        'LEARNING_RATE': 0.000247,
+        'DROPOUT': 0.295862,
         'BATCH_SIZE': 32,
-        'EPOCHS': 50
+        'EPOCHS': 250
     }
 
     report_data = []
@@ -200,9 +200,9 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
 if __name__ == "__main__":
     test_tickers = [
         "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
-        "2382.TW", "2377.TW", "3231.TW", "2324.TW", "2301.TW",
-        "2603.TW", "2881.TW", "2409.TW", "3481.TW", "2344.TW",
-        "2455.TW", "2388.TW", "1519.TW"
+        "2382.TW", "3231.TW", "2324.TW", "2301.TW",
+        "2603.TW", "2881.TW", "2409.TW", "3481.TW",
+        "2455.TW", "2388.TW", "1519.TW", "2344.TW"
     ]
 
     run_dl_comparison(test_tickers=test_tickers)

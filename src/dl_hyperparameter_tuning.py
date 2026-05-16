@@ -166,8 +166,8 @@ def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_day
 
 if __name__ == "__main__":
     train_tickers = [
-        "3006.TW", "4916.TW", "9958.TW", "2481.TW",
-        "2337.TW", "3563.TW", "2313.TW", "4919.TW"
+        "2313.TW", "2337.TW", "2481.TW", "3006.TW",
+        "3563.TW", "4916.TW", "4919.TW", "9958.TW"
     ]
 
     target_trials = 50

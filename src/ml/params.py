@@ -73,7 +73,7 @@ class TrainConfig:
     N_SPLITS_MIN: int = 3
 
     ML_EARLY_STOP_ROUND = 50
-    DL_EARLY_STOP_ROUND = 20
+    DL_EARLY_STOP_ROUND = 25
 
 @dataclass(frozen=True)
 class DLHyperParams:
