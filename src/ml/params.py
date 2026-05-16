@@ -78,7 +78,6 @@ class TrainConfig:
 @dataclass(frozen=True)
 class DLHyperParams:
     """CNN-LSTM 深度學習超參數"""
-    input_size: int = 11
     time_steps: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
     cnn_out_channels: int = 32          # CNN 特徵提取後的維度
     rnn_hidden: int = 16                # RNN 隱藏層神經元數量

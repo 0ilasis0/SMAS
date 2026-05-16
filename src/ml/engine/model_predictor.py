@@ -43,7 +43,7 @@ class ModelPredictor:
                 return False
             engine.dl_scaler = joblib.load(str(scaler_path_obj))
 
-            dl_input_size = DLHyperParams.input_size
+            dl_input_size = len(FeatureCol.get_dl_features())
             engine.dl_model = DLTrainer(engine.config.ticker, engine.config.dl_model_type, engine.config.rnn_type).load_inference_model(dl_input_size, engine.paths[ModelCol.DL])
 
             engine.meta_learner = MetaLearner(engine.config.ticker)
