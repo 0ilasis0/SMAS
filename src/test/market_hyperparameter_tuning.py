@@ -41,9 +41,9 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series, st
         'metric': 'auc',
         'boosting_type': 'gbdt',
         'random_state': 42,
-        'n_jobs': -1,      # 讓 Optuna 管多核
+        'n_jobs': -1,
         'verbose': -1,
-        'n_estimators': 1000,
+        'n_estimators': 100,
 
         'max_depth': max_depth,
         'num_leaves': trial.suggest_int('num_leaves', 3, int(2**max_depth) - 1),

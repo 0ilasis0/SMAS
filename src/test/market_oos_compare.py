@@ -38,12 +38,18 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         'random_state': 42,
         'n_jobs': -1,
         'verbose': -1,
-
         'n_estimators': 100,
-        'max_depth': 4,
-        'learning_rate': 0.05,
-        'subsample': 0.8,
-        'colsample_bytree': 0.8,
+
+        'max_depth': 3,
+        'num_leaves': 4,
+        'min_child_samples': 16,
+        'min_split_gain': 0.7,
+        'max_bin': 127,
+        'learning_rate': 0.005,
+        'subsample': 0.7428,
+        'colsample_bytree': 0.4491,        # 等同feature_fraction
+        'reg_alpha': 2.0228,
+        'reg_lambda': 0.3432,
     }
 
     # 🟢 實驗組 (Optimized)：請填入您 Optuna 跑出的最佳結果
@@ -54,20 +60,19 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         'random_state': 42,
         'n_jobs': -1,
         'verbose': -1,
-        'colsample_bytree': 0.8,
+        'n_estimators': 100,
 
         # --- ⬇️ 請替換為您的 Optuna 最新結果 ⬇️ ---
-        'n_estimators': 100,
         'max_depth': 3,
-        'num_leaves': 4,
+        'num_leaves': 5,
         'min_child_samples': 17,
-        'min_split_gain': 3.8681,
-        'learning_rate':  0.0030,
-        'subsample': 0.7371,
-        'feature_fraction': 0.4169,
-        'reg_alpha': 2.3999,
-        'reg_lambda': 0.1388,
-        'max_bin': 255
+        'min_split_gain': 0.6249,
+        'max_bin': 63,
+        'learning_rate':  0.0006,
+        'subsample': 0.5658,
+        'feature_fraction': 0.4374,
+        'reg_alpha': 2.1228,
+        'reg_lambda': 0.3703,
     }
 
     print("⏳ 正在萃取大盤特徵與準備盲測資料...")
