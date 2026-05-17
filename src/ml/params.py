@@ -112,7 +112,7 @@ class MarketLGBMConfig:
     # 防震盪正則化
     reg_alpha: float = 2.1228        # L1 正則化
     reg_lambda: float = 0.3703       # L2 正則化
-    max_bin: int = 63                # 特徵分桶數
+    max_bin: int = 127               # 特徵分桶數
 
     random_state: int = 42
     verbose: int = -1
