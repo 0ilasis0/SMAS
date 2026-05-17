@@ -119,18 +119,35 @@ if __name__ == "__main__":
     initial_cash = 2_000_000
 
     # test_tickers = [
-    #     "3006.TW", "4916.TW", "9958.TW", "2481.TW",
-    #     "2337.TW", "3563.TW", "2313.TW", "4919.TW"
+    #     "0052.TW",   # 富邦科技 (大盤科技股 Anchor)
+    #     "2303.TW",   # 聯電 (晶圓代工 - 穩定基準)
+    #     "2337.TW",   # 旺宏 (記憶體 - 區間震盪)
+    #     "2409.TW",   # 友達 (面板 - 景氣循環)
+    #     "3035.TW",   # 智原 (ASIC / IC設計 - 高波動)
+    #     "3037.TW",   # 欣興 (ABF 載板 - 法人籌碼)
+    #     "4958.TW",   # 臻鼎-KY (PCB 軟板 - 蘋概週期)
+    #     "6138.TWO",  # 茂達 (上櫃 IC 設計 - OTC 微結構)
+    #     "2354.TW",   # 鴻準 (機殼/組裝 - 集團動能)
+    #     "3563.TW",   # 牧德 (AOI 檢測設備 - 高價設備)
+    #     "2436.TW"    # 偉詮電 (二極體/類比IC - 中小型股)
+    #     "6770.TW",   # 力積電 (晶圓代工 - 對照 2303)
+    #     "2388.TW",   # 威盛 (高波動 IC 設計 - 對照 3035)
+    #     "3189.TW",   # 景碩 (ABF 載板 - 對照 3037)
+    #     "2313.TW",   # 華通 (PCB 硬板 - 對照 4958)
+    #     "3481.TW",   # 群創 (面板 - 對照 2409)
+    #     "3605.TW"    # 宏致 (連接器/零組件 - 對照 2354/2436)
     # ]
+
     test_tickers = [
-        "0052.TW", "2324.TW","3006.TW", "2301.TW", "4916.TW",
-        "3481.TW", "9958.TW", "2344.TW", "2455.TW", "2481.TW",
-        "2382.TW", "2454.TW", "1519.TW", "2337.TW", "4919.TW",
-        "2330.TW", "0050.TW", "2317.TW", "2388.TW", "3563.TW",
-        "2603.TW", "2409.TW", "2881.TW", "3231.TW", '2313.TW'
+        "6770.TW",   # 力積電 (晶圓代工 - 對照 2303)
+        "2388.TW",   # 威盛 (高波動 IC 設計 - 對照 3035)
+        "3189.TW",   # 景碩 (ABF 載板 - 對照 3037)
+        "2313.TW",   # 華通 (PCB 硬板 - 對照 4958)
+        "3481.TW",   # 群創 (面板 - 對照 2409)
+        "3605.TW"    # 宏致 (連接器/零組件 - 對照 2354/2436)
     ]
 
-    Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
-    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.CONSERVATIVE]
+    # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
+    Persona = [TradingPersona.AGGRESSIVE]
 
     run_multi_stock_backtest(Persona=Persona, test_tickers=test_tickers, initial_cash=initial_cash)

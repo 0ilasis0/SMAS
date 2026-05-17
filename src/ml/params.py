@@ -59,12 +59,12 @@ class XGBHyperParams:
     n_jobs: int = -1
     max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
     min_child_weight: int = 3
-    learning_rate: float = 0.005
-    subsample: float = 0.8              # 每次建樹只用 80% 的樣本 (增加泛化能力)
+    learning_rate: float = 0.009
+    subsample: float = 0.7              # 每次建樹只用 70% 的樣本
     colsample_bytree: float = 0.8       # 每次建樹只用 80% 的特徵
-    gamma: float = 0.5
-    reg_alpha: float = 1.0
-    reg_lambda: float = 1.0
+    gamma: float = 0.7
+    reg_alpha: float = 0.5              # 對葉子權重的平方和進行懲罰
+    reg_lambda: float = 0.02            # 對葉子權重的絕對值和進行懲罰
 
 @dataclass(frozen=True)
 class TrainConfig:
@@ -79,11 +79,11 @@ class TrainConfig:
 class DLHyperParams:
     """CNN-LSTM 深度學習超參數"""
     time_steps: int = 20                # 滑動窗口大小 (回顧過去 ~ 天)
-    cnn_out_channels: int = 32          # CNN 特徵提取後的維度
+    cnn_out_channels: int = 16          # CNN 特徵提取後的維度
     rnn_hidden: int = 16                # RNN 隱藏層神經元數量
     num_layers: int = 1                 # LSTM/GRU 疊了幾層
     batch_size: int = 32
-    learning_rate: float = 0.0001
+    learning_rate: float = 0.0002
     epochs: int = 250
     dropout: float = 0.5                # 隨機失活率
     scheduler_patience: int = 3

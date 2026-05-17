@@ -33,8 +33,7 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
         'n_jobs': 1,
 
         # 強迫 AI 必須認真讀完 100 棵樹，不准中途放棄罷工！
-        'n_estimators': 100,
-        # 'early_stopping_rounds': 25, (這行刪除或註解掉)
+        'n_estimators': 200,
 
         # 恢復稍微激進一點的搜索空間
         'max_depth': trial.suggest_int('max_depth', 3, 6),
@@ -82,7 +81,6 @@ def objective(trial: optuna.Trial, X_train: pd.DataFrame, y_train: pd.Series):
     if not val_aucs:
         return 0.0
 
-    # 🌟 關鍵修改 2：改變計分公式！
     # 取消嚴厲的變異數懲罰。我們改看「最近兩個時間段 (最近期) 的表現」加上「整體平均」
     recent_auc = np.mean(val_aucs[-2:]) # 越近期的市場表現越重要
     mean_auc = np.mean(val_aucs)
@@ -139,7 +137,7 @@ def run_optimization(target_total_trials: int, train_tickers: list, oos_days: in
         df_all = df_all.sort_index().reset_index(drop=True)
 
     # 絕對白名單萃取，保證跟預測引擎特徵 100% 一致
-    features = FeatureCol.get_features()
+    features = FeatureCol.get_xgb_features()
 
     # 檢查是否所有特徵都存在於 DataFrame 中
     missing_features = [f for f in features if f not in df_all.columns]
@@ -215,6 +213,6 @@ if __name__ == "__main__":
     ]
 
     # 強烈建議：對於 XGBoost 來說 300 次已經逼近全域最佳解了
-    target_total_trials = 600
+    target_total_trials = 300
 
     run_optimization(target_total_trials=target_total_trials, train_tickers=train_tickers)

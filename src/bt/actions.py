@@ -210,7 +210,7 @@ class GenerateGeminiReportNode(ActionNode):
         【標的資訊】
         - 股票代號：{bb.ticker}
         - 今日參考價：{getattr(bb, 'current_price', '未知')}
-        - 20 日月乖離率：{getattr(bb, 'bias_20', 0):.2%}
+        - 20 日月乖離率：{getattr(bb, 'bias_month', 0):.2%}
 
         【最終戰術決策】
         - 行動指令：{getattr(bb, 'action_decision', '未知')}

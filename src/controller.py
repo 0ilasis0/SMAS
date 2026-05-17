@@ -179,7 +179,7 @@ class IDSSController:
             raw_expected_open = current_price * (1 + (sox_return * beta))
 
             market_safe = bb.prob_market_safe
-            bias_20 = bb.bias_20
+            bias_month = bb.bias_month
 
             limit_up = self._get_tw_tick_price(current_price * strategy_config.tw_limit_up_ratio)
             limit_down = self._get_tw_tick_price(current_price * strategy_config.tw_limit_down_ratio)
@@ -203,10 +203,10 @@ class IDSSController:
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"個股勝率極高 ({bb.prob_final:.0%})。建議掛「預期開盤價之微幅拉回處」積極承接，避免錯失行情 (建議買價: {trade_price:.2f})。"
 
-                elif bias_20 < strategy_config.buy_rebound_bias:
+                elif bias_month < strategy_config.buy_rebound_bias:
                     raw_price = expected_open_price - (strategy_config.buy_rebound_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
-                    bb.gemini_reasoning += pricing_prefix + f"具備跌深反彈契機 (月乖離 {bias_20:.1%})，建議掛「合理拉回價」等待盤中洗盤安全摸底 (建議買價: {trade_price:.2f})。"
+                    bb.gemini_reasoning += pricing_prefix + f"具備跌深反彈契機 (月乖離 {bias_month:.1%})，建議掛「合理拉回價」等待盤中洗盤安全摸底 (建議買價: {trade_price:.2f})。"
                 else:
                     raw_price = expected_open_price - (strategy_config.buy_normal_discount_atr * atr)
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
@@ -218,10 +218,10 @@ class IDSSController:
                     trade_price = max(limit_down, self._get_tw_tick_price(raw_price))
                     bb.gemini_reasoning += pricing_prefix + f"空頭動能強或大盤有崩跌風險，建議掛「低於預期開盤價 (折價 {strategy_config.sell_panic_discount_atr}ATR)」果斷出脫求現 (建議賣價: {trade_price:.2f})。"
 
-                elif bias_20 > strategy_config.sell_overheated_bias:
+                elif bias_month > strategy_config.sell_overheated_bias:
                     raw_price = expected_open_price + (strategy_config.sell_overheated_premium_atr * atr)
                     trade_price = min(limit_up, self._get_tw_tick_price(raw_price))
-                    bb.gemini_reasoning += pricing_prefix + f"短線已嚴重超漲 (月乖離 {bias_20:.1%})，建議掛「偏高價」等待主力拉抬時停利給追價散戶 (建議賣價: {trade_price:.2f})。"
+                    bb.gemini_reasoning += pricing_prefix + f"短線已嚴重超漲 (月乖離 {bias_month:.1%})，建議掛「偏高價」等待主力拉抬時停利給追價散戶 (建議賣價: {trade_price:.2f})。"
 
                 elif bb.prob_final >= strategy_config.pricing_sell_strong_prob:
                     raw_price = expected_open_price + (strategy_config.sell_strong_premium_atr * atr)

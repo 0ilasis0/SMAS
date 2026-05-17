@@ -280,15 +280,22 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: "aggressive", "moderate", 或 "conservative"
-    target_persona = "conservative"
+    target_persona = "aggressive"
     target_total_trials = 2000
     initial_cash: int = 2_000_000
 
     train_tickers = [
-        "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
-        "2382.TW", "3231.TW", "2324.TW", "2301.TW", "1519.TW",
-        "2603.TW", "2881.TW", "2409.TW", "3481.TW", "2344.TW",
-        "2455.TW", "2388.TW"
+        "0052.TW",   # 富邦科技 (大盤科技股 Anchor)
+        "2303.TW",   # 聯電 (晶圓代工 - 穩定基準)
+        "2337.TW",   # 旺宏 (記憶體 - 區間震盪)
+        "2409.TW",   # 友達 (面板 - 景氣循環)
+        "3035.TW",   # 智原 (ASIC / IC設計 - 高波動)
+        "3037.TW",   # 欣興 (ABF 載板 - 法人籌碼)
+        "4958.TW",   # 臻鼎-KY (PCB 軟板 - 蘋概週期)
+        "6138.TWO",  # 茂達 (上櫃 IC 設計 - OTC 微結構)
+        "2354.TW",   # 鴻準 (機殼/組裝 - 集團動能)
+        "3563.TW",   # 牧德 (AOI 檢測設備 - 高價設備)
+        "2436.TW"    # 偉詮電 (二極體/類比IC - 中小型股)
     ]
 
     run_optimization(

@@ -266,10 +266,10 @@ class CheckNotOverheatedNode(ConditionNode):
     防線 2：追高防呆鎖 (IDSS 自訂引擎版)。
     如果股票短線漲太多 (近 5 日)、乖離過大 (月線)，強制禁止買進。
     """
-    def __init__(self, max_bias_5: float, max_bias_20: float, name=BTCondition.NOT_OVERHEATED):
+    def __init__(self, max_bias_week: float, max_bias_month: float, name=BTCondition.NOT_OVERHEATED):
         super().__init__(name)
-        self.max_bias_5 = max_bias_5
-        self.max_bias_20 = max_bias_20
+        self.max_bias_week = max_bias_week
+        self.max_bias_month = max_bias_month
 
     def tick(self, blackboard: Blackboard) -> NodeState:
         # 1. 取得黑板上的防呆數據
@@ -277,7 +277,7 @@ class CheckNotOverheatedNode(ConditionNode):
         bias_month = getattr(blackboard, FeatureCol.BIAS_MONTH.value, 0.0)
 
         # 2. 判斷是否過熱
-        if bias_week > self.max_bias_5 or bias_month > self.max_bias_20:
+        if bias_week > self.max_bias_week or bias_month > self.max_bias_month:
             dbg.war(f"⚠️ [進攻取消] 系統觸發追高防呆鎖 (近5日乖離: {bias_week:.1%}, 月線乖離: {bias_month:.1%})。拒絕追價買進！(FAILURE)")
             return NodeState.FAILURE
 

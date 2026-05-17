@@ -36,10 +36,20 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     print("🧠 深度學習 (DL) 樣本外盲測 (OOS) 效能對照引擎")
     print("="*70)
 
+    '''
+    ======================================================================
+    📉 調整前 平均 PR-AUC:  0.5359
+    🚀 調整後 平均 PR-AUC:  0.5331 (提升: -0.0028)
+    ----------------------------------------------------------------------
+    📉 調整前 Top 20% 抓漲精準度: 51.74%
+    🚀 調整後 Top 20% 抓漲精準度: 51.22% (提升: -0.52%)
+    ======================================================================
+    '''
+
     BASELINE_PARAMS = {
-        'CNN_OUT_CHANNELS': 32,
+        'CNN_OUT_CHANNELS': 16,
         'RNN_HIDDEN': 16,
-        'LEARNING_RATE': 0.0001,
+        'LEARNING_RATE': 0.0002,
         'DROPOUT': 0.5,
         'BATCH_SIZE': 32,
         'EPOCHS': 250
@@ -49,8 +59,8 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     OPTIMIZED_PARAMS = {
         'CNN_OUT_CHANNELS': 8,
         'RNN_HIDDEN': 16,
-        'LEARNING_RATE': 0.000247,
-        'DROPOUT': 0.295862,
+        'LEARNING_RATE': 0.0001,
+        'DROPOUT': 0.5,
         'BATCH_SIZE': 32,
         'EPOCHS': 250
     }
@@ -157,7 +167,7 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
                     "PR_AUC_Diff": round(pr_auc_opt - pr_auc_base, 4),
                     "Top20_Prec_Before(%)": round(prec_base * 100, 2),
                     "Top20_Prec_After(%)": round(prec_opt * 100, 2),
-                    "Top20_Prec_Diff(%)": round((prec_opt - prec_base) * 100, 2)
+                    "Top20_Prec_Diff(%)": round((prec_opt - prec_base) * 100, 2),
                 })
 
                 del trainer_base, trainer_opt, X_train, y_train, X_oos, y_oos
@@ -198,11 +208,17 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     print("="*70)
 
 if __name__ == "__main__":
+    # test_tickers = [
+    #     "0050.TW", "0052.TW", "2330.TW", "2317.TW",
+    #     "2382.TW", "3231.TW", "2324.TW", "2301.TW",
+    #     "2603.TW", "2881.TW", "2409.TW", "3481.TW",
+    #     "2455.TW", "2388.TW", "1519.TW", "2344.TW"
+    # ]
     test_tickers = [
-        "0050.TW", "0052.TW", "2330.TW", "2317.TW", "2454.TW",
-        "2382.TW", "3231.TW", "2324.TW", "2301.TW",
-        "2603.TW", "2881.TW", "2409.TW", "3481.TW",
-        "2455.TW", "2388.TW", "1519.TW", "2344.TW"
+        "0050.TW", "0052.TW", "2330.TW",
+        "2382.TW", "3231.TW", "2324.TW",
+        "2603.TW", "2881.TW", "2409.TW",
+        "2455.TW", "2388.TW", "1519.TW",
     ]
 
     run_dl_comparison(test_tickers=test_tickers)

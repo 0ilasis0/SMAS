@@ -27,37 +27,47 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
         'n_jobs': 1,
 
         'n_estimators': 100,
+
         'max_depth': 3,
         'min_child_weight': 3,
-        'learning_rate': 0.0992,
-        'subsample': 0.6505,
-        'colsample_bytree': 0.7472,
-        'gamma': 3.410,
-        'reg_alpha': 2.2545,
-        'reg_lambda': 0.8625
+        'learning_rate': 0.005,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'gamma': 0.5,
+        'reg_alpha': 1.0,
+        'reg_lambda': 1.0
     }
 
     # 🟢 實驗組：注入 Optuna 尋優結果與動態早停機制
     OPTIMIZED_PARAMS = {
         'objective': 'binary:logistic',
-        'eval_metric': 'aucpr',
+        'eval_metric': 'auc',
         'random_state': 42,
         'n_jobs': 1,
 
-        # 放大樹量並加入早停機制，讓 Eval Set 發揮作用
-        'n_estimators': 1000,
-        'early_stopping_rounds': 50,
+        'n_estimators': 100,
 
         # --- ⬇️ 注入 Optuna 的最新參數 ⬇️ ---
         'max_depth': 3,
-        'min_child_weight': 4,
-        'learning_rate': 0.0525,
-        'subsample': 0.6458,
-        'colsample_bytree': 0.665,
-        'gamma': 0.3570,
-        'reg_alpha': 0.8397,
-        'reg_lambda': 0.1526
+        'min_child_weight': 3,
+        'learning_rate': 0.009,
+        'subsample': 0.7,
+        'colsample_bytree': 0.8,
+        'gamma': 0.7,
+        'reg_alpha': 0.5,
+        'reg_lambda': 0.02
     }
+
+    '''
+    max_depth: 3
+    min_child_weight: 3
+    learning_rate: 0.0572
+    subsample: 0.6028
+    colsample_bytree: 0.8485
+    gamma: 0.7068
+    reg_alpha: 0.1145
+    reg_lambda: 0.0184
+    '''
 
     report_data = []
 
@@ -174,17 +184,17 @@ if __name__ == "__main__":
     from ml.params import SessionConfig
     lookahead = SessionConfig.lookahead
 
-    test_tickers = [
-        "3006.TW", "4916.TW", "9958.TW", "2481.TW",
-        "2337.TW", "3563.TW", "2313.TW", "4919.TW"
-    ]
     # test_tickers = [
-    #     "0052.TW", "2324.TW","3006.TW", "2301.TW", "4916.TW",
-    #     "3481.TW", "9958.TW", "2344.TW", "2455.TW", "2481.TW",
-    #     "2382.TW", "2377.TW", "2454.TW", "1519.TW", "2337.TW",
-    #     "2330.TW", "0050.TW", "2317.TW", "2388.TW", "3563.TW",
-    #     "2603.TW", "2409.TW", "2881.TW", "3231.TW", '2313.TW',
-    #     "4919.TW"
+    #     "3006.TW", "4916.TW", "9958.TW", "2481.TW",
+    #     "2337.TW", "3563.TW", "2313.TW", "4919.TW"
     # ]
+    test_tickers = [
+        "0052.TW", "2324.TW","3006.TW", "2301.TW", "4916.TW",
+        "3481.TW", "9958.TW", "2344.TW", "2455.TW", "2481.TW",
+        "2382.TW", "2377.TW", "2454.TW", "1519.TW", "2337.TW",
+        "2330.TW", "0050.TW", "2317.TW", "2388.TW", "3563.TW",
+        "2603.TW", "2409.TW", "2881.TW", "3231.TW", '2313.TW',
+        "4919.TW"
+    ]
 
     run_xgb_comparison(test_tickers=test_tickers, lookahead=lookahead)

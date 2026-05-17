@@ -64,7 +64,7 @@ class PathConfig:
 
     @classmethod
     def get_xgboost_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".json", oos_days)
+        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".joblib", oos_days)
 
     @classmethod
     def get_dl_model_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
