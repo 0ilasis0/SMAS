@@ -326,7 +326,7 @@ class IDSSController:
     def sync_market_data(self) -> bool:
         dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
         try:
-            updater = DataUpdater(self.engine.db, Fetcher())
+            updater = DataUpdater(self.engine.db)
             success = updater.update_market_data(ticker=self.ticker, force_sync=True)
 
             if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")

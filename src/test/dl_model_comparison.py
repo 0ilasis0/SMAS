@@ -25,9 +25,8 @@ dbg.toggle()
 
 def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False):
     """獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)"""
-    db = DataManager()
-    fetcher = Fetcher()
-    updater = DataUpdater(db, fetcher)
+    db = DataManager() 
+    updater = DataUpdater(db)
     updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
 
 def set_seed(seed=42):
