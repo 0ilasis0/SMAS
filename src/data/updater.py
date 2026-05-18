@@ -16,9 +16,10 @@ class DataUpdater:
     資料更新專員 (獨立運行版)
     負責管理每日資料抓取邏輯與更新快取檔紀錄。
     """
-    def __init__(self, db: DataManager, fetcher: Fetcher):
+    def __init__(self, db: DataManager, fetcher: Fetcher = Fetcher(), event_fetcher: HybridEventFetcher = HybridEventFetcher()):
         self.db = db
         self.fetcher = fetcher
+        self.event_fetcher = event_fetcher
         self.cache_file = Path(PathConfig.CACHE_FILE)
 
     def update_market_data(self, ticker: str, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
@@ -59,9 +60,8 @@ class DataUpdater:
         if force_wipe or self._needs_update(event_cache_key):
             dbg.log(f"[{ticker}] [事件日曆] 正在同步除權息與法說會資料...")
 
-            event_fetcher = HybridEventFetcher()
             # 傳入 ticker，同時取得除權息與法說會 DataFrame
-            df_div, df_earn = event_fetcher.fetch_upcoming_events(ticker)
+            df_div, df_earn = self.event_fetcher.fetch_upcoming_events(ticker)
 
             if not df_div.empty:
                 self.db.save_dividends_calendar(df_div)
