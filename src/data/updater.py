@@ -54,6 +54,7 @@ class DataUpdater:
                     self._mark_updated(m_ticker)
                 else:
                     dbg.war(f"[{m_ticker}] 總經資料更新失敗。")
+                    success = False
 
         # ================== 3. 企業事件更新 ==================
         event_cache_key = f"events_{ticker}"
