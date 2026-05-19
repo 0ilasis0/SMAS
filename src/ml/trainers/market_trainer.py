@@ -143,5 +143,4 @@ class MarketTrainer:
             dbg.log("成功載入 LightGBM 大盤防禦模型。")
             return model
         except Exception as e:
-            dbg.error(f"大盤模型載入發生未知例外 [{type(e).__name__}]: {str(e)} \n目標路徑: {model_path}")
-            return None
+            dbg.error

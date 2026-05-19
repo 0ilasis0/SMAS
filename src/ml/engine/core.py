@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
@@ -13,6 +14,8 @@ from .data_watchdog import DataWatchdog
 from .model_predictor import ModelPredictor
 from .model_trainer import ModelTrainer
 
+if TYPE_CHECKING:
+    from ml.model.meta_learner import MetaLearner
 
 class QuantAIEngine:
     """
@@ -38,8 +41,8 @@ class QuantAIEngine:
         self.xgb_model = None
         self.dl_model = None
         self.dl_scaler = None
-        self.meta_learner = None
         self.market_model = None
+        self.meta_learner: "MetaLearner" = None
 
         # 定義模型儲存路徑
         self.paths = {

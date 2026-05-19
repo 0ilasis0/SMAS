@@ -23,7 +23,6 @@ if TYPE_CHECKING:
 
 class ModelPredictor:
     """
-    [模組 4] 模型推論官
     負責載入硬碟中的權重檔，並執行線上即時推論或回測批次預測。
     支援 T-1 時光機模式 (is_t_minus_1_sim)。
     """

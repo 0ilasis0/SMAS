@@ -36,21 +36,15 @@ class DataWatchdog:
         """
         if len(df) < 2: return False
 
-        # TODO 如果運行沒問題劑型替換
-        # col_close = StockCol.CLOSE.value if hasattr(StockCol.CLOSE, 'value') else 'close'
-        # col_adj = StockCol.ADJ_CLOSE.value if hasattr(StockCol.ADJ_CLOSE, 'value') else 'adj_close'
-        col_close = StockCol.CLOSE
-        col_adj = StockCol.ADJ_CLOSE
-
-        if col_adj not in df.columns:
-            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 缺少 {col_adj} 欄位，請重新抓取。")
+        if StockCol.ADJ_CLOSE not in df.columns:
+            dbg.war(f"🚨 [Watchdog] 警告！{ticker} 缺少 {StockCol.ADJ_CLOSE} 欄位，請重新抓取。")
             return False
 
-        df_safe = df[df[col_close] > 0].copy()
+        df_safe = df[df[StockCol.CLOSE] > 0].copy()
         if len(df_safe) < 2: return False
 
         # 檢查原始價格，找出單日漲跌幅絕對值大於~的日子 (台股漲跌幅上限為 10%)
-        raw_returns = df[col_close].pct_change().dropna()
+        raw_returns = df[StockCol.CLOSE].pct_change().dropna()
         raw_anomaly = raw_returns.abs() > DataConst.RETURNS_ABS
 
         if raw_anomaly.any():
@@ -67,20 +61,8 @@ class DataWatchdog:
         if len(df) < 2:
             return df
 
-        # TODO 如果運行沒問題劑型替換
-        # col_close = StockCol.CLOSE.value if hasattr(StockCol.CLOSE, 'value') else 'close'
-        # col_open = StockCol.OPEN.value if hasattr(StockCol.OPEN, 'value') else 'open'
-        # col_high = StockCol.HIGH.value if hasattr(StockCol.HIGH, 'value') else 'high'
-        # col_low = StockCol.LOW.value if hasattr(StockCol.LOW, 'value') else 'low'
-        # col_vol = StockCol.VOLUME.value if hasattr(StockCol.VOLUME, 'value') else 'volume'
-        col_close = StockCol.CLOSE
-        col_open = StockCol.OPEN
-        col_high = StockCol.HIGH
-        col_low = StockCol.LOW
-        col_vol = StockCol.VOLUME
-
         # 找出收盤價異常為 0 的日子，發出警告並將其捨棄 (視同休市)
-        zero_mask = df[col_close] <= 0
+        zero_mask = df[StockCol.CLOSE] <= 0
         if zero_mask.any():
             zero_dates = df[zero_mask].index.strftime('%Y-%m-%d').tolist()
             dbg.war(f"[Watchdog] 發現 {ticker} 有 {len(zero_dates)} 筆收盤價為 0 的損毀資料 (如: {zero_dates[0]})。已直接捨棄，視同休市處理。")
@@ -88,7 +70,7 @@ class DataWatchdog:
         else:
             df_safe = df.copy()
 
-        daily_returns = df_safe[col_close].pct_change().dropna()
+        daily_returns = df_safe[StockCol.CLOSE].pct_change().dropna()
         anomaly_mask = daily_returns.abs() > DataConst.RETURNS_ABS
 
         if anomaly_mask.any():
@@ -103,11 +85,11 @@ class DataWatchdog:
 
             if not df_healed.empty:
                 # 重抓後依然要過濾零值
-                new_zero_mask = df_healed[col_close] <= 0
+                new_zero_mask = df_healed[StockCol.CLOSE] <= 0
                 if new_zero_mask.any():
                     df_healed = df_healed[~new_zero_mask].copy()
 
-                new_returns = df_healed[col_close].pct_change().dropna()
+                new_returns = df_healed[StockCol.CLOSE].pct_change().dropna()
                 new_anomaly_mask = new_returns.abs() > DataConst.RETURNS_ABS
 
                 if new_anomaly_mask.any():
@@ -122,8 +104,8 @@ class DataWatchdog:
                         if idx_loc > 0:
                             prev_date = df_healed.index[idx_loc - 1]
 
-                            price_after = float(df_healed[col_open].iloc[idx_loc])
-                            price_before = float(df_healed[col_close].iloc[idx_loc - 1])
+                            price_after = float(df_healed[StockCol.OPEN].iloc[idx_loc])
+                            price_before = float(df_healed[StockCol.CLOSE].iloc[idx_loc - 1])
 
                             if price_before <= 0 or price_after <= 0:
                                 dbg.war(f"[Watchdog] {adate.strftime('%Y-%m-%d')} 股價異常為 0，放棄修復此斷層。")
@@ -143,13 +125,13 @@ class DataWatchdog:
                                 )
                                 continue
 
-                            price_cols = [col_open, col_high, col_low, col_close]
+                            price_cols = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.CLOSE]
                             df_healed.loc[:prev_date, price_cols] *= ratio
 
-                            new_vol = df_healed.loc[:prev_date, col_vol] / ratio
+                            new_vol = df_healed.loc[:prev_date, StockCol.VOLUME] / ratio
                             new_vol.replace([np.inf, -np.inf], np.nan, inplace=True)
                             new_vol.fillna(0, inplace=True)
-                            df_healed.loc[:prev_date, col_vol] = new_vol.round().astype('int64')
+                            df_healed.loc[:prev_date, StockCol.VOLUME] = new_vol.round().astype('int64')
 
                     dbg.log(f"✅ [Watchdog] {ticker} 本地強制還原修復完成！所有技術指標將恢復正常。")
                 else:

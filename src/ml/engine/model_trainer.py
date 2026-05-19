@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 class ModelTrainer:
     """
-    [模組 3] 模型訓練長
     專責執行 XGBoost, Deep Learning, Market Brain 與 Meta-Learner 的完整 Stacking 訓練管線。
     """
     def __init__(self, engine):
@@ -43,11 +42,11 @@ class ModelTrainer:
         ]
 
         for p in model_paths_to_check:
-            if not p.exists():
-                return False
+            if not p.exists(): return False
+
             last_modified_date = datetime.fromtimestamp(p.stat().st_mtime).date()
-            if last_modified_date != today:
-                return False
+            if last_modified_date != today: return False
+
         return True
 
     def train_all_models(self, save_models: bool = True):
@@ -64,7 +63,7 @@ class ModelTrainer:
 
         self.engine.run_data_watchdog(config.ticker)
 
-        macro_tickers = [e.value for e in MacroTicker]
+        macro_tickers = MacroTicker.get_all_tickers()
         df_raw_full = self.engine.db.get_aligned_market_data(config.ticker, macro_tickers)
 
         if df_raw_full.empty:
@@ -78,7 +77,6 @@ class ModelTrainer:
         xgb_engine = XGBFeatureEngine()
         df_xgb_train = xgb_engine.process_pipeline(df_train_only, config.lookahead, is_training=True)
         xgb_trainer = XGBTrainer(config.ticker)
-        xgb_trainer.model_save_path = paths[ModelCol.XGB]
         oof_xgb = xgb_trainer.train_with_cv(df_xgb_train, lookahead=config.lookahead)
         if save_models:
             xgb_trainer.train_and_save_final_model(df_xgb_train, paths[ModelCol.XGB])
@@ -131,7 +129,6 @@ class ModelTrainer:
             if save_models:
                 market_trainer.train_and_save_final_model(df_market_train, market_path)
         else:
-            # 現在只有真正是今天訓練的，才會印出這行跳過
             dbg.log(f"大盤防禦模型 (OOS={oos_days}) 今日已訓練更新，跳過重複訓練。")
 
         # 清理 GPU 記憶體
