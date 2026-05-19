@@ -11,7 +11,6 @@ from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
 from const import GlobalParams
 from data.const import StockCol
-from data.fetcher import Fetcher
 from data.updater import DataUpdater
 from debug import dbg
 from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol, TradingMode

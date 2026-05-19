@@ -6,13 +6,13 @@ if 'warnings' not in sys.modules:
 
 import time
 import traceback
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import streamlit as st
 
 from bt.const import TradeDecision
 from controller import IDSSController
-from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.updater import DataUpdater
 from ml.engine import QuantAIEngine
@@ -28,13 +28,18 @@ from ui.state import init_session_state
 if TYPE_CHECKING:
     from bt.account import Account
 
-HAS_AUTO_UPDATED_KEY = "has_auto_updated"
+class APPCol(StrEnum):
+    HAS_AUTO_UPDATED_KEY = "has_auto_updated"
 
 
 def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False):
-    """獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)"""
-    db = DataManager()
-    updater = DataUpdater(db)
+    """
+    獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)
+    force_wipe：本地端舊資料要不要刪除
+    force_sync：今天明明已經抓過資料了，還要不要強行去網路再抓一次（覆蓋）
+    """
+    data_mg = DataManager()
+    updater = DataUpdater(data_mg)
     updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
 
 
@@ -143,7 +148,7 @@ def main():
     init_session_state()
     selected_persona = render_sidebar()
 
-    if not st.session_state.get(HAS_AUTO_UPDATED_KEY, False):
+    if not st.session_state.get(APPCol.HAS_AUTO_UPDATED_KEY, False):
         st.toast("🔄 系統首次啟動：正在檢查並同步最新市場收盤資料...", icon="⏳")
         status_placeholder = st.empty()
         has_error = False
@@ -168,11 +173,11 @@ def main():
 
                 if not has_error:
                     status.update(label="✅ 所有市場資料已校準！", state="complete", expanded=False)
-                    st.session_state[HAS_AUTO_UPDATED_KEY] = True
+                    st.session_state[APPCol.HAS_AUTO_UPDATED_KEY] = True
                 else:
                     status.update(label="❌ 部分資料同步失敗，請檢查下方訊息", state="error", expanded=True)
 
-                st.session_state[HAS_AUTO_UPDATED_KEY] = True
+                st.session_state[APPCol.HAS_AUTO_UPDATED_KEY] = True
                 status.update(label="✅ 所有市場資料已校準至最新交易日！", state="complete", expanded=False)
 
         if not has_error:
@@ -284,7 +289,7 @@ def main():
                     except Exception as e:
                         st.error(f"⚠️ {t} 同步失敗: {e}")
 
-                st.session_state[HAS_AUTO_UPDATED_KEY] = False # 讓系統重整後知道要重讀資料
+                st.session_state[APPCol.HAS_AUTO_UPDATED_KEY] = False # 讓系統重整後知道要重讀資料
                 st.toast("✅ 盤中即時資料已強制覆蓋更新！", icon="⚡")
                 time.sleep(1)
                 st.rerun()

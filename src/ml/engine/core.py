@@ -65,23 +65,22 @@ class QuantAIEngine:
     # =========================================================================
     # 公開 API (Facade 面板) - 這些方法名稱與參數必須與舊版 100% 相同
     # =========================================================================
-
     def run_data_watchdog(self, ticker: str):
-        """模組 2：資料防護與修復 (委派給 DataWatchdog)"""
+        """資料防護與修復"""
         self._watchdog.run_data_watchdog(ticker)
 
     def train_all_models(self, save_models: bool = True):
-        """模組 3：自動化訓練與存檔 (委派給 ModelTrainer)"""
+        """自動化訓練與存檔"""
         self._trainer.train_all_models(save_models)
 
     def load_inference_models(self) -> bool:
-        """模組 4-1：載入模型至記憶體 (委派給 ModelPredictor)"""
+        """載入模型至記憶體"""
         return self._predictor.load_inference_models()
 
     def predict_today(self, mode: TradingMode = TradingMode.SWING, is_t_minus_1_sim: bool = False) -> dict | None:
-        """模組 4-2：線上推論與預測 (委派給 ModelPredictor)"""
+        """線上推論與預測"""
         return self._predictor.predict_today(mode, is_t_minus_1_sim)
 
     def generate_backtest_data(self) -> pd.DataFrame:
-        """模組 4-3：批次產生回測資料 (委派給 ModelPredictor)"""
+        """批次產生回測資料"""
         return self._predictor.generate_backtest_data()
