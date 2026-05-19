@@ -174,6 +174,7 @@ class DLTrainer:
 
     def train_and_save_final_model(self, X_raw: np.ndarray, y: np.ndarray, save_path: Path | str):
         dbg.log(f"開始訓練最終上線版 DL 模型 (動態 Epoch={self.optimal_epochs})...")
+        # 形狀為 (Batch, Time_Steps, Features)
         num_features = X_raw.shape[2]
         final_scaler = RobustScaler()
         X_2d = X_raw.reshape(-1, num_features)

@@ -1,8 +1,8 @@
 import math
+import traceback
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import TimeSeriesSplit, cross_val_score
@@ -16,7 +16,7 @@ from ml.params import MetaHyperParams, TrainConfig
 class MetaLearner:
     """
     Level 1 Meta-Learner (元學習器)。
-    負責整合 Level 0 (XGBoost & DL) 的 OOF 預測機率，輸出最終綜合勝率。
+    負責整合 Level 0 (ML & DL) 的 OOF 預測機率，輸出最終綜合勝率。
     """
     def __init__(self, ticker: str, hp: MetaHyperParams = MetaHyperParams()):
         self.ticker = ticker
@@ -61,8 +61,9 @@ class MetaLearner:
                 scoring='roc_auc'
             )
             dbg.log(f"【Meta-Learner 誠實評估】5-Fold AUC: {honest_aucs.mean():.4f} (+/- {honest_aucs.std()*2:.4f})")
-        except ValueError as e:
-            dbg.war(f"【Meta-Learner 誠實評估】CV 驗證失敗 (可能是樣本標籤過度單一): {e}")
+        except ValueError:
+            error_details = traceback.format_exc()
+            dbg.error(f"【Meta-Learner 誠實評估】CV 驗證失敗！詳細崩潰堆疊如下：\n{error_details}")
 
         return X_meta, y_meta
 

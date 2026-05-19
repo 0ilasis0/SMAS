@@ -28,8 +28,8 @@ class GeminiOracle:
     實作完美隔離的 API Key Client 切換機制與按日情緒快取。
     """
     FALLBACK_MODELS = [
-        'models/gemini-3.1-flash-lite-preview', # 🥇 (15 RPM / 500 RPD) - 海量掃描專用
         'models/gemini-3-flash-preview',        # 🥈 (5 RPM / 20 RPD) - 高智商，專解複雜新聞
+        'models/gemini-3.1-flash-lite-preview', # 🥇 (15 RPM / 500 RPD) - 海量掃描專用
         'models/gemini-2.5-flash-lite',         # 🥉 (10 RPM / 20 RPD) - 伺服器波動時替補
         'models/gemini-2.5-flash',              # 🎖️ (5 RPM / 20 RPD) - 最後底線
     ]
@@ -60,7 +60,7 @@ class GeminiOracle:
 
     def _init_db(self):
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        # 加入 timeout=10 防禦多進程資料庫鎖定 (database is locked)
+        # timeout=10 防禦多進程資料庫鎖定 (database is locked)
         with sqlite3.connect(self.db_path, timeout=10) as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -129,37 +129,34 @@ class GeminiOracle:
             dbg.war(f"[{ticker}] 抓取 Google 新聞失敗 (網路瞬斷或封鎖): {e}")
             return ""
 
-    def _call_gemini_with_fallback(self, prompt: str) -> dict | None:
-        """嘗試以二維瀑布機制呼叫 Gemini (新版 SDK 實作)"""
-
+    def generate_report(self, system_instruction: str, user_prompt: str) -> str:
+        """
+        接收來自行為樹的 Prompt 與 System Instruction，並回傳 Gemini 生成的文字報告。
+        具備與情緒分析相同的多模型/多金鑰瀑布備援機制，並專為純文字輸出設計。
+        """
         for model_name in self.FALLBACK_MODELS:
             for key_idx, current_key in enumerate(self.api_keys):
-                dbg.log(f"嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
+                dbg.log(f"📝 報告生成 - 嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
 
-                raw_text = ""
                 try:
+                    # 使用新版 SDK 初始化 Client
                     client = genai.Client(api_key=current_key)
 
+                    # 將 user_prompt 放入 contents，將 system_instruction 放入 config 中
                     response = client.models.generate_content(
                         model=model_name,
-                        contents=prompt,
+                        contents=user_prompt,
                         config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            temperature=0.0,
+                            system_instruction=system_instruction,
+                            temperature=0.3,
                         )
                     )
 
-                    raw_text = response.text.strip()
-                    if "```" in raw_text:
-                        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
-
-                    # 避免 LLM 廢話開頭，直接找第一個 { 和最後一個 }
-                    start_idx = raw_text.find('{')
-                    end_idx = raw_text.rfind('}')
-                    if start_idx != -1 and end_idx != -1:
-                        raw_text = raw_text[start_idx:end_idx+1]
-
-                    return json.loads(raw_text)
+                    if response.text:
+                        return response.text.strip()
+                    else:
+                        dbg.war(f"[{model_name}] 回傳了空字串，嘗試下一把 Key...")
+                        continue
 
                 except APIError as api_err:
                     if api_err.code == 429:
@@ -168,22 +165,14 @@ class GeminiOracle:
                         continue
                     else:
                         dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生 API 錯誤 (Code: {api_err.code}): {api_err.message}")
-                        break
-
-                except ValueError as ve:
-                    dbg.war(f"[{model_name}] API Key #{key_idx + 1} 拒絕回答 (安全過濾): {ve}")
-                    break
-
-                except json.JSONDecodeError:
-                    dbg.error(f"[{model_name}] API Key #{key_idx + 1} 輸出非合法 JSON 格式。\nLLM 原始輸出為: {raw_text}")
-                    break
+                        break # 此模型可能有其他問題，直接跳出換下一個模型
 
                 except Exception as e:
                     dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生未預期錯誤: {e}")
                     continue
 
-        dbg.error("🚨 嚴重警告：所有模型與所有 API Key 皆已耗盡配額或發生崩潰！")
-        return None
+        dbg.error("🚨 報告生成失敗：所有模型與 API Key 皆已耗盡配額或發生崩潰！")
+        return "API 呼叫失敗，無法生成真實報告。"
 
     def get_sentiment_score(self, ticker: str) -> tuple[int, str]:
         current_today_str = datetime.now(self.tw_tz).strftime('%Y-%m-%d')
@@ -258,34 +247,37 @@ class GeminiOracle:
         dbg.log(f"[{ticker}] Gemini 情緒分析完成！分數: {score}, 理由: {reason}")
         return score, reason
 
-    def generate_report(self, system_instruction: str, user_prompt: str) -> str:
-        """
-        接收來自行為樹的 Prompt 與 System Instruction，並回傳 Gemini 生成的文字報告。
-        具備與情緒分析相同的多模型/多金鑰瀑布備援機制，並專為純文字輸出設計。
-        """
+    def _call_gemini_with_fallback(self, prompt: str) -> dict | None:
+        """嘗試以二維機制呼叫 Gemini """
+
         for model_name in self.FALLBACK_MODELS:
             for key_idx, current_key in enumerate(self.api_keys):
-                dbg.log(f"📝 報告生成 - 嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
+                dbg.log(f"嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
 
+                raw_text = ""
                 try:
-                    # 使用新版 SDK 初始化 Client
                     client = genai.Client(api_key=current_key)
 
-                    # 將 user_prompt 放入 contents，將 system_instruction 放入 config 中
                     response = client.models.generate_content(
                         model=model_name,
-                        contents=user_prompt,
+                        contents=prompt,
                         config=types.GenerateContentConfig(
-                            system_instruction=system_instruction,
-                            temperature=0.3,
+                            response_mime_type="application/json",
+                            temperature=0.0,
                         )
                     )
 
-                    if response.text:
-                        return response.text.strip()
-                    else:
-                        dbg.war(f"[{model_name}] 回傳了空字串，嘗試下一把 Key...")
-                        continue
+                    raw_text = response.text.strip()
+                    if "```" in raw_text:
+                        raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+
+                    # 避免 LLM 廢話開頭，直接找第一個 { 和最後一個 }
+                    start_idx = raw_text.find('{')
+                    end_idx = raw_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        raw_text = raw_text[start_idx:end_idx+1]
+
+                    return json.loads(raw_text)
 
                 except APIError as api_err:
                     if api_err.code == 429:
@@ -294,11 +286,19 @@ class GeminiOracle:
                         continue
                     else:
                         dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生 API 錯誤 (Code: {api_err.code}): {api_err.message}")
-                        break # 此模型可能有其他問題，直接跳出換下一個模型
+                        break
+
+                except ValueError as ve:
+                    dbg.war(f"[{model_name}] API Key #{key_idx + 1} 拒絕回答 (安全過濾): {ve}")
+                    break
+
+                except json.JSONDecodeError:
+                    dbg.error(f"[{model_name}] API Key #{key_idx + 1} 輸出非合法 JSON 格式。\nLLM 原始輸出為: {raw_text}")
+                    break
 
                 except Exception as e:
                     dbg.error(f"[{model_name}] API Key #{key_idx + 1} 發生未預期錯誤: {e}")
                     continue
 
-        dbg.error("🚨 報告生成失敗：所有模型與 API Key 皆已耗盡配額或發生崩潰！")
-        return "API 呼叫失敗，無法生成真實報告。"
+        dbg.error("🚨 嚴重警告：所有模型與所有 API Key 皆已耗盡配額或發生崩潰！")
+        return None
