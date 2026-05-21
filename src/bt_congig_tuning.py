@@ -7,7 +7,7 @@ import numpy as np
 import optuna
 
 from bt.backtest import BacktestEngine
-from bt.strategy_config import RiskWeights, StrategyConfig
+from bt.strategy_config import RiskWeights, StrategyConfig, TradingPersona
 from debug import dbg
 from ml.const import ModelCol
 from ml.engine import QuantAIEngine
@@ -61,21 +61,21 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     Optuna 的目標函數：根據不同性格 (persona_mode) 給予不同的評分權重
     """
     # ================= 1. 讓 AI 動態選擇參數 (依據性格切換邊界) =================
-    if persona_mode == "aggressive":
+    if persona_mode == TradingPersona.AGGRESSIVE:
         # 激進型：容忍深跌、買進門檻極低、無視大盤
         sl_bounds = (-0.20, -0.08)
         buy_bounds = (0.45, 0.6)
         safe_bounds = (0.35, 0.55)
         profit_bounds = (0.15, 0.35)
 
-    elif persona_mode == "moderate":
+    elif persona_mode == TradingPersona.MODERATE:
         # 穩健型 (MODERATE)
         sl_bounds = (-0.12, -0.05)
         buy_bounds = (0.48, 0.58)
         safe_bounds = (0.43, 0.51)
         profit_bounds = (0.1, 0.25)
 
-    elif persona_mode == "conservative":
+    elif persona_mode == TradingPersona.CONSERVATIVE:
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
         buy_bounds = (0.52, 0.62)
@@ -186,7 +186,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     calmar_ratio = avg_return / safe_mdd
 
     # ---------------- 評分邏輯分支 ----------------
-    if persona_mode == "aggressive":
+    if persona_mode == TradingPersona.AGGRESSIVE:
         trade_penalty = 0.0
         if avg_trades > 25.0:
             trade_penalty = (avg_trades - 25.0) * 0.05
@@ -200,7 +200,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
 
         final_score = base_score - bankruptcy_penalty
 
-    elif persona_mode == "conservative":
+    elif persona_mode == TradingPersona.CONSERVATIVE:
         # 🛡️ 保守型：極端風險厭惡
         mdd_penalty = 0.0
 
@@ -306,9 +306,9 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
-    # 可以填入: "aggressive", "moderate", 或 "conservative"
-    target_persona = "aggressive"
-    target_total_trials = 2000
+    # 可以填入: TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, 或 TradingPersona.CONSERVATIVE
+    target_persona = TradingPersona.CONSERVATIVE
+    target_total_trials = 1250
     initial_cash: int = 2_000_000
 
     train_tickers = [
