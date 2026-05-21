@@ -39,7 +39,7 @@ class StrategyConfig:
     conservative_buy_capital_ratio: float = 0.3 # 試水溫維持動用 30% 資金 (原: 0.40)
 
     # ================= 大盤防禦雷達門檻 =================
-    safe_threshold: float = 0.52                 # 大盤安全度門檻稍微提高 (原: 0.45)
+    safe_threshold: float = 0.54                 # 大盤安全度門檻稍微提高 (原: 0.45)
     cooldown_days: int = 2                       # 交易冷卻天數縮短 (原: 3)
 
     max_return_5d: float = 0.17                  # 5日漲幅過熱門檻極度收緊，絕不追高 (原: 0.23)
@@ -130,7 +130,7 @@ class PersonaFactory:
                 conservative_buy_capital_ratio=0.3, # (原: 0.30)
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.49,               # 激進型反而要求大盤要過半安全 (0.51) 才肯出手 (原: 0.44)
+                safe_threshold=0.52,               # 激進型反而要求大盤要過半安全 (0.51) 才肯出手 (原: 0.44)
                 cooldown_days=1,                   # 停損後隔天馬上可以再戰 (原: 3)
                 max_return_5d=0.22,                # 5日漲幅超過 22% 就不追高 (原: 0.30)
                 max_bias_20=0.14,                  # 20日乖離超過 14% 就不追高 (原: 0.20)
@@ -176,7 +176,7 @@ class PersonaFactory:
                 conservative_buy_capital_ratio=0.5,# 試水溫動用 50% 資金 (原: 0.40)
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.54,               # ⚠️ 大盤安全度必須高達 54% 才肯出手 (原: 0.47)
+                safe_threshold=0.55,               # ⚠️ 大盤安全度必須高達 54% 才肯出手 (原: 0.47)
                 cooldown_days=4,                   # 停損後冷卻期拉長到 4 天 (原: 3)
                 max_return_5d=0.30,                # 5日漲幅門檻放寬 (原: 0.16)
                 max_bias_20=0.14,                  # ⚠️ 嚴格限制：20日乖離超過 14% 絕對不追高 (原: 0.23)

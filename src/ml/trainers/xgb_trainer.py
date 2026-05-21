@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 
+import joblib
 import numpy as np
 import pandas as pd
 import xgboost as xgb
@@ -117,7 +118,7 @@ class XGBTrainer:
 
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
-        final_model.save_model(str(save_path_obj))
+        joblib.dump(final_model, str(save_path_obj))
 
         dbg.log(f"最終模型已成功儲存至: {save_path}")
 
@@ -130,8 +131,7 @@ class XGBTrainer:
                 dbg.error(f"XGBoost模型載入失敗: 找不到檔案 {model_path}")
                 return None
 
-            model = xgb.XGBClassifier()
-            model.load_model(model_path)
+            model = joblib.load(str(model_path))
             dbg.log(f"成功載入 XGBoost 模型: {model_path}")
             return model
 

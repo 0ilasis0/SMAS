@@ -17,3 +17,9 @@ class ConsiderConfig:
 @dataclass(frozen=True)
 class LLMParams:
     DEFAULT_SENTIMENT_SCORE = 5
+
+
+
+@dataclass(frozen=True)
+class BackTestParams:
+    MARKET_DANGER_THRESHOLD: float = 0.5

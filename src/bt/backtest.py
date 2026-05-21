@@ -2,6 +2,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from enum import StrEnum
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ import pandas as pd
 from bt.account import Account, Position
 from bt.blackboard import Blackboard
 from bt.const import BlackboardKey, TradeDecision
+from bt.params import BackTestParams
 from bt.strategy import build_trading_tree
 from bt.strategy_config import StrategyConfig
 from const import Color
@@ -240,20 +242,37 @@ class BacktestEngine:
 
             # 第三層：AI 勝率與大盤防禦雷達
             ax3 = plt.subplot(3, 1, 3, sharex=ax1)
-            ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
-            ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
-            ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
 
+            # [左 Y 軸] 畫 AI 機率與大盤安全度 (0 ~ 1.0)
+            line_ai, = ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
+            line_mkt, = ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
+            line_thresh = ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
+
+            # 大盤危險區塊
             ax3.fill_between(
                 df_res.index, 0, 1,
-                where=(df_res[HistoryCol.PROB_MARKET] < 0.5),
+                where=(df_res[HistoryCol.PROB_MARKET] < BackTestParams.MARKET_DANGER_THRESHOLD),
                 color=Color.RED, alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
             )
 
             ax3.set_ylabel('Probability')
             ax3.set_xlabel('Date')
             ax3.grid(True, alpha=0.3)
-            ax3.legend(loc='upper left')
+
+            # [右 Y 軸] 新增：疊加真實股價走勢
+            ax3_price = ax3.twinx()
+            line_price, = ax3_price.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.3, linewidth=2)
+            ax3_price.set_ylabel('Stock Price (NTD)', color=Color.GRAY)
+            ax3_price.tick_params(axis='y', labelcolor=Color.GRAY)
+
+            # 合併左右 Y 軸的圖例 (Legend)，維持畫面乾淨
+            import matplotlib.patches as mpatches
+            danger_patch = mpatches.Patch(color=Color.RED, alpha=0.1, label='Market Danger Zone')
+
+            lines_3 = [line_ai, line_mkt, line_thresh, line_price, danger_patch]
+            labels_3 = [l.get_label() for l in lines_3]
+
+            ax3.legend(lines_3, labels_3, loc='upper left')
 
             plt.tight_layout()
 

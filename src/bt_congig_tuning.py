@@ -1,12 +1,15 @@
 import matplotlib
 
 matplotlib.use('Agg')
+from pathlib import Path
+
 import numpy as np
 import optuna
 
 from bt.backtest import BacktestEngine
 from bt.strategy_config import RiskWeights, StrategyConfig
 from debug import dbg
+from ml.const import ModelCol
 from ml.engine import QuantAIEngine
 from path import PathConfig
 
@@ -15,18 +18,42 @@ dbg.toggle()
 def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
     """預先抓好所有股票的測試資料，放進記憶體，避免尋優過程中重複讀取"""
     data_dict = {}
-    print("📥 正在預載回測資料，請稍候...")
+    print(f"📥 正在預載回測資料 (OOS={oos_days}天)，請稍候...")
+
     for ticker in tickers:
         try:
+            print(f"\n🔍 [Debug] 開始準備 {ticker} ...")
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
-            if engine.load_inference_models():
+
+            # 🟢 探測針 1：檢查路徑到底指向哪裡
+            print(f"🔍 [Debug] {ticker} 預期 XGB 路徑: {engine.paths[ModelCol.XGB]}")
+            print(f"🔍 [Debug] {ticker} 預期 XGB 檔案是否存在: {Path(engine.paths[ModelCol.XGB]).exists()}")
+
+            # 🟢 探測針 2：攔截載入過程的詳細錯誤
+            try:
+                load_success = engine.load_inference_models()
+                print(f"🔍 [Debug] {ticker} 模型載入結果: {load_success}")
+            except Exception as e:
+                import traceback
+                print(f"🚨 [Debug] {ticker} 載入時發生劇烈當機！\n{traceback.format_exc()}")
+                load_success = False
+
+            if load_success:
                 df = engine.generate_backtest_data()
+
+                # 🟢 探測針 3：檢查產出的資料狀態
+                print(f"🔍 [Debug] {ticker} 產出回測資料形狀: {df.shape}")
+
                 if not df.empty:
                     data_dict[ticker] = df.tail(oos_days)
-        except Exception as e:
-            print(f"⚠️ {ticker} 載入失敗: {e}")
+                    print(f"🔍 [Debug] {ticker} 成功切出最後 {len(data_dict[ticker])} 天加入字典。")
+            else:
+                print(f"⚠️ {ticker} 載入失敗，跳過。")
 
-    print(f"✅ 成功載入 {len(data_dict)} 檔股票資料！")
+        except Exception as e:
+            print(f"⚠️ {ticker} 全域處理失敗: {e}")
+
+    print(f"\n✅ 成功載入 {len(data_dict)} 檔股票資料！")
     return data_dict
 
 def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
@@ -120,7 +147,7 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     sharpes = []
     returns = []
     mdds = []
-    trades_counts = [] # 🌟 新增：收集交易次數
+    trades_counts = [] # 收集交易次數
 
     for ticker, df in data_dict.items():
         engine = BacktestEngine(initial_cash=initial_cash, ticker=ticker, strategy=config)

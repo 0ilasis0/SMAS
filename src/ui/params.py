@@ -7,7 +7,7 @@ class BacktestParams:
     MAX_DAYS: int = 240
     MIN_DAYS: int = 60
     STEP_DAYS: int = 10
-    DEFAULT_DAYS: int = 240
+    DEFAULT_DAYS: int = 120
 
 
 @dataclass(frozen=True)
