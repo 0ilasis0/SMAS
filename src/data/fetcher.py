@@ -1,8 +1,9 @@
 import time
 import traceback
-import zoneinfo
+from datetime import datetime, timedelta
 
 import pandas as pd
+import requests
 import yfinance as yf
 
 from base import MathTool
@@ -112,4 +113,64 @@ class Fetcher:
             else:
                 dbg.error("已達最大重試次數，放棄抓取。")
 
+        return pd.DataFrame()
+
+    def fetch_foreign_futures_oi(self, days: int = DataLimit.DAILY_MAX_YEAR * 365) -> pd.DataFrame:
+        """
+        [宏觀升級] 抓取外資「台指期 (TX) 未平倉淨部位 (Net Open Interest)」。
+        負數代表外資滿手空單，是台股崩盤的最強領先指標。
+        來源: FinMind Open API
+        """
+        dbg.log("正在透過 FinMind API 抓取外資台指期未平倉數據...")
+
+        # 計算回推的起始日期
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+
+        url = "https://api.finmindtrade.com/api/v4/data"
+        params = {
+            "dataset": "TaiwanFuturesInstitutionalInvestors",
+            "data_id": "TX", # TX 代表大台指期貨
+            "start_date": start_date
+        }
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get("msg") == "success" and len(data.get("data", [])) > 0:
+                    df = pd.DataFrame(data["data"])
+                    df_foreign = df[df['institutional_investors'].str.contains('外資|Foreign', case=False, na=False)].copy()
+
+                    if df_foreign.empty:
+                        investor_list = df['institutional_investors'].unique().tolist()
+                        dbg.war(f"FinMind 回傳的投資人類別有: {investor_list}")
+                        dbg.war("FinMind API 未回傳包含『外資』的期貨數據，請檢查上方印出的類別名稱。")
+                        return pd.DataFrame()
+
+                    # 計算「未平倉淨部位 (多單 - 空單)」
+                    df_foreign['futures_net_oi'] = (
+                        df_foreign['long_open_interest_balance_volume'] -
+                        df_foreign['short_open_interest_balance_volume']
+                    )
+
+                    # 格式化為與系統相容的 DataFrame
+                    df_foreign['date'] = pd.to_datetime(df_foreign['date'])
+                    df_foreign.set_index('date', inplace=True)
+                    df_foreign.index.name = StockCol.DATE
+
+                    # 只保留我們需要的核心欄位
+                    df_clean = df_foreign[['futures_net_oi']].copy()
+
+                    dbg.log(f"成功抓取外資期貨 OI 數據，共 {len(df_clean)} 筆。")
+                    return df_clean
+
+            except Exception as e:
+                dbg.war(f"FinMind API 抓取失敗 (嘗試 {attempt + 1}/{self.MAX_RETRIES}): {e}")
+
+            if attempt < self.MAX_RETRIES - 1:
+                time.sleep(self.BACKOFF_FACTOR ** attempt)
+
+        dbg.error("外資期貨 OI 抓取已達最大重試次數，放棄。")
         return pd.DataFrame()

@@ -34,6 +34,7 @@ class StockCol(StrEnum):
 class MacroTicker(StrEnum):
     """總經與大盤指數標的"""
     TWII = "^TWII"  # 台灣加權指數 (本地)
+    US10Y = "^TNX"  # 美國 10 年期公債殖利率
     SOX = "^SOX"    # 費城半導體指數 (海外，需處理時差)
     VIX = "^VIX"
     USDTWD = "TWD=X"

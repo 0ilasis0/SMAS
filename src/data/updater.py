@@ -73,6 +73,19 @@ class DataUpdater:
         else:
             dbg.log(f"⚡ [{ticker}] [事件日曆] 今日已同步過該股事件，跳過網路抓取。")
 
+        # ================== 4. 宏觀籌碼更新 (外資期貨空單) ==================
+        futures_cache_key = "macro_futures_oi"
+        # 為了避免每跑一檔股票就抓一次大盤期貨，這裡用獨立的 cache_key 控制，一天只會進來一次
+        if force_wipe or force_sync or self._needs_update(futures_cache_key):
+            dbg.log("[宏觀防禦] 正在同步外資台指期未平倉空單 (Futures OI)...")
+            df_futures_oi = self.fetcher.fetch_foreign_futures_oi()
+
+            if not df_futures_oi.empty:
+                self.db.save_macro_data("FUTURES_OI", df_futures_oi)
+                self._mark_updated(futures_cache_key)
+            else:
+                dbg.war("[宏觀防禦] 外資期貨未平倉資料抓取失敗。")
+
         return success
 
     def _needs_update(self, cache_key: str) -> bool:

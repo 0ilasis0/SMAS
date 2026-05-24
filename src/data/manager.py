@@ -84,6 +84,17 @@ class DataManager:
                     earnings_date TEXT
                 )
             ''')
+
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS macro_time_series (
+                    metric_name TEXT,
+                    date TEXT,
+                    value REAL,
+                    PRIMARY KEY (metric_name, date)
+                )
+            ''')
+
+            # 為了加速未來 get_aligned_market_data 時的 Join 操作
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_earn_ticker ON earnings_calendar(ticker)')
 
             conn.commit()
@@ -172,7 +183,7 @@ class DataManager:
 
     def get_aligned_market_data(self, stock_ticker: str, macro_tickers: list[str]) -> pd.DataFrame:
         """
-        機構級數據對齊引擎
+        機構級數據對齊引擎 (支援宏觀期貨數據)
         """
         df_stock = self.get_daily_data(stock_ticker)
 
@@ -182,6 +193,7 @@ class DataManager:
         overseas_tickers = MacroTicker.get_overseas_tickers()
         macro_cols = [] # 記錄所有加入的大盤欄位
 
+        # 1. 處理一般的 Yahoo Finance 總經指數 (VIX, 美債, 費半等)
         for mt in macro_tickers:
             df_macro = self.get_daily_data(mt)
             if df_macro.empty: continue
@@ -197,6 +209,17 @@ class DataManager:
             else:
                 aligned_df = aligned_df.join(df_macro, how='left')
 
+        #  將獨立的宏觀籌碼指標 (如: 外資期指空單) 加入對齊
+        # 注意：我們將這個 Series 命名為 'futures_oi'，這樣 MarketFeatureEngine 才抓得到
+        s_futures_oi = self.get_macro_data("FUTURES_OI")
+        if not s_futures_oi.empty:
+            # 將 Series 轉為 DataFrame，並指定欄位名稱
+            df_futures = s_futures_oi.to_frame(name="futures_oi")
+            macro_cols.append("futures_oi")
+            # 台指期與台股同步開盤，所以不需要像美股那樣 shift(1)
+            aligned_df = aligned_df.join(df_futures, how='left')
+
+        # 3. 統一填補所有宏觀資料的假日期缺口 (例如國定假日)
         if macro_cols:
             aligned_df[macro_cols] = aligned_df[macro_cols].ffill()
 
@@ -301,3 +324,59 @@ class DataManager:
                 d2 = datetime.strptime(earnings_date_str, "%Y-%m-%d")
                 return (d2 - d1).days
         return None
+
+    # 宏觀與籌碼指標 資料庫操作
+    def save_macro_data(self, metric_name: str, df: pd.DataFrame):
+        """
+        將單一數值的宏觀指標存入資料庫 (例如: FUTURES_OI)
+        預期傳入的 df 必須以 date 為 index，且只有一個數值欄位。
+        """
+        if df.empty: return
+
+        # 假設 df 只有一個欄位，我們把它轉成 (metric_name, date, value) 的格式
+        value_col = df.columns[0]
+        records = []
+        for date_idx, row in df.iterrows():
+            date_str = str(date_idx).split(' ')[0]
+            val = float(row[value_col]) if pd.notna(row[value_col]) else 0.0
+            records.append((metric_name, date_str, val))
+
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.executemany('''
+                INSERT OR REPLACE INTO macro_time_series (metric_name, date, value)
+                VALUES (?, ?, ?)
+            ''', records)
+            conn.commit()
+            dbg.log(f"成功儲存宏觀指標 [{metric_name}]，共 {len(records)} 筆。")
+
+    def get_macro_data(self, metric_name: str, start_date: str = None, end_date: str = None) -> pd.Series:
+        """
+        讀取指定的宏觀指標，回傳以日期為 Index 的 Pandas Series。
+        """
+        query = "SELECT date, value FROM macro_time_series WHERE metric_name = ?"
+        params = [metric_name]
+
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+
+        query += " ORDER BY date ASC"
+
+        with sqlite3.connect(self.db_path) as conn:
+            df = pd.read_sql_query(query, conn, params=params, index_col='date', parse_dates=['date'])
+
+        if df.empty:
+            return pd.Series(dtype=float, name=metric_name)
+
+        # 整理 index 時區
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+
+        # 回傳 Series，並將 name 設為該指標名稱
+        series = df['value']
+        series.name = metric_name.lower()
+        return series
