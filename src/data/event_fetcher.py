@@ -4,6 +4,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 
+from const import StatusCol
 from debug import dbg
 
 
@@ -51,7 +52,7 @@ class HybridEventFetcher:
             resp = requests.get(self.finmind_url, params=params, timeout=10)
             data = resp.json()
 
-            if data.get("msg") == "success" and data.get("data"):
+            if data.get("msg") == StatusCol.SUCCESS and data.get("data"):
                 df_raw = pd.DataFrame(data["data"])
                 # 篩選未來的除息日
                 upcoming = df_raw[df_raw["CashExDividendTradingDate"] >= start_date].copy()

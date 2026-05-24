@@ -4,7 +4,7 @@ import pytz
 import streamlit as st
 
 from bt.const import TradeDecision
-from const import Color
+from const import Color, StatusCol
 from ml.const import OracleCol, QuoteCol, SignalCol
 from ui.const import APIKey
 
@@ -12,7 +12,7 @@ from ui.const import APIKey
 def render_report(result: dict):
     """將財報渲染邏輯獨立，保持主程式乾淨"""
 
-    if result.get(APIKey.STATUS.value) != "success":
+    if result.get(APIKey.STATUS.value) != StatusCol.SUCCESS:
         st.error(f"❌ 發生錯誤: {result.get(APIKey.MESSAGE.value, '未知錯誤')}")
         return
 

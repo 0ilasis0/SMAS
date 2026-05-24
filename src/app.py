@@ -12,15 +12,18 @@ from typing import TYPE_CHECKING
 import streamlit as st
 
 from bt.const import TradeDecision
+from const import StatusCol
 from controller import IDSSController
 from data.manager import DataManager
 from data.updater import DataUpdater
+from debug import dbg
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
 from ui.const import APIKey, Page, SessionKey
 from ui.params import BacktestParams
-from ui.portfolio import load_portfolio, render_portfolio_page, trade_dialog
+from ui.portfolio import (load_portfolio, render_portfolio_page,
+                          save_portfolio, trade_dialog)
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
@@ -32,15 +35,32 @@ class APPCol(StrEnum):
     HAS_AUTO_UPDATED_KEY = "has_auto_updated"
 
 
-def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False):
+def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False) -> bool:
     """
     獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)
     force_wipe：本地端舊資料要不要刪除
     force_sync：今天明明已經抓過資料了，還要不要強行去網路再抓一次（覆蓋）
     """
-    data_mg = DataManager()
-    updater = DataUpdater(data_mg)
-    updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
+    dbg.log(f"[{ticker}] 啟動後台獨立資料同步管線 (Wipe={force_wipe}, Sync={force_sync})...")
+
+    try:
+        data_mg = DataManager()
+        updater = DataUpdater(data_mg)
+
+        success = updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
+
+        if success:
+            dbg.log(f"[{ticker}] 後台管線同步成功！資料庫已為最新狀態。")
+        else:
+            dbg.error(f"[{ticker}] 後台管線同步失敗，請檢查網路連線或 API 流量限制。")
+
+        return success
+
+    except Exception as e:
+        error_details = traceback.format_exc()
+        dbg.error(f"[{ticker}] 獨立資料同步過程中發生未預期崩潰: {e}\n追蹤:\n{error_details}")
+
+        return False
 
 
 def run_mlops_pipeline(ticker: str):
@@ -62,10 +82,10 @@ def run_mlops_pipeline(ticker: str):
                 engine_live = QuantAIEngine(ticker=ticker, oos_days=0)
                 engine_live.train_all_models(save_models=True)
 
-                status.update(label="✅ 訓練完畢！準備重新載入系統...", state="complete", expanded=False)
+                status.update(label="✅ 訓練完畢！準備重新載入系統...", state=StatusCol.COMPLETE, expanded=False)
 
             except Exception as e:
-                status.update(label="❌ 訓練過程中發生錯誤", state="error", expanded=True)
+                status.update(label="❌ 訓練過程中發生錯誤", state=StatusCol.ERROR, expanded=True)
 
                 st.error(f"錯誤摘要: {e}")
                 st.markdown("### 🔍 完整錯誤追蹤日誌 (Traceback)")
@@ -133,7 +153,7 @@ def run_global_mlops_pipeline():
 
             # 完成後將進度條推滿
             progress_bar.progress(1.0, text="🎉 全域模型訓練完畢！")
-            status.update(label="🎉 所有自選股模型訓練完畢！系統已吸收最新市場趨勢。", state="complete", expanded=False)
+            status.update(label="🎉 所有自選股模型訓練完畢！系統已吸收最新市場趨勢。", state=StatusCol.COMPLETE, expanded=False)
             time.sleep(2)
             progress_bar.empty()
     finally:
@@ -142,7 +162,7 @@ def run_global_mlops_pipeline():
     st.rerun()
 
 # ==========================================
-# 主程式流 (Main Application Flow)
+# 主程式
 # ==========================================
 def main():
     init_session_state()
@@ -155,7 +175,7 @@ def main():
         with status_placeholder.container():
             with st.status("🔄 系統首次啟動：同步所有追蹤標的...", expanded=True) as status:
 
-                # 🌟 改為從所有組合包收集股票
+                # 改為從所有組合包收集股票
                 account = st.session_state.get(SessionKey.PORTFOLIO.value)
                 all_tickers = set()
                 if account:
@@ -172,13 +192,13 @@ def main():
                         has_error = True
 
                 if not has_error:
-                    status.update(label="✅ 所有市場資料已校準！", state="complete", expanded=False)
+                    status.update(label="✅ 所有市場資料已校準！", state=StatusCol.COMPLETE, expanded=False)
                     st.session_state[APPCol.HAS_AUTO_UPDATED_KEY] = True
                 else:
-                    status.update(label="❌ 部分資料同步失敗，請檢查下方訊息", state="error", expanded=True)
+                    status.update(label="❌ 部分資料同步失敗，請檢查下方訊息", state=StatusCol.ERROR, expanded=True)
 
                 st.session_state[APPCol.HAS_AUTO_UPDATED_KEY] = True
-                status.update(label="✅ 所有市場資料已校準至最新交易日！", state="complete", expanded=False)
+                status.update(label="✅ 所有市場資料已校準至最新交易日！", state=StatusCol.COMPLETE, expanded=False)
 
         if not has_error:
             time.sleep(1)
@@ -193,7 +213,6 @@ def main():
         db_manager = ctrl_live.engine.db if ctrl_live else None
 
         if db_manager is None:
-            from data.manager import DataManager
             db_manager = DataManager()
 
         render_portfolio_page(db_manager)
@@ -203,7 +222,7 @@ def main():
     # 進入 IDSS 決策大廳 (Dashboard)
     # ==========================================
     account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
-    current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
+    current_sp_name = st.session_state.get(SessionKey.CURRENT_SUB_PORTFOLIO.value)
     if not current_sp_name or current_sp_name not in account.sub_portfolios:
         st.warning("👈 尚未選擇投資組合包，請由左側邊欄選擇或建立。")
         st.stop()
@@ -223,7 +242,6 @@ def main():
             # 如果這檔股票有庫存，卻不在自選單裡，順手幫您補回去並存檔
             if current_ticker not in current_sp.watch_tickers:
                 current_sp.watch_tickers.append(current_ticker)
-                from ui.portfolio import save_portfolio
                 save_portfolio(account)
         else:
             # 如果組合包真的完全沒有自選股也沒有庫存，強制變成 None

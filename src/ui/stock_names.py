@@ -36,6 +36,7 @@ def get_tw_stock_mapping() -> dict:
 
     # 如果 API 剛好掛掉，給幾個預設值當作防呆底線
     if not mapping:
+        dbg.error(f"無法取得任何有效股票代號之中文名稱，啟用預設之標的")
         return {"2330.TW": "台積電"}
 
     return mapping

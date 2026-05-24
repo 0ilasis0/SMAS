@@ -5,7 +5,7 @@ import streamlit as st
 from bt.account import Account
 from bt.strategy_config import TradingPersona
 from ml.const import TradingMode
-from ui.base import get_smart_tw_ticker, is_valid_ticker
+from ui.base import get_smart_tw_ticker
 from ui.const import Page, SessionKey
 from ui.portfolio import load_portfolio, save_portfolio
 from ui.state import on_ticker_change, reset_result, save_settings
@@ -13,7 +13,7 @@ from ui.stock_names import get_tw_stock_mapping
 
 
 def render_sidebar() -> tuple[TradingPersona, TradingMode]:
-    # 讀取當前的鎖定狀態 (安全存取)
+    # 讀取當前的鎖定狀態
     is_locked = st.session_state.get(SessionKey.IS_TRAINING.value, False) or \
                 st.session_state.get(SessionKey.IS_GLOBAL_TRAINING.value, False)
 
@@ -53,10 +53,10 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                 st.warning("請先至「資產管理」建立組合包。")
                 return TradingPersona.MODERATE, TradingMode.SWING
 
-            current_sp_name = st.session_state.get("CURRENT_SUB_PORTFOLIO")
+            current_sp_name = st.session_state.get(SessionKey.CURRENT_SUB_PORTFOLIO.value)
             if current_sp_name not in sp_names:
                 current_sp_name = sp_names[0]
-                st.session_state["CURRENT_SUB_PORTFOLIO"] = current_sp_name
+                st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = current_sp_name
 
             selected_sp_name = st.selectbox(
                 "選擇目前操作的組合",
@@ -67,7 +67,7 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
 
             # 如果使用者切換了下拉選單，更新 Session 並重整
             if selected_sp_name != current_sp_name:
-                st.session_state["CURRENT_SUB_PORTFOLIO"] = selected_sp_name
+                st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = selected_sp_name
                 st.session_state[SessionKey.CURRENT_TICKER.value] = None
                 st.session_state[SessionKey.CTRL_LIVE.value] = None
                 st.rerun()
@@ -205,7 +205,7 @@ def delete_sub_portfolio_dialog(sp_id: str):
         # 3. 存檔並重整畫面
         save_portfolio(account)
         st.session_state[SessionKey.PORTFOLIO.value] = account
-        st.session_state["CURRENT_SUB_PORTFOLIO"] = None # 強制重新選擇
+        st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = None # 強制重新選擇
         st.session_state[SessionKey.CURRENT_TICKER.value] = None
 
         st.toast(f"✅ 已刪除組合包並退回結算資金 ${returned_cash:,.0f} 至總資金。", icon="🗑️")

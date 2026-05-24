@@ -9,9 +9,8 @@ from bt.blackboard import Blackboard
 from bt.const import AccountCol, TradeDecision
 from bt.strategy import build_trading_tree
 from bt.strategy_config import PersonaFactory, TradingPersona
-from const import GlobalParams
+from const import GlobalParams, StatusCol
 from data.const import StockCol
-from data.updater import DataUpdater
 from debug import dbg
 from ml.const import FeatureCol, OracleCol, QuoteCol, SignalCol, TradingMode
 from ml.engine import QuantAIEngine
@@ -69,12 +68,18 @@ class IDSSController:
         persona: TradingPersona,
     ) -> dict:
         if not self.is_ready:
-            return {"status": "error", "message": "系統尚未載入完成，請先呼叫 load_system()"}
+            return {
+                APIKey.STATUS.value: StatusCol.ERROR,
+                APIKey.MESSAGE.value: "系統尚未載入完成，請先呼叫 load_system()"
+            }
 
         # 1. AI 引擎預測與新聞分析
         prediction_result = self.engine.predict_today(mode=TradingMode.SWING, is_t_minus_1_sim=GlobalParams.IS_T_MINUS_1_SIM)
         if not prediction_result:
-            return {"status": "error", "message": "預測失敗，缺乏最新市場資料"}
+            return {
+                APIKey.STATUS.value: StatusCol.ERROR,
+                APIKey.MESSAGE.value: "預測失敗，缺乏最新市場資料"
+            }
 
         # 取得系統當前判定的目標日期
         current_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
@@ -127,8 +132,8 @@ class IDSSController:
         if any(p < 0 for p in [bb.prob_final, bb.prob_xgb, bb.prob_dl, bb.prob_market_safe]):
             dbg.error(f"🚨 [致命錯誤] 檢測到 AI 引擎輸出異常機率值 ({GlobalParams.DEFAULT_ERROR})，神經網路可能已崩潰或特徵缺失！")
             return {
-                "status": "error",
-                "message": "AI 引擎推論失敗 (機率異常)，為保護資金安全，系統已強制熔斷並鎖死交易功能。"
+                APIKey.STATUS.value: StatusCol.ERROR,
+                APIKey.MESSAGE.value: "AI 引擎推論失敗 (機率異常)，為保護資金安全，系統已強制熔斷並鎖死交易功能。"
             }
 
         # 4. 執行行為樹決策 (Tick)
@@ -289,7 +294,7 @@ class IDSSController:
         final_date = prediction_result.get(QuoteCol.DATE.value, datetime.now().strftime('%Y-%m-%d'))
 
         return {
-            APIKey.STATUS.value: "success",
+            APIKey.STATUS.value: StatusCol.SUCCESS,
             QuoteCol.TICKER.value: self.ticker,
             QuoteCol.DATE.value: final_date,
             APIKey.MODE.value: TradingMode.SWING.value,
@@ -322,15 +327,15 @@ class IDSSController:
             APIKey.REPORT.value: bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
 
-    def sync_market_data(self) -> bool:
-        dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
-        try:
-            updater = DataUpdater(self.engine.db)
-            success = updater.update_market_data(ticker=self.ticker, force_sync=True)
+    # def sync_market_data(self) -> bool:
+    #     dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
+    #     try:
+    #         updater = DataUpdater(self.engine.db)
+    #         success = updater.update_market_data(ticker=self.ticker, force_sync=True)
 
-            if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
-            else: dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
-            return success
-        except Exception as e:
-            dbg.error(f"[{self.ticker}] 資料同步過程中發生未預期錯誤: {e}")
-            return False
+    #         if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
+    #         else: dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
+    #         return success
+    #     except Exception as e:
+    #         dbg.error(f"[{self.ticker}] 資料同步過程中發生未預期錯誤: {e}")
+    #         return False

@@ -90,7 +90,7 @@ def create_sub_portfolio_dialog():
 
         save_portfolio(account)
         st.session_state[SessionKey.PORTFOLIO.value] = account
-        st.session_state["CURRENT_SUB_PORTFOLIO"] = sp_name
+        st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = sp_name
 
         # 執行完畢後清理 temp_key
         if not use_shared and "create_sp_alloc_amount" in st.session_state:
@@ -435,8 +435,8 @@ def sub_portfolio_settings_dialog(sp_id: str):
             # 更換字典的 Key
             account.sub_portfolios[new_name] = account.sub_portfolios.pop(sp_id)
             # 如果目前正在操作這個組合包，同步更新 Session
-            if st.session_state.get("CURRENT_SUB_PORTFOLIO") == sp_id:
-                st.session_state["CURRENT_SUB_PORTFOLIO"] = new_name
+            if st.session_state.get(SessionKey.CURRENT_SUB_PORTFOLIO.value) == sp_id:
+                st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = new_name
 
         # 2. 處理資金切換
         new_use_shared = fund_source.startswith("💧")
@@ -469,8 +469,8 @@ def sub_portfolio_settings_dialog(sp_id: str):
             st.session_state[SessionKey.PORTFOLIO.value] = account
 
             # 如果刪除的是當前選中的組合包，清空焦點
-            if st.session_state.get("CURRENT_SUB_PORTFOLIO") == sp_id:
-                st.session_state["CURRENT_SUB_PORTFOLIO"] = None
+            if st.session_state.get(SessionKey.CURRENT_SUB_PORTFOLIO.value) == sp_id:
+                st.session_state[SessionKey.CURRENT_SUB_PORTFOLIO.value] = None
                 st.session_state[SessionKey.CURRENT_TICKER.value] = None
                 st.session_state[SessionKey.CTRL_LIVE.value] = None
 

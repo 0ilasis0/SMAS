@@ -35,6 +35,7 @@ class SessionKey(StrEnum):
     UI_PERSONA = "ui_persona"
     UI_MODE = "ui_mode"
     LAST_RESULT = "last_result"
+    CURRENT_SUB_PORTFOLIO = "current_sub_portfolio"
 
 
 class APIKey(StrEnum):
