@@ -88,15 +88,19 @@ class XGBTrainer:
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
 
-        # 輸出核心特徵重要性排行 (有助於驗證瘦身後的特徵品質)
-        # if cv_importances:
-        #     avg_importance = np.mean(cv_importances, axis=0)
-        #     importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+        if cv_importances:
+            avg_importance = np.mean(cv_importances, axis=0)
+            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-        #     dbg.log("\n🏆 【XGBoost 核心預測特徵 (Top 10)】")
-        #     for idx, (feat_name, imp_score) in enumerate(importance_series.head(10).items(), 1):
-        #         dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
-        #     dbg.log("-" * 40)
+            dbg.log("\n🏆 【XGBoost 核心預測特徵 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("-" * 40)
+
+            dbg.log("\n🗑️ 【【XGBoost 貢獻度最低特徵 (Bottom 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
+                # 倒數排名，所以 idx 標示方式稍微不同
+                dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
 
         return oof_predictions.dropna()
 

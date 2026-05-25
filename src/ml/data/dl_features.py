@@ -75,7 +75,6 @@ class DLFeatureEngine:
             FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH
         ])
 
-        # 💡 注意：此處已徹底移除 K_UPPER, K_LOWER, K_BODY，全面杜絕多重共線性
         data = data.assign(**new_features)
         data = data.replace([np.inf, -np.inf], np.nan)
         data = data.dropna(subset=dl_features)

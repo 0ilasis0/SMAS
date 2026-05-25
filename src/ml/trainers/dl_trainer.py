@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool, MLTool
 from debug import dbg
-from ml.const import DLModelType, DLParamKey
+from ml.const import DLModelType, DLParamKey, FeatureCol
 from ml.params import DLHyperParams, TrainConfig
 from ml.trainers.dl_net import DLModelFactory, RNNType
 
@@ -170,7 +170,75 @@ class DLTrainer:
             return pd.Series(dtype=float)
 
         dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {np.mean(cv_aucs):.4f}")
+
+        if len(np.unique(y_val)) > 1:
+            auc = roc_auc_score(y_val, test_preds)
+            cv_aucs.append(auc)
+            auc_str = f"{auc:.4f}"
+
+            # 呼叫排列重要性計算器
+            fold_importances = self._calculate_permutation_importance(model, X_val, y_val, base_auc=auc)
+
+            dl_feature_names = FeatureCol.get_dl_features()
+
+            # 安全防呆：確保陣列長度與名稱數量一致
+            if len(dl_feature_names) == len(fold_importances):
+                imp_series = pd.Series(fold_importances, index=dl_feature_names).sort_values(ascending=False)
+
+                dbg.log(f"\n🧠 【DL 模型 (Fold {fold+1}) 核心特徵 (Top 5)】")
+                for idx, (feat_name, imp_score) in enumerate(imp_series.head(5).items(), 1):
+                    dbg.log(f"  {idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
+
+                dbg.log(f"\n🗑️ 【DL 模型 (Fold {fold+1}) 最沒用特徵 (Bottom 5)】")
+                for idx, (feat_name, imp_score) in enumerate(imp_series.tail(5).items(), 1):
+                    dbg.log(f"  倒數 {6-idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
+                dbg.log("-" * 40)
+            else:
+                dbg.war(f"特徵數量不匹配！(X_val 特徵數: {len(fold_importances)}, FeatureCol 數量: {len(dl_feature_names)})")
+        else:
+            auc_str = "N/A"
+
         return oof_predictions.dropna()
+
+    def _calculate_permutation_importance(self, model: nn.Module, X_val: np.ndarray, y_val: np.ndarray, base_auc: float) -> np.ndarray:
+        """
+        深度學習特徵重要性評估器
+        藉由隨機打亂單一特徵，觀察 AUC 下降的幅度來逆向推導特徵重要性。
+        """
+        num_features = X_val.shape[2]
+        importances = np.zeros(num_features)
+
+        # 如果驗證集只有一種標籤，無法計算 AUC，直接回傳 0
+        if len(np.unique(y_val)) <= 1:
+            return importances
+
+        model.eval()
+        with torch.no_grad():
+            for f_idx in range(num_features):
+                # 複製一份乾淨的驗證集
+                X_corrupted = X_val.copy()
+
+                # 將這一個維度 (特徵) 的所有數據壓平、徹底洗牌、再塞回去
+                # 這樣能完美摧毀該特徵的預測力，且不破壞其他特徵
+                orig_shape = X_corrupted[:, :, f_idx].shape
+                flat_feature = X_corrupted[:, :, f_idx].flatten()
+                np.random.shuffle(flat_feature)
+                X_corrupted[:, :, f_idx] = flat_feature.reshape(orig_shape)
+
+                # 用這個「被破壞」的數據集重新推論
+                corrupted_loader = self._create_dataloader(X_corrupted, y_val, shuffle=False)
+                test_preds = []
+                for X_t, _ in corrupted_loader:
+                    preds = torch.sigmoid(model(X_t.to(self.device))).cpu().numpy()
+                    test_preds.extend(np.atleast_1d(preds))
+
+                # 計算破壞後的 AUC
+                corrupted_auc = roc_auc_score(y_val, test_preds)
+
+                # 重要性 = 基準 AUC - 破壞後 AUC (掉得越多，代表特徵越重要)
+                importances[f_idx] = base_auc - corrupted_auc
+
+        return importances
 
     def train_and_save_final_model(self, X_raw: np.ndarray, y: np.ndarray, save_path: Path | str):
         dbg.log(f"開始訓練最終上線版 DL 模型 (動態 Epoch={self.optimal_epochs})...")

@@ -102,7 +102,6 @@ class MarketFeatureCol(StrEnum):
     TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
 
     US10Y_SURGE = "us10y_surge"
-    # FUTURES_OI_MOMENTUM = "futures_oi_momentum"
     FUTURES_OI_LEVEL = "futures_oi_level"
 
     # 大盤 K 線幾何特徵

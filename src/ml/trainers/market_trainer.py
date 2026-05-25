@@ -104,15 +104,14 @@ class MarketTrainer:
             avg_importance = np.mean(cv_importances, axis=0)
             importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-            # dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
-            # for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
-            #     dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
 
             dbg.log("\n🗑️ 【Market Brain 貢獻度最低特徵 (Bottom 5)】")
             for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
                 # 倒數排名，所以 idx 標示方式稍微不同
                 dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
-            dbg.log("-" * 40)
 
         return oof_predictions.dropna()
 
