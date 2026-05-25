@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pandas as pd
 
@@ -35,7 +37,7 @@ class MarketFeatureEngine:
         # ==========================================
         # 2. 美股衍生特徵 (無未來函數對齊版)
         # ==========================================
-        sox_close_col = f"{MacroTicker.SOX.value.replace('^', '')}_close".lower()
+        sox_close_col = self._get_ticker_col_name(MacroTicker.SOX)
         if sox_close_col in data.columns:
             data[MarketFeatureCol.SOX_RET_1D] = data[sox_close_col].pct_change()
             data[MarketFeatureCol.SOX_RET_5D] = data[sox_close_col].pct_change(periods=5)
@@ -88,7 +90,7 @@ class MarketFeatureEngine:
         # 4. 總經與籌碼特徵 (VIX, 匯率, 美債, 期貨空單)
         # ==========================================
         # [VIX 恐慌指數]
-        vix_col = f"{MacroTicker.VIX.value.replace('^', '')}_close".lower()
+        vix_col = self._get_ticker_col_name(MacroTicker.VIX)
         if vix_col in data.columns:
             data[MarketFeatureCol.VIX_CLOSE] = data[vix_col]
             vix_ma20 = data[vix_col].rolling(20).mean()
@@ -98,15 +100,14 @@ class MarketFeatureEngine:
             data[MarketFeatureCol.VIX_SURGE] = 0.0
 
         # [台幣匯率]
-        twd_col = f"{MacroTicker.USDTWD.value}_close".lower()
+        twd_col = self._get_ticker_col_name(MacroTicker.USDTWD)
         if twd_col in data.columns:
             data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
         else:
             data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
 
         # 美國 10 年期公債殖利率 (US10Y)
-        # 捕捉全球資金緊縮、科技股估值下殺的系統性風險
-        us10y_col = "^tnx_close" # Yahoo Finance 的代號通常是 ^TNX
+        us10y_col = self._get_ticker_col_name(MacroTicker.US10Y)
         if us10y_col in data.columns:
             # 計算 5 日斜率 (殖利率短期狂飆是最危險的)
             data[MarketFeatureCol.US10Y_SURGE] = data[us10y_col].pct_change(periods=5)
@@ -151,3 +152,9 @@ class MarketFeatureEngine:
 
         dbg.log(f"大盤特徵工程完成。產生 {len(df_clean)} 筆可用樣本。")
         return df_clean
+
+    def _get_ticker_col_name(self, ticker: MacroTicker) -> str:
+        """
+        將 Ticker 統一轉換為乾淨的欄位名稱：
+        """
+        return f"{ticker.value.replace('^', '')}_close".lower()
