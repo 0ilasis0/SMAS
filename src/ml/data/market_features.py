@@ -64,6 +64,10 @@ class MarketFeatureEngine:
         ema_slow = data[ai_vision_col].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
         data[MarketFeatureCol.TWII_MACD] = (ema_fast - ema_slow) / (data[ai_vision_col] + 1e-9) * 100
 
+        # 成交量取 Log 差分，消除極端節日效應
+        vol_col = str(StockCol.VOLUME)
+        data[MarketFeatureCol.TWII_VOL_CHG] = np.log1p(data[vol_col]) - np.log1p(data[vol_col].shift(1))
+
         prev_close = data[ai_vision_col].shift(1)
         tr1 = data.get(StockCol.HIGH, data[ai_vision_col]) - data.get(StockCol.LOW, data[ai_vision_col])
         tr2 = (data.get(StockCol.HIGH, data[ai_vision_col]) - prev_close).abs()
@@ -71,8 +75,13 @@ class MarketFeatureEngine:
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         data[MarketFeatureCol.TWII_ATR_RATIO] = (true_range / (prev_close + 1e-9)).rolling(window=self.params.MA_WEEK).mean()
 
+        # === 大盤 K 線型態 (判斷大盤恐慌下殺或強勢軋空) ===
+        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
+        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
         price_range = (data.get(StockCol.HIGH, data[StockCol.CLOSE]) - data.get(StockCol.LOW, data[StockCol.CLOSE])).clip(lower=0.01)
 
+        data[MarketFeatureCol.TWII_K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
+        data[MarketFeatureCol.TWII_K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
         data[MarketFeatureCol.TWII_K_BODY] = (data[StockCol.CLOSE] - data.get(StockCol.OPEN, data[StockCol.CLOSE])) / price_range
 
         # ==========================================

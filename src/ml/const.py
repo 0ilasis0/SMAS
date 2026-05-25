@@ -98,7 +98,7 @@ class MarketFeatureCol(StrEnum):
     TWII_BIAS_60 = "twii_bias_60"
     TWII_RSI = "twii_rsi"
     TWII_MACD = "twii_macd"
-    # TWII_VOL_CHG = "twii_vol_chg"
+    TWII_VOL_CHG = "twii_vol_chg"
     TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
 
     US10Y_SURGE = "us10y_surge"
@@ -106,8 +106,8 @@ class MarketFeatureCol(StrEnum):
     FUTURES_OI_LEVEL = "futures_oi_level"
 
     # 大盤 K 線幾何特徵
-    # TWII_K_UPPER = "twii_k_upper"
-    # TWII_K_LOWER = "twii_k_lower"
+    TWII_K_UPPER = "twii_k_upper"
+    TWII_K_LOWER = "twii_k_lower"
     TWII_K_BODY = "twii_k_body"
 
     SOX_RET_1D = "sox_ret_1d"
