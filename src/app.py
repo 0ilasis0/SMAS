@@ -375,4 +375,5 @@ def main():
 
 
 if __name__ == "__main__":
+    st.set_page_config(page_title="台股量化交易終端", page_icon="📈", layout="wide")
     main()
