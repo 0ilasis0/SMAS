@@ -51,14 +51,6 @@ class PathConfig:
     GEMINI_KEY = _PathFile.raw / "key.env"
 
     @classmethod
-    def get_all(cls):
-        return [e for e in cls]
-
-    @classmethod
-    def get_backtest_report_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, _PathFile.report, "_backtest", ".csv")
-
-    @classmethod
     def get_chart_report_path(cls, ticker: str) -> Path:
         return cls._generate_dynamic_path(ticker, _PathFile.report_chart, f"_chart", ".png")
 
