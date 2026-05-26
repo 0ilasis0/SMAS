@@ -54,7 +54,7 @@ class IndicatorParams:
 class XGBHyperParams:
     objective: str = 'binary:logistic'  # 輸出 0~1 的機率
     eval_metric: str = 'auc'            # 使用 AUC 評估模型排序能力
-    n_estimators: int = 500
+    n_estimators: int = 1000
     random_state: int = 42              # 固定亂數種子，確保結果可重現
     n_jobs: int = -1
     max_depth: int = 3                  # 限制樹的深度，防止過度擬合 (Overfitting)
@@ -72,7 +72,7 @@ class TrainConfig:
     N_SPLITS_MAX: int = 8
     N_SPLITS_MIN: int = 3
 
-    ML_EARLY_STOP_ROUND = 50
+    ML_EARLY_STOP_ROUND = 75
     DL_EARLY_STOP_ROUND = 25
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class MarketLGBMConfig:
 
     # 學習與正則化
     learning_rate: float = 0.0066
-    n_estimators: int = 500          # 原本: 100 (註: 配合低學習率，實盤可視情況增加)
+    n_estimators: int = 1000         # 原本: 1000 (註: 配合低學習率，實盤可視情況增加)
     subsample: float = 0.5658        # 原本: 0.8
     colsample_bytree: float = 0.4374 # 原本: 0.8 (對應 feature_fraction)
 

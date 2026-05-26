@@ -32,7 +32,7 @@ class MarketFeatureEngine:
         # ==========================================
         # 1. 基礎台股大盤漲跌幅
         # ==========================================
-        twii_ret_1d = data[ai_vision_col].pct_change()
+        # twii_ret_1d = data[ai_vision_col].pct_change()
 
         # ==========================================
         # 2. 美股衍生特徵 (無未來函數對齊版)
@@ -41,11 +41,11 @@ class MarketFeatureEngine:
         if sox_close_col in data.columns:
             data[MarketFeatureCol.SOX_RET_1D] = data[sox_close_col].pct_change()
             data[MarketFeatureCol.SOX_RET_5D] = data[sox_close_col].pct_change(periods=5)
-            data[MarketFeatureCol.SOX_TWII_SPREAD] = twii_ret_1d - data[MarketFeatureCol.SOX_RET_1D]
+            # data[MarketFeatureCol.SOX_TWII_SPREAD] = twii_ret_1d - data[MarketFeatureCol.SOX_RET_1D]
         else:
             data[MarketFeatureCol.SOX_RET_1D] = 0.0
             data[MarketFeatureCol.SOX_RET_5D] = 0.0
-            data[MarketFeatureCol.SOX_TWII_SPREAD] = 0.0
+            # data[MarketFeatureCol.SOX_TWII_SPREAD] = 0.0
 
         # ==========================================
         # 3. 台股大盤自身特徵 (Trend, Momentum & Volatility)
@@ -67,8 +67,8 @@ class MarketFeatureEngine:
         data[MarketFeatureCol.TWII_MACD] = (ema_fast - ema_slow) / (data[ai_vision_col] + 1e-9) * 100
 
         # 成交量取 Log 差分，消除極端節日效應
-        vol_col = str(StockCol.VOLUME)
-        data[MarketFeatureCol.TWII_VOL_CHG] = np.log1p(data[vol_col]) - np.log1p(data[vol_col].shift(1))
+        # vol_col = str(StockCol.VOLUME)
+        # data[MarketFeatureCol.TWII_VOL_CHG] = np.log1p(data[vol_col]) - np.log1p(data[vol_col].shift(1))
 
         prev_close = data[ai_vision_col].shift(1)
         tr1 = data.get(StockCol.HIGH, data[ai_vision_col]) - data.get(StockCol.LOW, data[ai_vision_col])
@@ -78,13 +78,13 @@ class MarketFeatureEngine:
         data[MarketFeatureCol.TWII_ATR_RATIO] = (true_range / (prev_close + 1e-9)).rolling(window=self.params.MA_WEEK).mean()
 
         # === 大盤 K 線型態 (判斷大盤恐慌下殺或強勢軋空) ===
-        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
-        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
-        price_range = (data.get(StockCol.HIGH, data[StockCol.CLOSE]) - data.get(StockCol.LOW, data[StockCol.CLOSE])).clip(lower=0.01)
+        # max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
+        # min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
+        # price_range = (data.get(StockCol.HIGH, data[StockCol.CLOSE]) - data.get(StockCol.LOW, data[StockCol.CLOSE])).clip(lower=0.01)
 
-        data[MarketFeatureCol.TWII_K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
-        data[MarketFeatureCol.TWII_K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
-        data[MarketFeatureCol.TWII_K_BODY] = (data[StockCol.CLOSE] - data.get(StockCol.OPEN, data[StockCol.CLOSE])) / price_range
+        # data[MarketFeatureCol.TWII_K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
+        # data[MarketFeatureCol.TWII_K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
+        # data[MarketFeatureCol.TWII_K_BODY] = (data[StockCol.CLOSE] - data.get(StockCol.OPEN, data[StockCol.CLOSE])) / price_range
 
         # ==========================================
         # 4. 總經與籌碼特徵 (VIX, 匯率, 美債, 期貨空單)

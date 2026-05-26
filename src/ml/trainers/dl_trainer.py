@@ -171,32 +171,32 @@ class DLTrainer:
 
         dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {np.mean(cv_aucs):.4f}")
 
-        if len(np.unique(y_val)) > 1:
-            auc = roc_auc_score(y_val, test_preds)
-            cv_aucs.append(auc)
-            auc_str = f"{auc:.4f}"
+        # if len(np.unique(y_val)) > 1:
+        #     auc = roc_auc_score(y_val, test_preds)
+        #     cv_aucs.append(auc)
+        #     auc_str = f"{auc:.4f}"
 
-            # 呼叫排列重要性計算器
-            fold_importances = self._calculate_permutation_importance(model, X_val, y_val, base_auc=auc)
+        #     # 呼叫排列重要性計算器
+        #     fold_importances = self._calculate_permutation_importance(model, X_val, y_val, base_auc=auc)
 
-            dl_feature_names = FeatureCol.get_dl_features()
+        #     dl_feature_names = FeatureCol.get_dl_features()
 
-            # 安全防呆：確保陣列長度與名稱數量一致
-            if len(dl_feature_names) == len(fold_importances):
-                imp_series = pd.Series(fold_importances, index=dl_feature_names).sort_values(ascending=False)
+        #     # 安全防呆：確保陣列長度與名稱數量一致
+        #     if len(dl_feature_names) == len(fold_importances):
+        #         imp_series = pd.Series(fold_importances, index=dl_feature_names).sort_values(ascending=False)
 
-                dbg.log(f"\n🧠 【DL 模型 (Fold {fold+1}) 核心特徵 (Top 5)】")
-                for idx, (feat_name, imp_score) in enumerate(imp_series.head(5).items(), 1):
-                    dbg.log(f"  {idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
+        #         dbg.log(f"\n🧠 【DL 模型 (Fold {fold+1}) 核心特徵 (Top 5)】")
+        #         for idx, (feat_name, imp_score) in enumerate(imp_series.head(5).items(), 1):
+        #             dbg.log(f"  {idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
 
-                dbg.log(f"\n🗑️ 【DL 模型 (Fold {fold+1}) 最沒用特徵 (Bottom 5)】")
-                for idx, (feat_name, imp_score) in enumerate(imp_series.tail(5).items(), 1):
-                    dbg.log(f"  倒數 {6-idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
-                dbg.log("-" * 40)
-            else:
-                dbg.war(f"特徵數量不匹配！(X_val 特徵數: {len(fold_importances)}, FeatureCol 數量: {len(dl_feature_names)})")
-        else:
-            auc_str = "N/A"
+        #         dbg.log(f"\n🗑️ 【DL 模型 (Fold {fold+1}) 最沒用特徵 (Bottom 5)】")
+        #         for idx, (feat_name, imp_score) in enumerate(imp_series.tail(5).items(), 1):
+        #             dbg.log(f"  倒數 {6-idx}. {feat_name}: AUC 貢獻 {imp_score:.4f}")
+        #         dbg.log("-" * 40)
+        #     else:
+        #         dbg.war(f"特徵數量不匹配！(X_val 特徵數: {len(fold_importances)}, FeatureCol 數量: {len(dl_feature_names)})")
+        # else:
+        #     auc_str = "N/A"
 
         return oof_predictions.dropna()
 
