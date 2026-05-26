@@ -251,8 +251,8 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-    db_path = PathConfig.RESULT_REPORT / "idss_optuna_study.db"
+    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
+    db_path = PathConfig.REPORT_RESULT / "idss_optuna_study.db"
     db_url = f"sqlite:///{db_path.absolute().as_posix()}?timeout=60"
 
     print(f"📁 尋優資料庫連結至: {db_path.name}")
@@ -307,7 +307,7 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, 或 TradingPersona.CONSERVATIVE
-    target_persona = TradingPersona.CONSERVATIVE
+    target_persona = TradingPersona.AGGRESSIVE
     target_total_trials = 1250
     initial_cash: int = 2_000_000
 

@@ -31,7 +31,7 @@ def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: in
     print("🚀 IDSS 混合制批量回測系統啟動")
     print("="*60)
 
-    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
+    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
 
     all_results = []
 

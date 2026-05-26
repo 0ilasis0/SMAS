@@ -147,8 +147,8 @@ def run_xgb_comparison(test_tickers: list, lookahead: int, oos_days: int = 240):
     df_report = pd.DataFrame(report_data)
     df_report = df_report.sort_values(by="AUC_Diff", ascending=False)
 
-    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-    csv_path = PathConfig.RESULT_REPORT / "xgb_model_comparison_report.csv"
+    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
+    csv_path = PathConfig.REPORT_RESULT / "xgb_model_comparison_report.csv"
     df_report.to_csv(csv_path, index=False)
 
     # ================= 印出終極總結 =================

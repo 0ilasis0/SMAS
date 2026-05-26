@@ -24,7 +24,8 @@ class LGBMLoggerProxy:
 lgb.register_logger(LGBMLoggerProxy())
 
 
-
+# TODO 問AI該code是否有漏洞或是需要升級的地方，需要搭配下方的部分code
+# TODO 並詢問為甚麼實戰的AUC反而下降了
 def find_optimal_threshold(y_true, y_prob):
     """ 使用 Youden's J Statistic 找到最佳門檻 """
     best_j = -1
@@ -193,8 +194,8 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         }]
 
         df_report = pd.DataFrame(report_data)
-        PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-        csv_path = PathConfig.RESULT_REPORT / "market_lgbm_comparison_report.csv"
+        PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
+        csv_path = PathConfig.REPORT_RESULT / "market_lgbm_comparison_report.csv"
         df_report.to_csv(csv_path, index=False)
 
         # ================= 6. 終極報表印出 =================

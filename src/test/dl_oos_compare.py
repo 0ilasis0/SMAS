@@ -188,8 +188,8 @@ def run_dl_comparison(test_tickers: list, oos_days: int = 240):
     df_report = pd.DataFrame(report_data)
     df_report = df_report.sort_values(by="PR_AUC_Diff", ascending=False)
 
-    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-    csv_path = PathConfig.RESULT_REPORT / "dl_model_comparison_report.csv"
+    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
+    csv_path = PathConfig.REPORT_RESULT / "dl_model_comparison_report.csv"
     df_report.to_csv(csv_path, index=False)
 
     print("\n" + "="*70)

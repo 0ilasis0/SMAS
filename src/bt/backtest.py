@@ -248,6 +248,9 @@ class BacktestEngine:
             line_mkt, = ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
             line_thresh = ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
 
+
+            # TODO 問AI這裡的崩盤是否依然是依賴 BackTestParams.MARKET_DANGER_THRESHOLD = 0.5 的 50%　，是不是應該也轉向使用　find_optimal_threshold
+            # TODO 順便整合 find_optimal_threshold 統一由 bt->backtest 控制
             # 大盤危險區塊
             ax3.fill_between(
                 df_res.index, 0, 1,

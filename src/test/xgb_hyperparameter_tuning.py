@@ -153,8 +153,8 @@ def run_optimization(target_total_trials: int, train_tickers: list, oos_days: in
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    PathConfig.RESULT_REPORT.mkdir(parents=True, exist_ok=True)
-    log_path = PathConfig.RESULT_REPORT / "xgboost_optuna_study.journal.log"
+    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
+    log_path = PathConfig.REPORT_RESULT / "xgboost_optuna_study.journal.log"
     storage = JournalStorage(JournalFileStorage(str(log_path)))
 
     print(f"📁 XGBoost 尋優日誌連結至: {log_path.name}")

@@ -135,7 +135,7 @@ def run_market_optimization(oos_days: int, lookahead: int, target_total_trials: 
     print(f"✅ 大盤資料準備完成！總訓練樣本: {len(X_train)} 筆")
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log_path = PathConfig.RESULT_REPORT / "market_lgbm_optuna_study.log"
+    log_path = PathConfig.REPORT_RESULT / "market_lgbm_optuna_study.log"
     storage = JournalStorage(JournalFileStorage(str(log_path)))
 
     study = optuna.create_study(direction="maximize", study_name="Market_LGBM_v1", storage=storage, load_if_exists=True)

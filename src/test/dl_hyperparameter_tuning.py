@@ -128,7 +128,7 @@ def tune_global_hyperparameters(train_tickers: list, target_trials: int, oos_day
         return final_score
 
     # 在您的目錄下建立一個 sqlite 資料庫檔案
-    sqlite_path = PathConfig.RESULT_REPORT / "optuna_tuning.db"
+    sqlite_path = PathConfig.REPORT_RESULT / "optuna_tuning.db"
     sqlite_path.parent.mkdir(parents=True, exist_ok=True)
     storage_url = f"sqlite:///{sqlite_path.absolute()}"
 

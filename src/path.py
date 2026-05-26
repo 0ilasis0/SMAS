@@ -29,6 +29,7 @@ class _PathFile:
     processed = _resource_path("data", "processed")
     model = _resource_path("data", "processed", "model")
     report = _resource_path("data", "processed", "report")
+    report_chart = _resource_path("data", "processed", "report_chart")
     raw = _resource_path("data", "raw")
 
     @classmethod
@@ -37,8 +38,7 @@ class _PathFile:
 
 @dataclass(frozen = True)
 class PathConfig:
-    MODEL_DIR = _PathFile.model
-    RESULT_REPORT = _PathFile.report
+    REPORT_RESULT = _PathFile.report
     EXPERIMENT_DETAILS = _PathFile.report / "experiment_detail.csv"
     EXPERIMENT_SUMMARY = _PathFile.report / "experiment_summary.csv"
     ALL_STOCKS_PERSONA = _PathFile.report / "all_stocks_persona.csv"
@@ -56,40 +56,40 @@ class PathConfig:
 
     @classmethod
     def get_backtest_report_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, "_backtest", ".csv")
+        return cls._generate_dynamic_path(ticker, _PathFile.report, "_backtest", ".csv")
 
     @classmethod
     def get_chart_report_path(cls, ticker: str) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.RESULT_REPORT, f"_chart", ".png")
+        return cls._generate_dynamic_path(ticker, _PathFile.report_chart, f"_chart", ".png")
 
     @classmethod
     def get_xgboost_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_xgb_model", ".joblib", oos_days)
+        return cls._generate_dynamic_path(ticker, _PathFile.model, "_xgb_model", ".joblib", oos_days)
 
     @classmethod
     def get_dl_model_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
         dl_name = dl_type.name if dl_type else "DL"
         rnn_name = f"{rnn_type.name}_" if rnn_type else ""
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_name}_{rnn_name}model", ".pth", oos_days)
+        return cls._generate_dynamic_path(ticker, _PathFile.model, f"_{dl_name}_{rnn_name}model", ".pth", oos_days)
 
     @classmethod
     def get_dl_scalar_path(cls, ticker: str, dl_type: "DLModelType", rnn_type: "RNNType", oos_days: int = 0) -> Path:
         dl_name = dl_type.name if dl_type else "DL"
         rnn_name = f"{rnn_type.name}_" if rnn_type else ""
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, f"_{dl_name}_{rnn_name}scaler", ".joblib", oos_days)
+        return cls._generate_dynamic_path(ticker, _PathFile.model, f"_{dl_name}_{rnn_name}scaler", ".joblib", oos_days)
 
     @classmethod
     def get_meta_model_path(cls, ticker: str, oos_days: int = 0) -> Path:
-        return cls._generate_dynamic_path(ticker, cls.MODEL_DIR, "_meta_model", ".joblib", oos_days)
+        return cls._generate_dynamic_path(ticker, _PathFile.model, "_meta_model", ".joblib", oos_days)
 
     @classmethod
     def get_market_model_path(cls, oos_days: int = 0) -> Path:
-        if not cls.MODEL_DIR.exists():
-            cls.MODEL_DIR.mkdir(parents=True, exist_ok=True)
-            dbg.log(f"建立新資料夾: {cls.MODEL_DIR}")
+        if not _PathFile.model.exists():
+            _PathFile.model.mkdir(parents=True, exist_ok=True)
+            dbg.log(f"建立新資料夾: {_PathFile.model}")
 
         oos_suffix = f"_oos_{oos_days}" if oos_days > 0 else ""
-        return cls.MODEL_DIR / f"universal_market_model{oos_suffix}.joblib"
+        return _PathFile.model / f"universal_market_model{oos_suffix}.joblib"
 
     @classmethod
     def _generate_dynamic_path(cls, ticker: str, base_dir: Path, suffix: str, ext: str, oos_days: int = 0) -> Path:
