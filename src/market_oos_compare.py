@@ -1,15 +1,14 @@
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                             roc_auc_score)
+from sklearn.metrics import (accuracy_score, confusion_matrix, precision_score,
+                             recall_score, roc_auc_score)
 
 from data.const import MacroTicker
 from debug import dbg
 from ml.const import MarketFeatureCol
 from ml.data.market_features import MarketFeatureEngine
 from ml.engine import QuantAIEngine
-from ml.params import TrainConfig
 # ================= 引入您的實際生產模組 =================
 from path import PathConfig
 
@@ -23,6 +22,28 @@ class LGBMLoggerProxy:
         dbg.error(f"[LGBM] {msg}")
 
 lgb.register_logger(LGBMLoggerProxy())
+
+
+
+def find_optimal_threshold(y_true, y_prob):
+    """ 使用 Youden's J Statistic 找到最佳門檻 """
+    best_j = -1
+    best_thresh = 0.5
+    # 在 0.01 到 0.99 之間嘗試 50 個切點
+    for t in np.linspace(0.01, 0.99, 50):
+        preds = (y_prob >= t).astype(int)
+        tn, fp, fn, tp = confusion_matrix(y_true, preds).ravel()
+
+        tpr = tp / (tp + fn + 1e-9) # 真正率 (崩盤有抓到)
+        fpr = fp / (fp + tn + 1e-9) # 偽陽率 (沒崩盤卻亂響)
+
+        # Youden's J = TPR - FPR，越接近 1 代表分類效果越好
+        j = tpr - fpr
+        if j > best_j:
+            best_j = j
+            best_thresh = t
+
+    return best_thresh
 
 def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int = 240):
     print("="*70)
@@ -38,18 +59,18 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         'random_state': 42,
         'n_jobs': -1,
         'verbose': -1,
-        'n_estimators': 100,
+        'n_estimators': 200,
 
         'max_depth': 3,
-        'num_leaves': 4,
-        'min_child_samples': 16,
-        'min_split_gain': 0.7,
+        'num_leaves': 5,
+        'min_child_samples': 17,
+        'min_split_gain': 0.6249,
         'max_bin': 127,
-        'learning_rate': 0.005,
-        'subsample': 0.7428,
-        'colsample_bytree': 0.4491,        # 等同feature_fraction
-        'reg_alpha': 2.0228,
-        'reg_lambda': 0.3432,
+        'learning_rate': 0.0066,
+        'subsample': 0.5658,
+        'colsample_bytree': 0.4374,        # 等同feature_fraction
+        'reg_alpha': 2.1228,
+        'reg_lambda': 0.3703,
     }
 
     # 🟢 實驗組 (Optimized)：請填入您 Optuna 跑出的最佳結果
@@ -60,19 +81,19 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         'random_state': 42,
         'n_jobs': -1,
         'verbose': -1,
-        'n_estimators': 100,
+        'n_estimators': 200,
 
         # --- ⬇️ 請替換為您的 Optuna 最新結果 ⬇️ ---
-        'max_depth': 3,
-        'num_leaves': 5,
-        'min_child_samples': 17,
-        'min_split_gain': 0.6249,
-        'max_bin': 63,
-        'learning_rate':  0.0006,
-        'subsample': 0.5658,
-        'feature_fraction': 0.4374,
-        'reg_alpha': 2.1228,
-        'reg_lambda': 0.3703,
+        'max_depth': 4,
+        'num_leaves': 12,
+        'min_child_samples': 37,
+        'min_split_gain': 0.7391,
+        'max_bin': 255,
+        'learning_rate':  0.015,
+        'subsample': 0.6027,
+        'feature_fraction': 0.473,
+        'reg_alpha': 0.8046,
+        'reg_lambda': 0.0163,
     }
 
     print("⏳ 正在萃取大盤特徵與準備盲測資料...")
@@ -114,7 +135,8 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
         model_base.fit(X_train_full, y_train_full)
 
         preds_proba_base = model_base.predict_proba(X_oos)[:, 1]
-        preds_label_base = (preds_proba_base >= 0.5).astype(int)
+        threshold_base = np.percentile(preds_proba_base, 85)
+        preds_label_base = (preds_proba_base >= threshold_base).astype(int)
 
         # ================= 4. 訓練 Optimized 模型 (包含內部 CV 早停) =================
         print("🧠 正在訓練 Optuna Optimized (實驗組) 模型...")
@@ -137,8 +159,13 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
             model_opt = lgb.LGBMClassifier(**opt_params_fallback, scale_pos_weight=scale_pos_weight)
             model_opt.fit(X_train_full, y_train_full)
 
+        val_probs = model_opt.predict_proba(X_val)[:, 1]
+        dynamic_threshold = find_optimal_threshold(y_val, val_probs)
+
+        dbg.log(f"✅ 動態門檻標定完成，最佳觸發機率門檻: {dynamic_threshold:.4f}")
+
         preds_proba_opt = model_opt.predict_proba(X_oos)[:, 1]
-        preds_label_opt = (preds_proba_opt >= 0.5).astype(int)
+        preds_label_opt = (preds_proba_opt >= dynamic_threshold).astype(int)
 
         # ================= 5. 評估並產生報告 =================
         def get_metrics(y_true, y_pred, y_prob):

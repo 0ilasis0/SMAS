@@ -117,7 +117,7 @@ class MetaLearner:
         根據 XGBoost 與 DL 的預測機率，透過 Logistic Regression 產出最終綜合機率。
         """
         if math.isnan(prob_xgb) or math.isnan(prob_dl):
-            dbg.war("接收到 NaN 機率，回傳中性勝率 0.5")
+            dbg.error("接收到 NaN 機率，回傳中性勝率 0.5")
             return 0.5
 
         prob_xgb = MathTool.clamp(prob_xgb, 0.0, 1.0)

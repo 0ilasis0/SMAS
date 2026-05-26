@@ -98,21 +98,21 @@ class MarketLGBMConfig:
     boosting_type: str = 'gbdt'
 
     # 核心結構參數
-    max_depth: int = 3               # 原本: 4
-    num_leaves: int = 5              # 限制葉子數以防過擬合
-    min_child_samples: int = 17      # 確保每個節點有足夠樣本
-    min_split_gain: float = 0.6249   # 門檻，強迫模型只抓強訊號
+    max_depth: int = 4               # 原本: 4
+    num_leaves: int = 12             # 限制葉子數以防過擬合
+    min_child_samples: int = 37      # 確保每個節點有足夠樣本
+    min_split_gain: float = 0.7391   # 門檻，強迫模型只抓強訊號
 
     # 學習與正則化
-    learning_rate: float = 0.0066
+    learning_rate: float = 0.015
     n_estimators: int = 1000         # 原本: 1000 (註: 配合低學習率，實盤可視情況增加)
-    subsample: float = 0.5658        # 原本: 0.8
-    colsample_bytree: float = 0.4374 # 原本: 0.8 (對應 feature_fraction)
+    subsample: float = 0.6027        # 原本: 0.8
+    colsample_bytree: float = 0.473 # 原本: 0.8 (對應 feature_fraction)
 
     # 防震盪正則化
-    reg_alpha: float = 2.1228        # L1 正則化
-    reg_lambda: float = 0.3703       # L2 正則化
-    max_bin: int = 127               # 特徵分桶數
+    reg_alpha: float = 0.8046        # L1 正則化
+    reg_lambda: float = 0.0163       # L2 正則化
+    max_bin: int = 255               # 特徵分桶數
 
     random_state: int = 42
     verbose: int = -1

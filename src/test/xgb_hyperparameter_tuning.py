@@ -213,6 +213,6 @@ if __name__ == "__main__":
     ]
 
     # 強烈建議：對於 XGBoost 來說 300 次已經逼近全域最佳解了
-    target_total_trials = 300
+    target_total_trials = 400
 
     run_optimization(target_total_trials=target_total_trials, train_tickers=train_tickers)
