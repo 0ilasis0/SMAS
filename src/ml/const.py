@@ -51,18 +51,18 @@ class FeatureCol(StrEnum):
     RS_10D = "rs_10d"
 
     # --- 5. 量能、波動與 K線幾何 (僅 XGBoost 適用) ---
-    VOL_CHANGE = "vol_change"
-    CLOSE_CHANGE = "close_change"
+    # K_UPPER = "k_upper"         # 上影線比例
+    # K_LOWER = "k_lower"         # 下影線比例
+    # VOL_CHANGE = "vol_change"
+    # CLOSE_CHANGE = "close_change"
     OBV = "obv"
     ATR_RATIO = "atr_ratio"
-    K_UPPER = "k_upper"         # 上影線比例
-    K_LOWER = "k_lower"         # 下影線比例
 
     # --- 6. 原始 DNA (僅 LSTM 適用) ---
     # 這些是 DLFeatureEngine 動態生成的對數報酬率
     OPEN_LOG_CHG = "Open_log_chg"
     HIGH_LOG_CHG = "High_log_chg"
-    LOW_LOG_CHG = "Low_log_chg"
+    # LOW_LOG_CHG = "Low_log_chg"
     CLOSE_LOG_CHG = "Adj Close_log_chg"
     VOLUME_LOG_CHG = "Volume_log_chg"
     BB_WIDTH = "bb_width"       # DL 專用波動率縮放
@@ -77,17 +77,19 @@ class FeatureCol(StrEnum):
             cls.BIAS_WEEK.value, cls.BIAS_MONTH.value, cls.BIAS_QUARTER.value, cls.BIAS_YEAR.value,
             cls.MACD.value, cls.MACD_SIGNAL.value,
             cls.KD_K.value, cls.KD_D.value, cls.KD_CROSS.value,
-            cls.VOL_CHANGE.value, cls.CLOSE_CHANGE.value, cls.GAP_RATIO.value,
+            # cls.VOL_CHANGE.value, cls.CLOSE_CHANGE.value,
+            cls.GAP_RATIO.value,
             cls.OBV.value, cls.ATR_RATIO.value,
-            cls.RS_5D.value, cls.RS_10D.value,
-            cls.K_UPPER.value, cls.K_LOWER.value
+            # cls.K_UPPER.value, cls.K_LOWER.value,
+            cls.RS_5D.value, cls.RS_10D.value
         ]
 
     @classmethod
     def get_dl_features(cls):
         """ LSTM 專屬：最純粹的正交原始特徵 """
         return [
-            cls.OPEN_LOG_CHG.value, cls.HIGH_LOG_CHG.value, cls.LOW_LOG_CHG.value,
+            cls.OPEN_LOG_CHG.value, cls.HIGH_LOG_CHG.value,
+            # cls.LOW_LOG_CHG.value,
             cls.CLOSE_LOG_CHG.value, cls.VOLUME_LOG_CHG.value,
             cls.BIAS_WEEK.value, cls.BIAS_MONTH.value, cls.BB_WIDTH.value
         ]

@@ -76,7 +76,7 @@ class XGBFeatureEngine:
         raw_obv = (direction * data[StockCol.VOLUME]).cumsum()
         obv_ma20 = raw_obv.rolling(window=20).mean()
         data[FeatureCol.OBV] = (raw_obv - obv_ma20) / (obv_ma20.abs() + 1)
-        data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
+        # data[FeatureCol.VOL_CHANGE] = data[StockCol.VOLUME].pct_change()
 
         high_low = data[StockCol.HIGH] - data[StockCol.LOW]
         high_close = (data[StockCol.HIGH] - data[StockCol.CLOSE].shift()).abs()
@@ -87,14 +87,14 @@ class XGBFeatureEngine:
         # 4. K 線幾何與跳空缺口
         prev_close = data[StockCol.CLOSE].shift(1)
         data[FeatureCol.GAP_RATIO] = (data[StockCol.OPEN] - prev_close) / (prev_close + 1e-9)
-        data[FeatureCol.CLOSE_CHANGE] = data[StockCol.ADJ_CLOSE].pct_change()
+        # data[FeatureCol.CLOSE_CHANGE] = data[StockCol.ADJ_CLOSE].pct_change()
 
-        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
-        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
-        price_range = (data[StockCol.HIGH] - data[StockCol.LOW]).clip(lower=0.01)
+        # max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
+        # min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
+        # price_range = (data[StockCol.HIGH] - data[StockCol.LOW]).clip(lower=0.01)
 
-        data[FeatureCol.K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
-        data[FeatureCol.K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
+        # data[FeatureCol.K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
+        # data[FeatureCol.K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
 
         # 5. 大盤相對強弱
         twii_prefix = MacroTicker.TWII.value.replace('^', '') + "_"

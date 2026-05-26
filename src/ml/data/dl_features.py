@@ -40,51 +40,36 @@ class DLFeatureEngine:
             dbg.war(f"資料量不足。需要 {min_required_len} 筆 (含暖機期)，目前僅有 {len(df)} 筆。")
             return None, None, None
 
+        active_features = FeatureCol.get_dl_features()
+
         # 拿「過去」補「現在」，確保時序連續性
         data = df.copy().ffill()
 
         # 1. 還原並計算 OHLCV 的純粹對數報酬率 (模型的核心時序 DNA)
         adj_factor = data[StockCol.ADJ_CLOSE] / (data[StockCol.CLOSE] + 1e-9)
-        target_cols = [StockCol.OPEN, StockCol.HIGH, StockCol.LOW, StockCol.VOLUME, StockCol.ADJ_CLOSE]
 
-        new_features = {}
-        dl_features = []
-
-        for col in target_cols:
-            feat_name = f"{col.value}_log_chg"
-            if col == StockCol.VOLUME:
-                new_features[feat_name] = np.log1p(data[col]) - np.log1p(data[col].shift(1))
-            else:
-                # 正確運用 adj_factor 進行價格權值還原，避免除權息造成跳空偽訊號
-                adj_price = data[col] * adj_factor if col != StockCol.ADJ_CLOSE else data[col]
-                prev_adj_price = data[col].shift(1) * adj_factor.shift(1) if col != StockCol.ADJ_CLOSE else data[col].shift(1)
-                new_features[feat_name] = np.log((adj_price + 1e-9) / (prev_adj_price + 1e-9))
-            dl_features.append(feat_name)
+        data[FeatureCol.OPEN_LOG_CHG] = np.log((data[StockCol.OPEN] * adj_factor) / (data[StockCol.OPEN].shift(1) * adj_factor.shift(1) + 1e-9))
+        data[FeatureCol.HIGH_LOG_CHG] = np.log((data[StockCol.HIGH] * adj_factor) / (data[StockCol.HIGH].shift(1) * adj_factor.shift(1) + 1e-9))
+        data[FeatureCol.CLOSE_LOG_CHG] = np.log((data[StockCol.ADJ_CLOSE]) / (data[StockCol.ADJ_CLOSE].shift(1) + 1e-9))
+        data[FeatureCol.VOLUME_LOG_CHG] = np.log1p(data[StockCol.VOLUME]) - np.log1p(data[StockCol.VOLUME].shift(1))
 
         # 2. 輔助大局特徵：趨勢乖離與通道寬度 (提供絕對空間位置與波動縮放感)
-        ai_vision_col = str(StockCol.ADJ_CLOSE)
-        ma_w = data[ai_vision_col].rolling(window=IndicatorParams.MA_WEEK).mean()
-        ma_m = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).mean()
-        rolling_std = data[ai_vision_col].rolling(window=IndicatorParams.MA_MONTH).std()
+        ma_w = data[StockCol.ADJ_CLOSE].rolling(window=IndicatorParams.MA_WEEK).mean()
+        ma_m = data[StockCol.ADJ_CLOSE].rolling(window=IndicatorParams.MA_MONTH).mean()
+        rolling_std = data[StockCol.ADJ_CLOSE].rolling(window=IndicatorParams.MA_MONTH).std()
 
-        new_features[FeatureCol.BIAS_WEEK] = (data[ai_vision_col] - ma_w) / (ma_w + 1e-9)
-        new_features[FeatureCol.BIAS_MONTH] = (data[ai_vision_col] - ma_m) / (ma_m + 1e-9)
-        new_features[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
+        data[FeatureCol.BIAS_WEEK] = (data[StockCol.ADJ_CLOSE] - ma_w) / (ma_w + 1e-9)
+        data[FeatureCol.BIAS_MONTH] = (data[StockCol.ADJ_CLOSE] - ma_m) / (ma_m + 1e-9)
+        data[FeatureCol.BB_WIDTH] = (rolling_std * 2) / (ma_m + 1e-9)
 
-        dl_features.extend([
-            FeatureCol.BIAS_WEEK, FeatureCol.BIAS_MONTH, FeatureCol.BB_WIDTH
-        ])
-
-        data = data.assign(**new_features)
-        data = data.replace([np.inf, -np.inf], np.nan)
-        data = data.dropna(subset=dl_features)
+        data = data.replace([np.inf, -np.inf], np.nan).dropna(subset=active_features)
 
         if len(data) < self.time_steps:
             dbg.war("扣除暖機期與無效資料後，資料量不足以建立滑動視窗。")
             return None, None, None
 
         # 3. 建立 3D 滑動視窗矩陣 (Batch, Time_Steps, Features)
-        raw_features = data[dl_features].values
+        raw_features = data[active_features].values
         X = sliding_window_view(raw_features, window_shape=self.time_steps, axis=0)
         X = np.transpose(X, (0, 2, 1))
 
@@ -99,14 +84,14 @@ class DLFeatureEngine:
 
             # 計算真實波幅 ATR
             high_low = adj_high - adj_low
-            high_close = (adj_high - data[ai_vision_col].shift()).abs()
-            low_close = (adj_low - data[ai_vision_col].shift()).abs()
+            high_close = (adj_high - data[StockCol.ADJ_CLOSE].shift()).abs()
+            low_close = (adj_low - data[StockCol.ADJ_CLOSE].shift()).abs()
             true_range = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
             atr = true_range.rolling(window=self.entry_criteria.ATR_LOOKBACK).mean()
 
             # 動態設定停利目標 (1.6x ATR) 與停損價位 (1.5x ATR)
-            target_profit_price = data[ai_vision_col] + (atr * self.entry_criteria.PROFIT_TARGET_ATR)
-            stop_loss_price = data[ai_vision_col] - (atr * self.entry_criteria.STOP_LOSS_ATR)
+            target_profit_price = data[StockCol.ADJ_CLOSE] + (atr * self.entry_criteria.PROFIT_TARGET_ATR)
+            stop_loss_price = data[StockCol.ADJ_CLOSE] - (atr * self.entry_criteria.STOP_LOSS_ATR)
 
             hit_target_day = pd.Series(np.inf, index=data.index)
             hit_stop_day = pd.Series(np.inf, index=data.index)
@@ -129,7 +114,7 @@ class DLFeatureEngine:
             y = y_all[self.time_steps - 1:]
 
             # 濾除未來時間不足 lookahead 天的尾端資料
-            future_isna = data[ai_vision_col].shift(-self.lookahead).isna().values[self.time_steps - 1:]
+            future_isna = data[StockCol.ADJ_CLOSE].shift(-self.lookahead).isna().values[self.time_steps - 1:]
             valid_mask = ~future_isna
 
             X = X[valid_mask]
