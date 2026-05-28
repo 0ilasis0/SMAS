@@ -40,6 +40,9 @@ class DLTrainer:
 
         self.optimal_epochs = self.epochs
 
+        # 平均 AUC，預設為0.5
+        self.cv_avg_auc: float = 0.5
+
     def _detect_device(self):
         """自動偵測是否支援 GPU 加速 or Mac 晶片加速"""
         if torch.cuda.is_available(): return torch.device("cuda")
@@ -101,7 +104,7 @@ class DLTrainer:
                 for X_batch, y_batch in train_loader:
                     X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
                     optimizer.zero_grad()
-                    loss = criterion(model(X_batch), y_batch)
+                    loss = criterion(model(X_batch).view(-1, 1), y_batch)
                     loss.backward()
                     nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                     optimizer.step()
@@ -111,10 +114,10 @@ class DLTrainer:
                 val_loss = 0.0
 
                 with torch.no_grad():
-                    # 💡 使用放大的 val_loader，避免微氣候干擾
+                    # 使用放大的 val_loader，避免微氣候干擾
                     for X_v, y_v in val_loader:
                         X_v, y_v = X_v.to(self.device), y_v.to(self.device)
-                        val_loss += criterion(model(X_v), y_v).item()
+                        val_loss += criterion(model(X_v).view(-1, 1), y_v).item()
 
                 avg_val_loss = val_loss / len(val_loader)
                 if avg_val_loss < best_val_loss:
@@ -137,8 +140,9 @@ class DLTrainer:
             test_preds = []
             with torch.no_grad():
                 for X_t, _ in val_loader:  # 直接對 val_loader 進行推論
-                    preds = torch.sigmoid(model(X_t.to(self.device))).cpu().numpy()
-                    test_preds.extend(np.atleast_1d(preds))
+                    preds = torch.sigmoid(model(X_t.to(self.device)).view(-1)).cpu().numpy()
+                    preds_unscaled = MLTool.unscale_probability(preds, pos_weight_val)
+                    test_preds.extend(np.atleast_1d(preds_unscaled))
 
             test_preds = np.array(test_preds)
             oof_predictions.iloc[val_idx] = test_preds
@@ -165,7 +169,9 @@ class DLTrainer:
             dbg.error("交叉驗證失敗：資料量不足。")
             return pd.Series(dtype=float)
 
-        dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {np.mean(cv_aucs):.4f}")
+        avg_auc = np.mean(cv_aucs) if cv_aucs else 0.5
+        self.cv_avg_auc = avg_auc
+        dbg.log(f"【DL 驗證結果】平均 Accuracy: {np.mean(cv_accuracies):.4f}, 平均 AUC: {avg_auc:.4f}")
 
         # if len(np.unique(y_val)) > 1:
         #     auc = roc_auc_score(y_val, test_preds)
@@ -264,7 +270,7 @@ class DLTrainer:
             for X_batch, y_batch in full_loader:
                 X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
                 optimizer.zero_grad()
-                loss = criterion(model(X_batch), y_batch)
+                loss = criterion(model(X_batch).view(-1, 1), y_batch)
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
@@ -277,15 +283,16 @@ class DLTrainer:
         y_prob_oof = oof_preds.values
 
         # 計算客觀無洩漏的真實 AUC
-        val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
-        dbg.log(f"✅ DL 模型標定完成 | 真實 OOF AUC: {val_auc:.4f}")
+        val_auc = self.cv_avg_auc
+        dbg.log(f"✅ DL 模型標定完成 | 真實 CV 平均 AUC: {val_auc:.4f}")
 
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
         checkpoint = {
-            ModelAttr.STATE_DICT: model.state_dict(),
-            ModelAttr.VAL_AUC: val_auc
+            ModelAttr.STATE_DICT.value: model.state_dict(),
+            ModelAttr.VAL_AUC.value: val_auc,
+            ModelAttr.TRAIN_SCALE_WEIGHT.value: float(pos_weight_val)
         }
         torch.save(checkpoint, str(save_path_obj))
 
@@ -293,30 +300,31 @@ class DLTrainer:
         return final_scaler
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
-        ''' y跟X釘在一起並轉成tensor後打包 '''
-        X_tensor = torch.tensor(X, dtype=torch.float32)
+        ''' y跟X釘在一起並轉成tensor後打包 (支援推論與 pin_memory 加速) '''
+        X_tensor = torch.as_tensor(X, dtype=torch.float32)
         if y is not None:
-            y_tensor = torch.tensor(y, dtype=torch.float32)
+            y_tensor = torch.as_tensor(y, dtype=torch.float32).view(-1, 1)
             dataset = TensorDataset(X_tensor, y_tensor)
         else:
             dataset = TensorDataset(X_tensor)
 
         use_pin_memory = (self.device.type == 'cuda')
         return DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=shuffle,
-            pin_memory=use_pin_memory
+            dataset, batch_size=self.batch_size, shuffle=shuffle, pin_memory=use_pin_memory
         )
 
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
-        """ 載入訓練好的模型權重與 AUC """
+        """ 載入訓練好的模型權重與 AUC (極限 Debug 追蹤版) """
+        dbg.log(f"🐛 [DL Debug] 準備載入 DL 模型，路徑: {model_path}")
+        dbg.log(f"🐛 [DL Debug] 傳入的特徵數量 num_features: {num_features}")
+
         try:
             model_path = Path(model_path)
             if not model_path.exists():
                 dbg.error(f"❌ 深度學習模型載入失敗: 找不到檔案 {model_path}")
                 return None
 
+            dbg.log(f"🐛 [DL Debug] 開始建立模型架構 (Factory)...")
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
@@ -324,26 +332,19 @@ class DLTrainer:
                 rnn_type=self.rnn_type
             ).to(self.device)
 
-            # 讀取磁碟中的檔案
-            checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=True)
+            checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=False)
+            dbg.log(f"🐛 [DL Debug] 硬碟檔案讀取成功！檔案類型: {type(checkpoint)}")
 
-            model.load_state_dict(checkpoint[ModelAttr.STATE_DICT])
-            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, None)
+            state_dict = checkpoint.get(ModelAttr.STATE_DICT.value) or checkpoint.get(ModelAttr.STATE_DICT.value)
+            model.load_state_dict(state_dict)
+            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC.value, checkpoint.get(ModelAttr.VAL_AUC.value, 0.5))
+            model.train_scale_weight = checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT.value, checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT.value, 1.0))
 
             model.eval()
-            if model.val_auc is None:
-                model.val_auc = 0.5
-                dbg.log(f"找不到 model 中含有 val_auc 因此啟用預設model.val_auc = 0.5")
-
             dbg.log(f"✅ 成功載入 DL 模型 (紀錄 AUC: {model.val_auc:.4f}): {model_path}")
             return model
 
-        except RuntimeError as re:
-            error_details = traceback.format_exc()
-            dbg.error(f"💀 DL 模型結構不匹配 (Shape Mismatch)！\n您可能修改了特徵數量 (num_features={num_features}) 或 Time Steps，導致舊的權重檔塞不進去。\n請至 UI 介面點擊「全域模型訓練」！\n追蹤:\n{error_details}")
-            return None
-
         except Exception as e:
             error_details = traceback.format_exc()
-            dbg.error(f"🔥 DL 模型載入發生深層崩潰！\n目標路徑: {model_path}\n詳細錯誤追蹤:\n{error_details}")
-            return None
+            dbg.error(f"🔥 DL 模型載入發生深層崩潰！\n{'-'*40}\n詳細錯誤追蹤:\n{error_details}\n{'-'*40}")
+            raise e

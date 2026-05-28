@@ -176,7 +176,6 @@ class MLConst:
 
 class MLCol(StrEnum):
     N_ESTIMATORS = "n_estimators"
-    TRAIN_SCALE_WEIGHT = "train_scale_weight"
 
 
 # ==========================================
@@ -190,8 +189,9 @@ class MetricsCol(StrEnum):
     MARKET_AUC = "market_auc"
     MARKET_THRESH = "market_thresh"
 
-class ModelAttr:
+class ModelAttr(StrEnum):
     """綁定在神經網路/模型物件身上的自訂屬性名稱"""
     VAL_AUC = "val_auc"
     STATE_DICT = "state_dict"
     DYNAMIC_THRESH = "dynamic_threshold"
+    TRAIN_SCALE_WEIGHT = "train_scale_weight"

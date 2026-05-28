@@ -28,6 +28,9 @@ class XGBTrainer:
         self.params = asdict(hp)
         self.optimal_trees = self.params.get(MLCol.N_ESTIMATORS, XGBHyperParams.n_estimators)
 
+        # 平均 AUC，預設為0.5
+        self.cv_avg_auc: float = 0.5
+
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         n_splits = MathTool.clamp(n_splits, TrainConfig.N_SPLITS_MIN, TrainConfig.N_SPLITS_MAX)
         dbg.log(f"開始執行 XGBoost TimeSeriesSplit 交叉驗證 (Fold={n_splits}, Gap={lookahead})...")
@@ -63,13 +66,17 @@ class XGBTrainer:
             )
 
             # 進行 Out-of-Fold (OOF) 的全面預測與評估
-            y_pred = model.predict(X_val)
-            y_pred_proba = model.predict_proba(X_val)[:, 1]
+            raw_prob = model.predict_proba(X_val)[:, 1]
+
+            # 讓 y_pred_proba 直接等於「解壓縮後的真實機率」
+            y_pred_proba = MLTool.unscale_probability(raw_prob, scale_weight)
             oof_predictions.iloc[val_index] = y_pred_proba
 
             best_iters.append(model.best_iteration)
 
-            acc = accuracy_score(y_val, y_pred)
+            # 拿「解壓縮後」的真實機率去切 0.5，這樣算出來的 Accuracy 才是準的
+            y_pred_binary = (y_pred_proba > 0.5).astype(int)
+            acc = accuracy_score(y_val, y_pred_binary)
             cv_accuracies.append(acc)
 
             if len(np.unique(y_val)) > 1:
@@ -86,7 +93,9 @@ class XGBTrainer:
 
         avg_acc = np.mean(cv_accuracies) if cv_accuracies else 0
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
+        self.cv_avg_auc = avg_auc
         dbg.log(f"【CV 驗證結果】平均 Accuracy: {avg_acc:.4f}, 平均 AUC: {avg_auc:.4f}")
+
 
         # if cv_importances:
         #     avg_importance = np.mean(cv_importances, axis=0)
@@ -119,13 +128,10 @@ class XGBTrainer:
 
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
-
-        # 確保 OOF 的 Index 與原始資料的 y 對齊
-        y_true_oof = y.loc[oof_preds.index].values
-        y_prob_oof = oof_preds.values
+        final_model.train_scale_weight = float(scale_weight)
 
         # 紀錄客觀無洩漏的 AUC 到模型屬性中
-        final_model.val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
+        final_model.val_auc = self.cv_avg_auc
         dbg.log(f"✅ 已將真實 OOF AUC [{final_model.val_auc:.4f}] 寫入 XGBoost 模型基因中。")
 
         save_path_obj = Path(save_path)

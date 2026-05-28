@@ -35,15 +35,6 @@ class MLTool:
         return float(neg_count / pos_count) if pos_count > 0 else 1.0
 
     @staticmethod
-    def evaluate_auc(y_true: np.ndarray, y_prob: np.ndarray) -> float:
-        """模型共用：計算 UI 顯示 AUC"""
-        if len(np.unique(y_true)) > 1:
-            return float(roc_auc_score(y_true, y_prob))
-        else:
-            dbg.war(f"{len(np.unique(y_true))} < 1，所以無法計算UI AUC，啟用預設{MLDefault.FALLBACK_AUC}")
-            return MLDefault.FALLBACK_AUC
-
-    @staticmethod
     def unscale_probability(p_weighted: np.ndarray, weight: float) -> np.ndarray:
         """
         將經過 scale_pos_weight 膨脹的機率，利用 Log-Odds 數學逆向還原回真實機率分佈。

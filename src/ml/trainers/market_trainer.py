@@ -24,6 +24,9 @@ class MarketTrainer:
         # 用來紀錄 CV 過程中得到的最佳迭代次數
         self.optimal_trees = self.config.n_estimators
 
+        # 平均 AUC，預設為0.5
+        self.cv_avg_auc: float = 0.5
+
     def train_with_cv(self, df_clean: pd.DataFrame, lookahead: int, n_splits: int = TrainConfig.N_SPLITS) -> pd.Series:
         dbg.log(f"開始執行 LightGBM 大盤防禦模型 CV (Fold={n_splits}, Gap={lookahead})...")
 
@@ -102,6 +105,7 @@ class MarketTrainer:
             dbg.log(f"💡 CV 判定最佳平均樹量為: {self.optimal_trees} 棵 (原設定 {self.config.n_estimators} 棵)")
 
         avg_auc = np.mean(cv_aucs) if cv_aucs else 0
+        self.cv_avg_auc = avg_auc
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
 
         # if cv_importances:
@@ -138,14 +142,14 @@ class MarketTrainer:
         final_model.fit(X, y)
 
         # ==========================================
-        # 2. 使用乾淨的 OOF 數據來評估 AUC 與門檻 (絕不洩漏)
+        # 2. 使用乾淨的 OOF 數據來評估 AUC 與門檻
         # ==========================================
         # 確保 OOF 的 Index 與原始資料的 y 對齊
         y_true_oof = y.loc[oof_preds.index].values
         y_prob_oof = oof_preds.values
 
         # 紀錄客觀無洩漏的 AUC
-        final_model.val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
+        final_model.val_auc = self.cv_avg_auc
         # 根據 F-beta 尋找最佳防禦門檻 (使用 OOF 計算！)
         final_model.dynamic_threshold = self._tune_danger_threshold(y_true_oof, y_prob_oof, thresh_config)
 
