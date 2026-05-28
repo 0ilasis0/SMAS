@@ -142,7 +142,8 @@
 
 > 💡 **判讀技巧：** 「順風順水」(橘線創高且無紅色警戒區) 是最佳買點；「逆風飛行」(大盤亮起紅色警戒) 時系統會嚴格縮減資金或強制空手；「扶不起的阿斗」(橘線低迷) 代表籌碼渙散，應果斷放棄。**(獲利靠第三層，保命靠第四層！)**
 
-![IDSSchart](img/IDSSchart.png)
+![IDSSchart1](img/IDSSchart1.png)
+![IDSSchart2](img/IDSSchart2.png)
 
 
 
