@@ -138,7 +138,7 @@ class PersonaFactory:
                 conservative_buy_capital_ratio=0.5,# 保守買進 50% (原: 0.6)
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.51,              # 大盤安全度 (原: 0.53)
+                safe_threshold=0.47,              # 大盤安全度 (原: 0.53)
                 cooldown_days=2,                  # 停損後冷卻天數 (原: 1)
                 max_return_5d=0.29,               # 5日漲幅上限 (原: 0.32)
                 max_bias_20=0.15,                 # 20日乖離上限 (原: 0.28)
@@ -163,35 +163,35 @@ class PersonaFactory:
             # 🛡️ 保守型：草木皆兵，極度要求大盤環境安全
             return StrategyConfig(
                 # ================= [防守參數] =================
-                stop_loss_tolerance=-0.15,         # 跌 3% 就強制停損，幾乎不給凹單空間 (原: -0.15)
-                trailing_stop_drawdown=-0.08,      # 移動停損也收緊到 6%，保本至上 (原: -0.08)
-                take_profit_target=0.15,           # 只要賺 15% 就滿足，開始停利 (原: 0.15)
-                take_profit_sell_ratio=0.30,       # 停利時改為賣 30%，保留部位跟隨趨勢 (原: 0.75)
-                stop_loss_sell_ratio=1.0,          # 停損時直接 100% 砍倉，不留一絲火種 (原: 0.75)
-                sell_signal_threshold=0.44,        # AI 勝率低於 44% 就拉警報 (原: 0.44)
-                warning_sell_ratio=1.0,            # 一收到預警，直接 100% 清倉逃命 (原: 0.30)
+                stop_loss_tolerance=-0.08,        # 容忍 8% 虧損 (原: -0.15)
+                trailing_stop_drawdown=-0.08,     # 行動停損回落 8% (原: -0.08)
+                take_profit_target=0.12,          # 賺 12% 開始分批停利 (原: 0.15)
+                take_profit_sell_ratio=0.70,      # 停利時賣出 70% (原: 0.30)
+                stop_loss_sell_ratio=0.80,        # 停損時賣出 80% (原: 1.0)
+                sell_signal_threshold=0.32,       # AI 預警門檻 (原: 0.44)
+                warning_sell_ratio=1.00,          # AI 預警時 100% 清倉逃命 (原: 1.0)
 
                 # ================= [進攻參數] =================
-                max_entries=4,                     # 保守反而需要「分批試單」，放寬至 4 次以分散風險 (原: 1)
-                max_gap_ratio=0.09,                # 跳空容忍度維持 9% (原: 0.09)
+                max_entries=1,                    # 限制進場次數 (原: 4)
+                max_gap_ratio=0.09,               # 跳空容忍度 (原: 0.09)
 
-                strong_buy_threshold=0.54,         # 要求勝率高達 62% 才敢重倉 (原: 0.58)
-                strong_buy_capital_ratio=1.0,      # 一旦達標 62% 勝率，直接 100% 押滿 (原: 0.80)
+                strong_buy_threshold=0.56,        # 強勢買進門檻 (原: 0.54)
+                conservative_buy_threshold=0.52,  # 保守買進門檻 (原: 0.50)
 
-                conservative_buy_threshold=0.50,   # 要求 52% 勝率才肯試水溫 (原: 0.555)
-                conservative_buy_capital_ratio=0.4,# 試水溫動用 50% 資金 (原: 0.5)
+                strong_buy_capital_ratio=1.0,    # 強勢買進資金比例 (原: 1.0)
+                conservative_buy_capital_ratio=0.60, # 保守買進資金比例 (原: 0.4)
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.54,               # 大盤安全度降回 46% 即可接受 (原: 0.55)
-                cooldown_days=5,                   # 停損後強制冷卻 5 天，避免連續吃鱉 (原: 4)
-                max_return_5d=0.23,                # 5日漲幅門檻放寬 (原: 0.30)
-                max_bias_20=0.27,                  # 放寬乖離率限制 (原: 0.14)
+                safe_threshold=0.55,              # 大盤安全度 (原: 0.54)
+                cooldown_days=1,                  # 停損後冷卻天數 (原: 5)
+                max_return_5d=0.26,               # 5日漲幅上限 (原: 0.23)
+                max_bias_20=0.14,                 # 20日乖離率上限 (原: 0.27)
 
                 # ================= [動態風控水位參數] =================
-                # 買進風險權重 (原: heavy=0.20, light=0.15)
-                buy_risk=RiskWeights(heavy=0.15, light=0.06),
-                # 賣出風險權重 (原: heavy=0.18, light=0.05)
-                sell_risk=RiskWeights(heavy=0.06, light=0.05),
+                # 買進風險權重 (原: heavy=0.15, light=0.06)
+                buy_risk=RiskWeights(heavy=0.15, light=0.08),
+                # 賣出風險權重 (原: heavy=0.06, light=0.05)
+                sell_risk=RiskWeights(heavy=0.16, light=0.09),
 
                 # ================= [定價參數 (維持您原本的手動設定)] =================
                 buy_panic_discount_atr=1.8,      # 大盤恐慌時，掛在極度深淵 (折價 1.8 ATR) 等天上掉禮物
