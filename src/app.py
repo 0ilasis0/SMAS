@@ -16,8 +16,9 @@ from controller import IDSSController
 from data.manager import DataManager
 from data.updater import DataUpdater
 from debug import dbg
-from ml.const import MetricsCol, MLDefault, ModelAttr
+from ml.const import MetricsCol, ModelAttr
 from ml.engine import QuantAIEngine
+from ml.params import MLDefault
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
 from ui.const import APIKey, Page, SessionKey

@@ -172,14 +172,14 @@ class DLParamKey(StrEnum):
 @dataclass(frozen=True)
 class MLConst:
     # 依據：MA_YEAR(240) + DL_TIME_STEPS(20) + 安全緩衝 = 抓取 400 天足矣
-    MAX_LOOKBACK = 400
+    MAX_LOOKBACK: int = 400
 
 class MLCol(StrEnum):
     N_ESTIMATORS = "n_estimators"
 
 
 # ==========================================
-# UI 使用 AUC 名稱與參數
+# UI 使用 ML-AUC 名稱
 # ==========================================
 class MetricsCol(StrEnum):
     """傳遞給前端的 AI 引擎健康度指標名稱"""
@@ -192,13 +192,5 @@ class MetricsCol(StrEnum):
 class ModelAttr:
     """綁定在神經網路/模型物件身上的自訂屬性名稱"""
     VAL_AUC = "val_auc"
+    STATE_DICT = "state_dict"
     DYNAMIC_THRESH = "dynamic_threshold"
-
-@dataclass(frozen=True)
-class MLDefault:
-    """機器學習防呆預設值 (Magic Numbers)"""
-    FALLBACK_AUC: float = 0.5        # 無法取得 AUC 時的預設值 (丟銅板機率)
-    FALLBACK_THRESH: float = 0.5     # 無法取得動態門檻時的預設值
-
-    HIGH_AUC: float = 0.57
-    MID_AUC: float = 0.54

@@ -151,3 +151,16 @@ class MetaHyperParams:
     # 演算法配置 (通常不需變動)
     SOLVER: str = "lbfgs"
     MAX_ITER: int = 100
+
+
+# ==========================================
+# UI 使用 ML-AUC 參數
+# ==========================================
+@dataclass(frozen=True)
+class MLDefault:
+    """機器學習防呆預設值 (Magic Numbers)"""
+    FALLBACK_AUC: float = 0.5        # 無法取得 AUC 時的預設值 (丟銅板機率)
+    FALLBACK_THRESH: float = 0.5     # 無法取得動態門檻時的預設值
+
+    HIGH_AUC: float = 0.57
+    MID_AUC: float = 0.54

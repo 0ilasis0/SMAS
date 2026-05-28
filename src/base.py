@@ -8,7 +8,7 @@ from sklearn.metrics import roc_auc_score
 
 from const import GlobalVar
 from debug import dbg
-from ml.const import MLDefault
+from ml.params import MLDefault
 from path import PathConfig
 
 

@@ -5,7 +5,8 @@ import streamlit as st
 
 from bt.const import TradeDecision
 from const import Color, StatusCol
-from ml.const import MetricsCol, MLDefault, OracleCol, QuoteCol, SignalCol
+from ml.const import MetricsCol, OracleCol, QuoteCol, SignalCol
+from ml.params import MLDefault
 from ui.const import APIKey
 
 

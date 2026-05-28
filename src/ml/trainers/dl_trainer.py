@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool, MLTool
 from debug import dbg
-from ml.const import DLModelType, DLParamKey
+from ml.const import DLModelType, DLParamKey, ModelAttr
 from ml.params import DLHyperParams, TrainConfig
 from ml.trainers.dl_net import DLModelFactory, RNNType
 
@@ -288,8 +288,8 @@ class DLTrainer:
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
         checkpoint = {
-            'state_dict': model.state_dict(),
-            'val_auc': val_auc
+            ModelAttr.STATE_DICT: model.state_dict(),
+            ModelAttr.VAL_AUC: val_auc
         }
         torch.save(checkpoint, str(save_path_obj))
 
@@ -332,7 +332,7 @@ class DLTrainer:
             checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=True)
 
             model.load_state_dict(checkpoint['state_dict'])
-            model.val_auc = checkpoint.get('val_auc', None)
+            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, None)
 
             model.eval()
             if model.val_auc is None:
