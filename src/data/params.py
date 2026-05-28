@@ -1,8 +1,10 @@
-# data/params.py
 from base import FrozenMeta
 
 
 class DataLimit(metaclass=FrozenMeta):
-    DAILY_MAX_YEAR = 40
-    DAILY_MAX_MONTH = 480
-    INTRADAY_MAX_DAY = 90
+    DAILY_DEFAULT_YEAR: int = 20
+    DAILY_MAX_YEAR: int = 40
+    DAILY_MAX_MONTH: int = 480
+
+    INTRADAY_DEFAULT_DAY: int = 90
+    INTRADAY_MAX_DAY: int = 90

@@ -48,7 +48,7 @@ class Fetcher:
 
         return self._process_fetched_data(df, ticker_symbol, index_name=StockCol.DATE)
 
-    def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_MAX_DAY) -> pd.DataFrame:
+    def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_DEFAULT_DAY) -> pd.DataFrame:
         """
         抓取指定標的的分時資料 (預設 5 分鐘 K 線)。
         """
@@ -115,7 +115,7 @@ class Fetcher:
 
         return pd.DataFrame()
 
-    def fetch_foreign_futures_oi(self, days: int = DataLimit.DAILY_MAX_YEAR * 365) -> pd.DataFrame:
+    def fetch_foreign_futures_oi(self, days: int = DataLimit.DAILY_DEFAULT_YEAR * 365) -> pd.DataFrame:
         """
         [宏觀升級] 抓取外資「台指期 (TX) 未平倉淨部位 (Net Open Interest)」。
         負數代表外資滿手空單，是台股崩盤的最強領先指標。

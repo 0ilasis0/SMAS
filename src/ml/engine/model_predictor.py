@@ -5,10 +5,11 @@ import joblib
 import pandas as pd
 import torch
 
+from base import MLTool
 from data.const import MacroTicker, StockCol
 from debug import dbg
-from ml.const import (FeatureCol, MLConst, ModelCol, OracleCol, QuoteCol,
-                      SignalCol, TradingMode)
+from ml.const import (FeatureCol, MLCol, MLConst, ModelCol, OracleCol,
+                      QuoteCol, SignalCol, TradingMode)
 from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
@@ -143,7 +144,14 @@ class ModelPredictor:
             dbg.error(f"大盤缺失特徵！拒絕預測。")
             return None
 
-        prob_danger = engine.market_model.predict_proba(df_market_clean.loc[[target_date], MarketFeatureCol.get_features()].astype(float).values)[0, 1]
+        # 1. 取得模型吐出的「膨脹機率」
+        raw_prob_danger = engine.market_model.predict_proba(df_market_clean.loc[[target_date], MarketFeatureCol.get_features()].astype(float).values)[0, 1]
+
+        # 2. 取出藏在模型基因裡的「還原金鑰 (權重)」
+        weight = getattr(engine.market_model, MLCol.TRAIN_SCALE_WEIGHT, 1.0)
+
+        # 3. 呼叫數學公式，將機率精準壓回真實海平面
+        prob_danger = MLTool.unscale_probability(raw_prob_danger, float(weight))
         prob_market_safe = 1.0 - prob_danger
 
         # 總指揮融合
@@ -213,7 +221,21 @@ class ModelPredictor:
         df_market_pure = engine.db.get_aligned_market_data(MacroTicker.TWII.value, aux_macros)
         df_market_clean = market_engine_feat.process_pipeline(df_market_pure, is_training=False)
 
-        prob_market_safe_series = pd.Series(1.0 - engine.market_model.predict_proba(df_market_clean[MarketFeatureCol.get_features()])[:, 1], index=df_market_clean.index, name=SignalCol.PROB_MARKET_SAFE.value)
+        # 1. 批次取得所有歷史日期的「膨脹機率陣列」
+        raw_prob_danger_array = engine.market_model.predict_proba(df_market_clean[MarketFeatureCol.get_features()])[:, 1]
+
+        # 2. 取出權重金鑰
+        weight = getattr(engine.market_model, MLCol.TRAIN_SCALE_WEIGHT, 1.0)
+
+        # 3. 陣列化數學還原 (MLTool.unscale_probability 支援 numpy 陣列運算)
+        prob_danger_array = MLTool.unscale_probability(raw_prob_danger_array, float(weight))
+
+        # 4. 轉換為安全機率並打包成 Series
+        prob_market_safe_series = pd.Series(
+            1.0 - prob_danger_array,
+            index=df_market_clean.index,
+            name=SignalCol.PROB_MARKET_SAFE.value
+        )
 
         df_backtest = df_raw.copy().join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
         df_backtest.dropna(subset=[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value, SignalCol.PROB_MARKET_SAFE.value], inplace=True)

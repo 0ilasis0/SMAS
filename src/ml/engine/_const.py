@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from data.const import TimeUnit
+from data.params import DataLimit
 
 
 @dataclass(frozen=True)
@@ -8,7 +9,7 @@ class DataConst:
     RETURNS_ABS: int = 0.45
 
     # 數據自動修復的專屬配置區
-    HEAL_PERIOD: int = 10
+    HEAL_PERIOD: int = DataLimit.DAILY_DEFAULT_YEAR // 2
     HEAL_UNIT: TimeUnit = TimeUnit.YEAR
 
     # 手動平滑演算法的合理變動倍數邊界

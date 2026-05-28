@@ -292,6 +292,23 @@ class DLTrainer:
         dbg.log(f"最終模型權重 (含真實 OOF AUC 資訊) 已儲存至: {save_path_obj}")
         return final_scaler
 
+    def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
+        ''' y跟X釘在一起並轉成tensor後打包 '''
+        X_tensor = torch.tensor(X, dtype=torch.float32)
+        if y is not None:
+            y_tensor = torch.tensor(y, dtype=torch.float32)
+            dataset = TensorDataset(X_tensor, y_tensor)
+        else:
+            dataset = TensorDataset(X_tensor)
+
+        use_pin_memory = (self.device.type == 'cuda')
+        return DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=shuffle,
+            pin_memory=use_pin_memory
+        )
+
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """ 載入訓練好的模型權重與 AUC """
         try:

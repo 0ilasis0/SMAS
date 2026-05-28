@@ -22,7 +22,7 @@ class DataUpdater:
         self.event_fetcher = event_fetcher
         self.cache_file = Path(PathConfig.CACHE_FILE)
 
-    def update_market_data(self, ticker: str, period: int = DataLimit.DAILY_MAX_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
+    def update_market_data(self, ticker: str, period: int = DataLimit.DAILY_DEFAULT_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
         if force_wipe:
             dbg.log(f"🧹 [資料清洗] 正在清空 {ticker} 舊版歷史資料庫...")
             self.db.clear_ticker_data(ticker)

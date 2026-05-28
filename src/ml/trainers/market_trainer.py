@@ -76,8 +76,12 @@ class MarketTrainer:
                 callbacks=callbacks
             )
 
-            # 這裡只預測沒看過的 X_test，保證 OOF 的純淨度
-            y_pred_proba_danger = model.predict_proba(X_test)[:, 1]
+            #取得被 scale_pos_weight 膨脹的危險機率
+            y_pred_proba_danger_weighted = model.predict_proba(X_test)[:, 1]
+
+            # 校正還原回同一基準的真實機率！
+            y_pred_proba_danger = MLTool.unscale_probability(y_pred_proba_danger_weighted, scale_weight)
+
             oof_predictions.iloc[test_index] = y_pred_proba_danger
 
             # 紀錄最佳迭代次數
@@ -142,9 +146,10 @@ class MarketTrainer:
 
         # 紀錄客觀無洩漏的 AUC
         final_model.val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
-
         # 根據 F-beta 尋找最佳防禦門檻 (使用 OOF 計算！)
-        final_model.dynamic_threshold = MLTool.tune_danger_threshold(y_true_oof, y_prob_oof, thresh_config)
+        final_model.dynamic_threshold = self._tune_danger_threshold(y_true_oof, y_prob_oof, thresh_config)
+
+        final_model.train_scale_weight = float(scale_weight)
 
         dbg.log(f"✅ 已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
 
@@ -155,6 +160,46 @@ class MarketTrainer:
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(final_model, str(save_path_obj))
         dbg.log(f"大盤防禦模型已成功儲存至: {save_path}")
+
+    @staticmethod
+    def _tune_danger_threshold(y_true: np.ndarray, y_prob: np.ndarray, config) -> float:
+        """大盤專用：根據 F-beta 尋找最佳防禦門檻"""
+        # 防線 1：先檢查標籤是否單一，避免 sklearn 拋出錯誤
+        if len(np.unique(y_true)) < 2:
+            dbg.war("OOF 標籤單一，無法計算 PR 曲線，啟用退回門檻。")
+            return config.FALLBACK_THRESHOLD
+
+        try:
+            precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
+            beta = config.BETA
+
+            numerator = (1 + beta**2) * (precisions * recalls)
+            denominator = (beta**2 * precisions) + recalls + 1e-9
+            f_scores = numerator / denominator
+
+            # 防線 2：F-Score 全軍覆沒防護
+            if np.max(f_scores) == 0:
+                dbg.war("模型 PR 預測完全失效 (F-Score全為0)，啟用退回門檻。")
+                return config.FALLBACK_THRESHOLD
+
+            best_idx = np.argmax(f_scores[:-1])
+            best_thresh = float(thresholds[best_idx])
+
+            # 防線 3：極端高機率防護
+            if best_thresh > 1.0:
+                return config.FALLBACK_THRESHOLD
+
+            # 防線 4：系統絕對安全底線
+            final_thresh = max(best_thresh, config.ABS_MIN_THRESHOLD)
+
+            if best_thresh < config.ABS_MIN_THRESHOLD:
+                dbg.war(f"算出最佳門檻 {best_thresh:.4f} 過低，已強制拉升至底線 {config.ABS_MIN_THRESHOLD:.2f}")
+
+            return final_thresh
+
+        except Exception as e:
+            dbg.war(f"動態門檻計算發生異常，使用預設值。詳細錯誤: {e}")
+            return config.FALLBACK_THRESHOLD
 
     @staticmethod
     def load_inference_model(model_path: Path | str) -> lgb.LGBMClassifier:

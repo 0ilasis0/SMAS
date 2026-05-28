@@ -176,6 +176,7 @@ class MLConst:
 
 class MLCol(StrEnum):
     N_ESTIMATORS = "n_estimators"
+    TRAIN_SCALE_WEIGHT = "train_scale_weight"
 
 
 # ==========================================
