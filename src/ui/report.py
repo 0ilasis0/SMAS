@@ -107,7 +107,7 @@ def render_report(result: dict):
             - **K線型態辨識 (Deep Learning):** 狀態 {get_health_status(dl_auc)}
               - 交叉驗證 AUC: `{dl_auc:.4f}`
 
-            *(💡 溫馨提示：金融市場充滿極高隨機性雜訊，模型 AUC 只要突破 0.55 即屬華爾街頂尖水準)*
+            *(💡 溫馨提示：金融市場充滿極高隨機性雜訊，模型 AUC 只要突破 {MLDefault.HIGH_AUC} 即屬華爾街頂尖水準)*
             """)
     st.markdown("---")
 
