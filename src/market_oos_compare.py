@@ -1,8 +1,8 @@
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (accuracy_score, confusion_matrix, precision_score,
-                             recall_score, roc_auc_score)
+from sklearn.metrics import (accuracy_score, precision_recall_curve,
+                             precision_score, recall_score, roc_auc_score)
 
 from data.const import MacroTicker
 from debug import dbg
@@ -24,27 +24,44 @@ class LGBMLoggerProxy:
 lgb.register_logger(LGBMLoggerProxy())
 
 
-# TODO 問AI該code是否有漏洞或是需要升級的地方，需要搭配下方的部分code
-# TODO 並詢問為甚麼實戰的AUC反而下降了
-def find_optimal_threshold(y_true, y_prob):
-    """ 使用 Youden's J Statistic 找到最佳門檻 """
-    best_j = -1
-    best_thresh = 0.5
-    # 在 0.01 到 0.99 之間嘗試 50 個切點
-    for t in np.linspace(0.01, 0.99, 50):
-        preds = (y_prob >= t).astype(int)
-        tn, fp, fn, tp = confusion_matrix(y_true, preds).ravel()
+def find_optimal_threshold(y_true, y_prob, beta: float = 2.0, max_alert_rate: float = 0.3):
+    """
+    動態門檻標定函數
+    :param y_true: 真實標籤 (Danger 0/1)
+    :param y_prob: 模型預測機率 (0.0~1.0)
+    :param beta: 風險權重。設為 2.0 代表我們對「漏掉崩盤(Recall)」的痛感，是「誤報(Precision)」的 4 倍。
+    :param max_alert_rate: 物理防護網。限制雷達觸發率上限 (如 0.30 代表最多允許 30% 日子為警告)。
+    """
 
-        tpr = tp / (tp + fn + 1e-9) # 真正率 (崩盤有抓到)
-        fpr = fp / (fp + tn + 1e-9) # 偽陽率 (沒崩盤卻亂響)
+    # 1. 安全邊界防呆：如果沒有崩盤事件，則取機率分布的前 15% 作為靜態警告線
+    if len(np.unique(y_true)) < 2:
+        return max(np.percentile(y_prob, 85), 0.5)
 
-        # Youden's J = TPR - FPR，越接近 1 代表分類效果越好
-        j = tpr - fpr
-        if j > best_j:
-            best_j = j
-            best_thresh = t
+    # 2. 計算 PR 曲線與 F-Beta Score
+    precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
 
-    return best_thresh
+    numerator = (1 + beta**2) * (precisions * recalls)
+    denominator = (beta**2 * precisions) + recalls + 1e-9
+    f_scores = numerator / denominator
+
+    # 3. F-Score 全軍覆沒防護：如果模型完全無法預測，退回中立線
+    if np.max(f_scores) == 0:
+        print("F-Score 全軍覆沒防護：如果模型完全無法預測，退回中立線")
+        return 0.5
+
+    best_idx = np.argmax(f_scores[:-1])
+    best_thresh = thresholds[best_idx]
+
+    # 4. 發報頻率上限防護 (Max Alert Rate Protection)
+    # 計算若使用最佳門檻，警報率會是多少，若超過 max_alert_rate，則強行提高門檻
+    alert_rate = np.mean(y_prob >= best_thresh)
+    if alert_rate > max_alert_rate:
+        # 強制將門檻拉高至允許的發報頻率上限
+        floor_thresh = np.percentile(y_prob, 100 - (max_alert_rate * 100))
+        best_thresh = max(best_thresh, floor_thresh)
+
+    # 5. 極端值斷路器：避免 1.0 以上的溢出觸發
+    return min(best_thresh, 1.01)
 
 def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int = 240):
     print("="*70)
@@ -161,7 +178,7 @@ def run_market_comparison(lookahead: int, stop_rounds: int  = 25, oos_days: int 
             model_opt.fit(X_train_full, y_train_full)
 
         val_probs = model_opt.predict_proba(X_val)[:, 1]
-        dynamic_threshold = find_optimal_threshold(y_val, val_probs)
+        dynamic_threshold = find_optimal_threshold(y_val, val_probs, beta=2.0, max_alert_rate=0.30)
 
         dbg.log(f"✅ 動態門檻標定完成，最佳觸發機率門檻: {dynamic_threshold:.4f}")
 

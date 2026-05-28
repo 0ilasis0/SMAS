@@ -13,6 +13,22 @@ class SessionConfig:
     # 除非重新尋找模型超參數，否則不可調整 lookahead
     lookahead: int = 10
 
+    # 該數值會在未來被計算好的數值替換
+    dynamic_market_threshold: float = 0.5
+
+@dataclass(frozen=True)
+class MarketThresholdConfig:
+    """大盤防禦模型動態門檻尋優與風控配置載體"""
+    # F-beta 中的 Beta 權重 (設 2.0 代表更重視 Recall，即寧可錯殺不可漏過崩盤)
+    BETA: float = 1.0
+
+    # 動態門檻的絕對低標 (防止極端市況下算出太低的機率導致雷達神經過敏，預設 0.25)
+    ABS_MIN_THRESHOLD: float = 0.25
+
+    # 資料極端異常或計算崩潰時的安全回退門檻 (預設 0.5)
+    FALLBACK_THRESHOLD: float = 0.5
+
+
 @dataclass(frozen=True)
 class EntryQualityCriteria:
     ''' 進場品質準則 '''

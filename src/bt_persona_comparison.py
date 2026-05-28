@@ -12,6 +12,8 @@ dbg.toggle()
 
 def fetch_backtest_data(ticker: str, oos_days: int) -> pd.DataFrame:
     """模擬 IDSSController 獲取回測資料的流程"""
+    market_thresh = 0.5
+
     try:
         engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
         # 嘗試載入模型，如果失敗則直接回傳空 DataFrame
@@ -20,11 +22,12 @@ def fetch_backtest_data(ticker: str, oos_days: int) -> pd.DataFrame:
             return pd.DataFrame()
 
         df = engine.generate_backtest_data()
+        market_thresh = engine.config.dynamic_market_threshold
         # 盲測期間關閉 LLM (避免觸發新聞 API)
-        return df.tail(oos_days)
+        return df.tail(oos_days), market_thresh
     except Exception as e:
         print(f"⚠️ {ticker} 獲取資料失敗: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame(), market_thresh
 
 def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: int, oos_days: int = 240):
     print("="*60)
@@ -38,7 +41,7 @@ def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: in
     # 執行雙層迴圈 (股票 x 個性)
     for ticker in test_tickers:
         print(f"\n📥 正在準備 {ticker} 的回測資料...")
-        df_test = fetch_backtest_data(ticker, oos_days=oos_days)
+        df_test, dynamic_thresh = fetch_backtest_data(ticker, oos_days=oos_days)
         if df_test.empty: continue
 
         print(f"📊 開始對 {ticker} 進行不同種性格交叉測試：")
@@ -47,7 +50,12 @@ def run_multi_stock_backtest(Persona: list, test_tickers: list, initial_cash: in
             strategy_config = PersonaFactory.get_config(persona)
             strategy_config.enable_llm_oracle = False
 
-            engine = BacktestEngine(initial_cash=initial_cash, ticker=ticker, strategy=strategy_config)
+            engine = BacktestEngine(
+                initial_cash=initial_cash,
+                ticker=ticker,
+                dynamic_market_threshold=dynamic_thresh,
+                strategy=strategy_config
+            )
             stats = engine.run(df_test, silence=True)
 
             if stats:
@@ -148,6 +156,6 @@ if __name__ == "__main__":
     ]
 
     # Persona = [TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, TradingPersona.CONSERVATIVE]
-    Persona = [TradingPersona.CONSERVATIVE]
+    Persona = [TradingPersona.AGGRESSIVE]
 
     run_multi_stock_backtest(Persona=Persona, test_tickers=test_tickers, initial_cash=initial_cash)

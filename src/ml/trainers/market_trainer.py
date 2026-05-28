@@ -4,14 +4,14 @@ import joblib
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_recall_curve, roc_auc_score
 from sklearn.model_selection import TimeSeriesSplit
 
 from base import MLTool
 from debug import dbg
 from ml.const import MLCol
 from ml.data.market_features import MarketFeatureCol
-from ml.params import MarketLGBMConfig, TrainConfig
+from ml.params import MarketLGBMConfig, MarketThresholdConfig, TrainConfig
 
 
 class MarketTrainer:
@@ -115,7 +115,8 @@ class MarketTrainer:
 
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path | str):
+    def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path | str,
+                                   thresh_config: MarketThresholdConfig = MarketThresholdConfig()):
         dbg.log(f"開始訓練最終上線版 LightGBM 大盤模型 (使用動態最佳樹量: {self.optimal_trees})...")
         features = MarketFeatureCol.get_features()
         X = df_clean[features]
@@ -128,6 +129,33 @@ class MarketTrainer:
 
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
+
+        try:
+            preds_proba = final_model.predict_proba(X)[:, 1]
+            precisions, recalls, thresholds = precision_recall_curve(y, preds_proba)
+
+            beta = thresh_config.BETA
+            numerator = (1 + beta**2) * (precisions * recalls)
+            denominator = (beta**2 * precisions) + recalls + 1e-9
+            f_scores = numerator / denominator
+
+            best_idx = np.argmax(f_scores[:-1])
+            best_thresh = float(thresholds[best_idx])
+
+            # 如果完全沒崩盤，或門檻大於 1，退回 0.5
+            if len(np.unique(y)) < 2 or best_thresh > 1.0:
+                best_thresh = thresh_config.FALLBACK_THRESHOLD
+
+            # 直接把變數塞給 model 物件！
+            final_model.dynamic_threshold = max(best_thresh, thresh_config.ABS_MIN_THRESHOLD)
+            if best_thresh < final_model.dynamic_threshold:
+                dbg.war(f"✅ 計算出 best_thresh({best_thresh:.4f}) < {thresh_config.ABS_MIN_THRESHOLD:.2f}，進行安全性修正。")
+
+            dbg.log(f"✅ 已將動態崩盤門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中。")
+
+        except Exception as e:
+            final_model.dynamic_threshold = thresh_config.FALLBACK_THRESHOLD
+            dbg.war(f"動態門檻計算失敗，使用配置預設值 {thresh_config.FALLBACK_THRESHOLD}。錯誤: {e}")
 
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)

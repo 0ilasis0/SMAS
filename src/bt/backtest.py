@@ -10,7 +10,6 @@ import pandas as pd
 from bt.account import Account, Position
 from bt.blackboard import Blackboard
 from bt.const import BlackboardKey, TradeDecision
-from bt.params import BackTestParams
 from bt.strategy import build_trading_tree
 from bt.strategy_config import StrategyConfig
 from const import Color
@@ -57,9 +56,11 @@ class BacktestEngine:
     IDSS 行為樹專用回測引擎。
     結合歷史 K 線與 AI 預測勝率，逐日進行沙盤推演，並計算最終績效。
     """
-    def __init__(self, initial_cash: int, ticker: str, strategy: StrategyConfig =  StrategyConfig()):
+    def __init__(self, initial_cash: int, ticker: str, dynamic_market_threshold: float, strategy: StrategyConfig =  StrategyConfig()):
         self.initial_cash = initial_cash
         self.ticker = ticker
+
+        self.dynamic_market_threshold = dynamic_market_threshold
 
         self.account = Account(total_cash=initial_cash)
 
@@ -167,12 +168,12 @@ class BacktestEngine:
                 )
                 self.history_records.append(final_record.to_dict())
 
-            report_stats = self._generate_report(disable_plot=silence)
+            report_stats = self._generate_report(disable_plot=silence, df=df)
 
             return report_stats
 
-    def _generate_report(self, disable_plot: bool):
-        """計算績效指標並繪製三層量化儀表板"""
+    def _generate_report(self, disable_plot: bool, df: pd.DataFrame = None):
+        """計算績效指標並繪製四層量化儀表板"""
         if not self.history_records: return {}
 
         df_res = pd.DataFrame(self.history_records).set_index(HistoryCol.DATE)
@@ -211,10 +212,13 @@ class BacktestEngine:
             dbg.log(f"💸 賣出次數: \t{sell_count} 次")
             dbg.log("="*40)
 
-            fig = plt.figure(figsize=(14, 10))
+            fig = plt.figure(figsize=(14, 12))
 
-            # 第一層：資金曲線與回撤
-            ax1 = plt.subplot(3, 1, 1)
+            danger_patch = mpatches.Patch(color=Color.RED, alpha=0.1, label='Market Danger Zone')
+            dynamic_safe_thresh = 1.0 - self.dynamic_market_threshold
+
+            # ================= 第一層：資金曲線與回撤 =================
+            ax1 = plt.subplot(4, 1, 1)
             ax1.plot(df_res.index, df_res[HistoryCol.TOTAL_EQUITY], label='Total Equity', color=Color.BLUE, linewidth=2)
             ax1.set_title(f'IDSS Quant Strategy Dashboard - {self.bb.ticker}', fontsize=14, fontweight='bold')
             ax1.set_ylabel('Total Equity (NTD)')
@@ -229,8 +233,8 @@ class BacktestEngine:
             lines_2, labels_2 = ax1_dd.get_legend_handles_labels()
             ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper left')
 
-            # 第二層：股價走勢與買賣點
-            ax2 = plt.subplot(3, 1, 2, sharex=ax1)
+            # ================= 第二層：個股走勢與買賣點 =================
+            ax2 = plt.subplot(4, 1, 2, sharex=ax1)
             ax2.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.7)
             buys = df_res[df_res[HistoryCol.ACTION] == TradeDecision.BUY]
             sells = df_res[df_res[HistoryCol.ACTION] == TradeDecision.SELL]
@@ -240,46 +244,66 @@ class BacktestEngine:
             ax2.grid(True, alpha=0.3)
             ax2.legend(loc='upper left')
 
-            # 第三層：AI 勝率與大盤防禦雷達
-            ax3 = plt.subplot(3, 1, 3, sharex=ax1)
+            # ================= 第三層：個股 AI 勝率 (純淨版) =================
+            ax3 = plt.subplot(4, 1, 3, sharex=ax1)
 
-            # [左 Y 軸] 畫 AI 機率與大盤安全度 (0 ~ 1.0)
+            # 左 Y 軸：AI 勝率
             line_ai, = ax3.plot(df_res.index, df_res[HistoryCol.PROB_FINAL], label='AI Final Prob', color=Color.ORANGE, linewidth=1.5)
-            line_mkt, = ax3.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linestyle='--', linewidth=1.5)
-            line_thresh = ax3.axhline(y=0.5, color=Color.RED, linestyle=':', alpha=0.5, label='50% Threshold')
 
-
-            # TODO 問AI這裡的崩盤是否依然是依賴 BackTestParams.MARKET_DANGER_THRESHOLD = 0.5 的 50%　，是不是應該也轉向使用　find_optimal_threshold
-            # TODO 順便整合 find_optimal_threshold 統一由 bt->backtest 控制
-            # 大盤危險區塊
+            # 危險警戒區塊 (Danger Zone)
             ax3.fill_between(
                 df_res.index, 0, 1,
-                where=(df_res[HistoryCol.PROB_MARKET] < BackTestParams.MARKET_DANGER_THRESHOLD),
-                color=Color.RED, alpha=0.1, label='Market Danger Zone', transform=ax3.get_xaxis_transform()
+                where=(df_res[HistoryCol.PROB_MARKET] < dynamic_safe_thresh),
+                color=Color.RED, alpha=0.1, transform=ax3.get_xaxis_transform()
             )
-
-            ax3.set_ylabel('Probability')
-            ax3.set_xlabel('Date')
+            ax3.set_ylabel('AI Probability')
             ax3.grid(True, alpha=0.3)
 
-            # [右 Y 軸] 新增：疊加真實股價走勢
+            # 右 Y 軸：疊加個股真實走勢
             ax3_price = ax3.twinx()
             line_price, = ax3_price.plot(df_res.index, df_res[HistoryCol.CLOSE], label='Stock Price', color=Color.GRAY, alpha=0.3, linewidth=2)
-            ax3_price.set_ylabel('Stock Price (NTD)', color=Color.GRAY)
+            ax3_price.set_ylabel('Stock Price', color=Color.GRAY)
             ax3_price.tick_params(axis='y', labelcolor=Color.GRAY)
 
-            # 合併左右 Y 軸的圖例 (Legend)，維持畫面乾淨
-            import matplotlib.patches as mpatches
-            danger_patch = mpatches.Patch(color=Color.RED, alpha=0.1, label='Market Danger Zone')
+            ax3.legend([line_ai, line_price, danger_patch], ['AI Final Prob', 'Stock Price', 'Market Danger Zone'], loc='upper left')
 
-            lines_3 = [line_ai, line_mkt, line_thresh, line_price, danger_patch]
-            labels_3 = [l.get_label() for l in lines_3]
+            # ================= 第四層：大盤防禦雷達 (Market Brain) =================
+            ax4 = plt.subplot(4, 1, 4, sharex=ax1)
 
-            ax3.legend(lines_3, labels_3, loc='upper left')
+            # 左 Y 軸：大盤安全機率與動態門檻
+            line_mkt, = ax4.plot(df_res.index, df_res[HistoryCol.PROB_MARKET], label='Market Safety Prob', color=Color.PURPLE, linewidth=1.5)
+            line_thresh = ax4.axhline(y=dynamic_safe_thresh, color=Color.RED, linestyle=':', alpha=0.8, label=f'Safety Threshold ({dynamic_safe_thresh:.2f})')
+
+            # 危險警戒區塊 (與第三層同步)
+            ax4.fill_between(
+                df_res.index, 0, 1,
+                where=(df_res[HistoryCol.PROB_MARKET] < dynamic_safe_thresh),
+                color=Color.RED, alpha=0.1, transform=ax4.get_xaxis_transform()
+            )
+            ax4.set_ylabel('Market Safety')
+            ax4.set_xlabel('Date')
+            ax4.grid(True, alpha=0.3)
+
+            # 右 Y 軸：大盤 (TWII) 真實走勢 (從 df 中撈取)
+            ax4_market = ax4.twinx()
+            twii_ticker = "^TWII"
+
+            # 檢查原始 DataFrame 是否有大盤資料，如果有的話就畫上去
+            if df is not None and twii_ticker in df.columns:
+                twii_data = df.loc[df_res.index, twii_ticker]
+                line_twii, = ax4_market.plot(df_res.index, twii_data, label='TWII Index', color='darkgray', alpha=0.5, linewidth=2)
+                ax4_market.set_ylabel('TWII Score/Price', color='gray')
+                ax4_market.tick_params(axis='y', labelcolor='gray')
+
+                ax4.legend([line_mkt, line_thresh, line_twii, danger_patch],
+                           ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'TWII Index', 'Market Danger Zone'], loc='upper left')
+            else:
+                ax4.legend([line_mkt, line_thresh, danger_patch],
+                           ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'Market Danger Zone'], loc='upper left')
 
             plt.tight_layout()
 
-            # --- 若之後要存檔，可以解開註解 ---
+            # --- 存檔邏輯 ---
             try:
                 report_img_path = PathConfig.get_chart_report_path(ticker=self.bb.ticker)
                 report_img_path.parent.mkdir(parents=True, exist_ok=True)
@@ -287,10 +311,9 @@ class BacktestEngine:
             except Exception as e:
                 dbg.error(f"圖片存檔失敗: {e}")
 
-            # 關閉畫布釋放記憶體
             plt.close(fig)
 
-        # 無論有沒有畫圖，都回傳純數字字典
+        # 回傳純數字字典
         stats = {
             "initial_cash": self.initial_cash,
             "final_equity": final_equity,

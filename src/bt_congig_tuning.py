@@ -18,6 +18,7 @@ dbg.toggle()
 def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
     """預先抓好所有股票的測試資料，放進記憶體，避免尋優過程中重複讀取"""
     data_dict = {}
+    market_threshold = 0.5
     print(f"📥 正在預載回測資料 (OOS={oos_days}天)，請稍候...")
 
     for ticker in tickers:
@@ -40,6 +41,7 @@ def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
 
             if load_success:
                 df = engine.generate_backtest_data()
+                market_threshold = engine.config.dynamic_market_threshold
 
                 # 🟢 探測針 3：檢查產出的資料狀態
                 print(f"🔍 [Debug] {ticker} 產出回測資料形狀: {df.shape}")
@@ -54,9 +56,13 @@ def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
             print(f"⚠️ {ticker} 全域處理失敗: {e}")
 
     print(f"\n✅ 成功載入 {len(data_dict)} 檔股票資料！")
-    return data_dict
 
-def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
+    if market_threshold == 0.5:
+        print(f"沒有成功載入market_threshold = {market_threshold}")
+
+    return data_dict, market_threshold
+
+def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str, market_threshold: float):
     """
     Optuna 的目標函數：根據不同性格 (persona_mode) 給予不同的評分權重
     """
@@ -150,7 +156,12 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str):
     trades_counts = [] # 收集交易次數
 
     for ticker, df in data_dict.items():
-        engine = BacktestEngine(initial_cash=initial_cash, ticker=ticker, strategy=config)
+        engine = BacktestEngine(
+            initial_cash=initial_cash,
+            ticker=ticker,
+            dynamic_market_threshold=market_threshold,
+            strategy=config
+        )
         stats = engine.run(df, silence=True)
 
         total_trades = stats['buy_count'] + stats['sell_count'] if stats else 0
@@ -246,7 +257,7 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
     print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{target_persona.upper()}]")
     print("="*60)
 
-    data_dict = fetch_data_for_optuna(test_tickers, oos_days=oos_days)
+    data_dict, market_threshold = fetch_data_for_optuna(test_tickers, oos_days=oos_days)
     if not data_dict: return
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -278,7 +289,7 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 
         # 啟動多核心
         study.optimize(
-            lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=target_persona),
+            lambda trial: objective(trial, data_dict, initial_cash=initial_cash, persona_mode=target_persona, market_threshold=market_threshold),
             n_trials=remaining_trials,
             n_jobs=-1  # -1 代表使用電腦所有 CPU 核心全力衝刺
         )
@@ -307,7 +318,7 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 if __name__ == "__main__":
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, 或 TradingPersona.CONSERVATIVE
-    target_persona = TradingPersona.AGGRESSIVE
+    target_persona = TradingPersona.CONSERVATIVE
     target_total_trials = 1250
     initial_cash: int = 2_000_000
 

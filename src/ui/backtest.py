@@ -102,7 +102,12 @@ def render_backtest_tab(selected_persona):
                 # 盲測時關閉 LLM (避免觸發大量新聞 API 消耗與幻覺)
                 strategy_config.enable_llm_oracle = False
 
-                bt_engine = BacktestEngine(initial_cash=sim_cash, ticker=current_ticker, strategy=strategy_config)
+                bt_engine = BacktestEngine(
+                    initial_cash=sim_cash,
+                    ticker=current_ticker,
+                    dynamic_market_threshold=ctrl_bt.engine.config.dynamic_market_threshold,
+                    strategy=strategy_config
+                )
 
                 # 將 UI 的風控模式選擇，注入到引擎的黑板中
                 bt_engine.bb.is_backtest = is_pure_signal_test

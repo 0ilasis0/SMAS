@@ -113,7 +113,12 @@ def run_model_comparison(test_tickers: list, init_cash: int, oos_days: int = 240
                     final_auc = roc_auc_score(y_true, y_final_prob)
                     final_acc = accuracy_score(y_true, (y_final_prob > 0.5).astype(int))
 
-                bt_engine = BacktestEngine(initial_cash=init_cash, ticker=ticker, strategy=strategy)
+                bt_engine = BacktestEngine(
+                    initial_cash=init_cash,
+                    ticker=ticker,
+                    dynamic_market_threshold=0.5,
+                    strategy=strategy
+                )
                 stats = bt_engine.run(df=df_test, silence=True)
                 train_time = time.time() - start_time
 
