@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from dotenv import dotenv_values
 from numpy.typing import NDArray
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import precision_recall_curve, roc_auc_score
 
 from const import GlobalVar
 from debug import dbg
@@ -42,6 +42,47 @@ class MLTool:
         else:
             dbg.war(f"{len(np.unique(y_true))} < 1，所以無法計算UI AUC，啟用預設{MLDefault.FALLBACK_AUC}")
             return MLDefault.FALLBACK_AUC
+
+    @staticmethod
+    def tune_danger_threshold(y_true: np.ndarray, y_prob: np.ndarray, config) -> float:
+        """大盤專用：根據 F-beta 尋找最佳防禦門檻"""
+        # 防線 1：先檢查標籤是否單一，避免 sklearn 拋出錯誤
+        if len(np.unique(y_true)) < 2:
+            dbg.war("OOF 標籤單一，無法計算 PR 曲線，啟用退回門檻。")
+            return config.FALLBACK_THRESHOLD
+
+        try:
+
+            precisions, recalls, thresholds = precision_recall_curve(y_true, y_prob)
+            beta = config.BETA
+
+            numerator = (1 + beta**2) * (precisions * recalls)
+            denominator = (beta**2 * precisions) + recalls + 1e-9
+            f_scores = numerator / denominator
+
+            # 防線 2：F-Score 全軍覆沒防護
+            if np.max(f_scores) == 0:
+                dbg.war("模型 PR 預測完全失效 (F-Score全為0)，啟用退回門檻。")
+                return config.FALLBACK_THRESHOLD
+
+            best_idx = np.argmax(f_scores[:-1])
+            best_thresh = float(thresholds[best_idx])
+
+            # 防線 3：極端高機率防護
+            if best_thresh > 1.0:
+                return config.FALLBACK_THRESHOLD
+
+            # 防線 4：系統絕對安全底線
+            final_thresh = max(best_thresh, config.ABS_MIN_THRESHOLD)
+
+            if best_thresh < config.ABS_MIN_THRESHOLD:
+                dbg.war(f"算出最佳門檻 {best_thresh:.4f} 過低，已強制拉升至底線 {config.ABS_MIN_THRESHOLD:.2f}")
+
+            return final_thresh
+
+        except Exception as e:
+            dbg.war(f"動態門檻計算發生異常，使用預設值。詳細錯誤: {e}")
+            return config.FALLBACK_THRESHOLD
 
 
 class KeyManager:

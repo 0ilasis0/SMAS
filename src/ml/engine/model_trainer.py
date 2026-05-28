@@ -76,10 +76,12 @@ class ModelTrainer:
         dbg.log("\n--- [訓練階段] 左腦：XGBoost ---")
         xgb_engine = XGBFeatureEngine()
         df_xgb_train = xgb_engine.process_pipeline(df_train_only, config.lookahead, is_training=True)
+
         xgb_trainer = XGBTrainer(config.ticker)
         oof_xgb = xgb_trainer.train_with_cv(df_xgb_train, lookahead=config.lookahead)
+
         if save_models:
-            xgb_trainer.train_and_save_final_model(df_xgb_train, paths[ModelCol.XGB])
+            xgb_trainer.train_and_save_final_model(df_xgb_train, oof_xgb, paths[ModelCol.XGB])
 
         y_true = df_xgb_train[FeatureCol.TARGET.value]
 
@@ -92,7 +94,9 @@ class ModelTrainer:
         oof_dl = dl_trainer.train_with_cv(X_dl_train, y_dl_train, valid_index_train, lookahead=config.lookahead)
 
         if save_models:
-            final_dl_scaler = dl_trainer.train_and_save_final_model(X_dl_train, y_dl_train, paths[ModelCol.DL])
+            final_dl_scaler = dl_trainer.train_and_save_final_model(
+                X_dl_train, y_dl_train, valid_index_train, oof_dl, paths[ModelCol.DL]
+            )
             scaler_path_obj = Path(paths[ModelCol.DL_SCALAR])
             scaler_path_obj.parent.mkdir(parents=True, exist_ok=True)
             joblib.dump(final_dl_scaler, str(scaler_path_obj))
@@ -117,17 +121,16 @@ class ModelTrainer:
 
             if df_market_pure.empty:
                 dbg.error(f"🚨 找不到大盤資料 {MacroTicker.TWII.value}！請先執行 update_market_data()！")
-                return
 
             df_market_pure_train = df_market_pure.iloc[:-oos_days] if oos_days > 0 else df_market_pure
             market_engine_feat = MarketFeatureEngine(lookahead=config.lookahead)
             df_market_train = market_engine_feat.process_pipeline(df_market_pure_train, is_training=True)
 
             market_trainer = MarketTrainer()
-            market_trainer.train_with_cv(df_market_train, lookahead=config.lookahead)
+            oof_market = market_trainer.train_with_cv(df_market_train, lookahead=config.lookahead)
 
             if save_models:
-                market_trainer.train_and_save_final_model(df_market_train, market_path)
+                market_trainer.train_and_save_final_model(df_market_train, oof_market, market_path)
         else:
             dbg.log(f"大盤防禦模型 (OOS={oos_days}) 今日已訓練更新，跳過重複訓練。")
 
@@ -139,10 +142,10 @@ class ModelTrainer:
         dbg.log("\n--- [訓練階段] 總指揮：Meta-Learner ---")
         df_oof = pd.DataFrame(index=df_train_only.index)
 
-        if isinstance(oof_xgb, np.ndarray):
-            oof_xgb = pd.Series(oof_xgb, index=df_xgb_train.index)
-        if isinstance(oof_dl, np.ndarray):
-            oof_dl = pd.Series(oof_dl, index=valid_index_train)
+        # if isinstance(oof_xgb, np.ndarray):
+        #     oof_xgb = pd.Series(oof_xgb, index=df_xgb_train.index)
+        # if isinstance(oof_dl, np.ndarray):
+        #     oof_dl = pd.Series(oof_dl, index=valid_index_train)
 
         df_oof = df_oof.join(oof_xgb.rename(SignalCol.PROB_XGB.value)) \
                        .join(oof_dl.rename(SignalCol.PROB_DL.value)) \

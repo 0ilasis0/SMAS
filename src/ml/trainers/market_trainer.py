@@ -78,7 +78,7 @@ class MarketTrainer:
 
             # 這裡只預測沒看過的 X_test，保證 OOF 的純淨度
             y_pred_proba_danger = model.predict_proba(X_test)[:, 1]
-            oof_predictions.iloc[test_index] = 1.0 - y_pred_proba_danger
+            oof_predictions.iloc[test_index] = y_pred_proba_danger
 
             # 紀錄最佳迭代次數
             if model.best_iteration_ is not None:
@@ -115,7 +115,7 @@ class MarketTrainer:
 
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path | str,
+    def train_and_save_final_model(self, df_clean: pd.DataFrame, oof_preds: pd.Series, save_path: Path | str,
                                    thresh_config: MarketThresholdConfig = MarketThresholdConfig()):
         dbg.log(f"開始訓練最終上線版 LightGBM 大盤模型 (使用動態最佳樹量: {self.optimal_trees})...")
         features = MarketFeatureCol.get_features()
@@ -127,39 +127,30 @@ class MarketTrainer:
         lgbm_params = self.config.to_dict
         lgbm_params[MLCol.N_ESTIMATORS] = self.optimal_trees
 
+        # ==========================================
+        # 1. 訓練模型 (這時候讓它看全部資料)
+        # ==========================================
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        # 紀錄模型AUC
-        preds_proba = final_model.predict_proba(X)[:, 1]
-        final_model.val_auc = MLTool.evaluate_auc(y.values, preds_proba)
-        # 根據 F-beta 尋找最佳防禦門檻
-        try:
-            precisions, recalls, thresholds = precision_recall_curve(y, preds_proba)
+        # ==========================================
+        # 2. 使用乾淨的 OOF 數據來評估 AUC 與門檻 (絕不洩漏)
+        # ==========================================
+        # 確保 OOF 的 Index 與原始資料的 y 對齊
+        y_true_oof = y.loc[oof_preds.index].values
+        y_prob_oof = oof_preds.values
 
-            beta = thresh_config.BETA
-            numerator = (1 + beta**2) * (precisions * recalls)
-            denominator = (beta**2 * precisions) + recalls + 1e-9
-            f_scores = numerator / denominator
+        # 紀錄客觀無洩漏的 AUC
+        final_model.val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
 
-            best_idx = np.argmax(f_scores[:-1])
-            best_thresh = float(thresholds[best_idx])
+        # 根據 F-beta 尋找最佳防禦門檻 (使用 OOF 計算！)
+        final_model.dynamic_threshold = MLTool.tune_danger_threshold(y_true_oof, y_prob_oof, thresh_config)
 
-            # 如果完全沒崩盤，或門檻大於 1，退回 0.5
-            if len(np.unique(y)) < 2 or best_thresh > 1.0:
-                best_thresh = thresh_config.FALLBACK_THRESHOLD
+        dbg.log(f"✅ 已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
 
-            # 直接把變數塞給 model 物件！
-            final_model.dynamic_threshold = max(best_thresh, thresh_config.ABS_MIN_THRESHOLD)
-            if best_thresh < final_model.dynamic_threshold:
-                dbg.war(f"✅ 計算出 best_thresh({best_thresh:.4f}) < {thresh_config.ABS_MIN_THRESHOLD:.2f}，進行安全性修正。")
-
-            dbg.log(f"✅ 已將動態崩盤門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中。")
-
-        except Exception as e:
-            final_model.dynamic_threshold = thresh_config.FALLBACK_THRESHOLD
-            dbg.war(f"動態門檻計算失敗，使用配置預設值 {thresh_config.FALLBACK_THRESHOLD}。錯誤: {e}")
-
+        # ==========================================
+        # 3. 儲存具備最強權重與真實防禦參數的終極模型
+        # ==========================================
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(final_model, str(save_path_obj))

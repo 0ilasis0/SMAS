@@ -64,12 +64,8 @@ class DLTrainer:
 
             scaler = RobustScaler()
 
-            # 將 3D 壓平讓 Scaler 學習
-            X_train_2d = X_train_raw.reshape(-1, num_features)
-            scaler.fit(X_train_2d)
-
-            # 轉換並膨脹回原來的 3D 形狀
-            X_train = scaler.transform(X_train_2d).reshape(X_train_raw.shape)
+            # 將 3D 壓平讓 Scaler 學習，轉換並膨脹回原來的 3D 形狀
+            X_train = scaler.fit_transform(X_train_raw.reshape(-1, num_features)).reshape(X_train_raw.shape)
             X_val = scaler.transform(X_val_raw.reshape(-1, num_features)).reshape(X_val_raw.shape)
 
             train_loader = self._create_dataloader(X_train, y_train, shuffle=True)
@@ -240,7 +236,7 @@ class DLTrainer:
 
         return importances
 
-    def train_and_save_final_model(self, X_raw: np.ndarray, y: np.ndarray, save_path: Path | str):
+    def train_and_save_final_model(self, X_raw: np.ndarray, y: np.ndarray, valid_index: pd.Index, oof_preds: pd.Series, save_path: Path | str):
         dbg.log(f"開始訓練最終上線版 DL 模型 (動態 Epoch={self.optimal_epochs})...")
         # 形狀為 (Batch, Time_Steps, Features)
         num_features = X_raw.shape[2]
@@ -273,16 +269,16 @@ class DLTrainer:
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
-        model.eval()
-        with torch.no_grad():
-            # 將 numpy 轉為 Tensor 餵給模型
-            X_tensor = torch.as_tensor(X_scaled, dtype=torch.float32, device=self.device)
-            # 取得羅吉斯輸出並轉為機率
-            preds_proba = torch.sigmoid(model(X_tensor)).cpu().numpy().flatten()
+        # 由於 y 是 numpy array，我們先將它轉為含有正確 index 的 Series 以利對齊
+        y_series = pd.Series(y, index=valid_index)
 
-        # 計算 AUC
-        val_auc = MLTool.evaluate_auc(y, preds_proba)
-        dbg.log(f"✅ DL 模型標定完成 | 全局 AUC: {val_auc:.4f}")
+        # 精準對齊 OOF 預測值與真實答案 (防範 dropna() 造成的長度差異)
+        y_true_oof = y_series.loc[oof_preds.index].values
+        y_prob_oof = oof_preds.values
+
+        # 計算客觀無洩漏的真實 AUC
+        val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
+        dbg.log(f"✅ DL 模型標定完成 | 真實 OOF AUC: {val_auc:.4f}")
 
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
@@ -293,25 +289,8 @@ class DLTrainer:
         }
         torch.save(checkpoint, str(save_path_obj))
 
-        dbg.log(f"最終模型權重 (含 AUC 資訊) 已儲存至: {save_path_obj}")
+        dbg.log(f"最終模型權重 (含真實 OOF AUC 資訊) 已儲存至: {save_path_obj}")
         return final_scaler
-
-    def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
-        ''' y跟X釘在一起並轉成tensor後打包 '''
-        X_tensor = torch.tensor(X, dtype=torch.float32)
-        if y is not None:
-            y_tensor = torch.tensor(y, dtype=torch.float32)
-            dataset = TensorDataset(X_tensor, y_tensor)
-        else:
-            dataset = TensorDataset(X_tensor)
-
-        use_pin_memory = (self.device.type == 'cuda')
-        return DataLoader(
-            dataset,
-            batch_size=self.batch_size,
-            shuffle=shuffle,
-            pin_memory=use_pin_memory
-        )
 
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """ 載入訓練好的模型權重與 AUC """
@@ -331,7 +310,7 @@ class DLTrainer:
             # 讀取磁碟中的檔案
             checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=True)
 
-            model.load_state_dict(checkpoint['state_dict'])
+            model.load_state_dict(checkpoint[ModelAttr.STATE_DICT])
             model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, None)
 
             model.eval()

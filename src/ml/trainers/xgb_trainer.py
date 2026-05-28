@@ -104,7 +104,7 @@ class XGBTrainer:
 
         return oof_predictions.dropna()
 
-    def train_and_save_final_model(self, df_clean: pd.DataFrame, save_path: Path):
+    def train_and_save_final_model(self, df_clean: pd.DataFrame, oof_preds: pd.Series, save_path: Path):
         dbg.log(f"開始訓練最終上線版 XGBoost 模型 (動態樹量={self.optimal_trees})...")
 
         features = FeatureCol.get_xgb_features()
@@ -120,8 +120,13 @@ class XGBTrainer:
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
-        preds_proba = final_model.predict_proba(X)[:, 1]
-        final_model.val_auc = MLTool.evaluate_auc(y.values, preds_proba)
+        # 確保 OOF 的 Index 與原始資料的 y 對齊
+        y_true_oof = y.loc[oof_preds.index].values
+        y_prob_oof = oof_preds.values
+
+        # 紀錄客觀無洩漏的 AUC 到模型屬性中
+        final_model.val_auc = MLTool.evaluate_auc(y_true_oof, y_prob_oof)
+        dbg.log(f"✅ 已將真實 OOF AUC [{final_model.val_auc:.4f}] 寫入 XGBoost 模型基因中。")
 
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
