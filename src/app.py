@@ -346,10 +346,10 @@ def main():
                     engine = ctrl_live.engine
 
                     result[MetricsCol.DICT_KEY.value] = {
-                        MetricsCol.XGB_AUC.value: getattr(engine.xgb_model, ModelAttr.VAL_AUC.value, MLDefault.FALLBACK_AUC),
-                        MetricsCol.DL_AUC.value: getattr(engine.dl_model, ModelAttr.VAL_AUC.value, MLDefault.FALLBACK_AUC),
-                        MetricsCol.MARKET_AUC.value: getattr(engine.market_model, ModelAttr.VAL_AUC.value, MLDefault.FALLBACK_AUC),
-                        MetricsCol.MARKET_THRESH.value: getattr(engine.market_model, ModelAttr.DYNAMIC_THRESH.value, MLDefault.FALLBACK_THRESH)
+                        MetricsCol.XGB_AUC.value: getattr(engine.xgb_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.DL_AUC.value: getattr(engine.dl_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.MARKET_AUC.value: getattr(engine.market_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.MARKET_THRESH.value: getattr(engine.market_model, ModelAttr.DYNAMIC_THRESH, MLDefault.FALLBACK_THRESH)
                     }
 
                 st.session_state[SessionKey.LAST_RESULT.value] = result

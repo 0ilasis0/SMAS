@@ -148,7 +148,7 @@ class ModelPredictor:
         raw_prob_danger = engine.market_model.predict_proba(df_market_clean.loc[[target_date], MarketFeatureCol.get_features()].astype(float).values)[0, 1]
 
         # 2. 取出藏在模型基因裡的「還原金鑰 (權重)」
-        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT.value, 1.0)
+        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT, 1.0)
 
         # 3. 呼叫數學公式，將機率精準壓回真實海平面
         prob_danger = MLTool.unscale_probability(raw_prob_danger, float(weight))
@@ -225,7 +225,7 @@ class ModelPredictor:
         raw_prob_danger_array = engine.market_model.predict_proba(df_market_clean[MarketFeatureCol.get_features()])[:, 1]
 
         # 2. 取出權重金鑰
-        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT.value, 1.0)
+        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT, 1.0)
 
         # 3. 陣列化數學還原
         prob_danger_array = MLTool.unscale_probability(raw_prob_danger_array, float(weight))

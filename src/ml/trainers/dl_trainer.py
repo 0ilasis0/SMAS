@@ -290,9 +290,9 @@ class DLTrainer:
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
         checkpoint = {
-            ModelAttr.STATE_DICT.value: model.state_dict(),
-            ModelAttr.VAL_AUC.value: val_auc,
-            ModelAttr.TRAIN_SCALE_WEIGHT.value: float(pos_weight_val)
+            ModelAttr.STATE_DICT: model.state_dict(),
+            ModelAttr.VAL_AUC: val_auc,
+            ModelAttr.TRAIN_SCALE_WEIGHT: float(pos_weight_val)
         }
         torch.save(checkpoint, str(save_path_obj))
 
@@ -335,10 +335,9 @@ class DLTrainer:
             checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=False)
             dbg.log(f"🐛 [DL Debug] 硬碟檔案讀取成功！檔案類型: {type(checkpoint)}")
 
-            state_dict = checkpoint.get(ModelAttr.STATE_DICT.value) or checkpoint.get(ModelAttr.STATE_DICT.value)
-            model.load_state_dict(state_dict)
-            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC.value, checkpoint.get(ModelAttr.VAL_AUC.value, 0.5))
-            model.train_scale_weight = checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT.value, checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT.value, 1.0))
+            model.load_state_dict(checkpoint.get(ModelAttr.STATE_DICT))
+            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, checkpoint.get(ModelAttr.VAL_AUC, 0.5))
+            model.train_scale_weight = checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT, checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT, 1.0))
 
             model.eval()
             dbg.log(f"✅ 成功載入 DL 模型 (紀錄 AUC: {model.val_auc:.4f}): {model_path}")
