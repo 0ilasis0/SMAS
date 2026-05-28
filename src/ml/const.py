@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from enum import StrEnum
 
 
@@ -168,9 +169,36 @@ class DLParamKey(StrEnum):
 # ==========================================
 # ML 系統全域常數
 # ==========================================
+@dataclass(frozen=True)
 class MLConst:
     # 依據：MA_YEAR(240) + DL_TIME_STEPS(20) + 安全緩衝 = 抓取 400 天足矣
     MAX_LOOKBACK = 400
 
 class MLCol(StrEnum):
     N_ESTIMATORS = "n_estimators"
+
+
+# ==========================================
+# UI 使用 AUC 名稱與參數
+# ==========================================
+class MetricsCol(StrEnum):
+    """傳遞給前端的 AI 引擎健康度指標名稱"""
+    DICT_KEY = "model_metrics"       # 裝整個字典的 Key
+    XGB_AUC = "xgb_auc"
+    DL_AUC = "dl_auc"
+    MARKET_AUC = "market_auc"
+    MARKET_THRESH = "market_thresh"
+
+class ModelAttr:
+    """綁定在神經網路/模型物件身上的自訂屬性名稱"""
+    VAL_AUC = "val_auc"
+    DYNAMIC_THRESH = "dynamic_threshold"
+
+@dataclass(frozen=True)
+class MLDefault:
+    """機器學習防呆預設值 (Magic Numbers)"""
+    FALLBACK_AUC: float = 0.5        # 無法取得 AUC 時的預設值 (丟銅板機率)
+    FALLBACK_THRESH: float = 0.5     # 無法取得動態門檻時的預設值
+
+    HIGH_AUC: float = 0.57
+    MID_AUC: float = 0.54

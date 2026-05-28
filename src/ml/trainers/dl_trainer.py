@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 from base import MathTool, MLTool
 from debug import dbg
-from ml.const import DLModelType, DLParamKey, FeatureCol
+from ml.const import DLModelType, DLParamKey
 from ml.params import DLHyperParams, TrainConfig
 from ml.trainers.dl_net import DLModelFactory, RNNType
 
@@ -273,12 +273,27 @@ class DLTrainer:
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
 
+        model.eval()
+        with torch.no_grad():
+            # 將 numpy 轉為 Tensor 餵給模型
+            X_tensor = torch.as_tensor(X_scaled, dtype=torch.float32, device=self.device)
+            # 取得羅吉斯輸出並轉為機率
+            preds_proba = torch.sigmoid(model(X_tensor)).cpu().numpy().flatten()
+
+        # 計算 AUC
+        val_auc = MLTool.evaluate_auc(y, preds_proba)
+        dbg.log(f"✅ DL 模型標定完成 | 全局 AUC: {val_auc:.4f}")
+
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
 
-        torch.save(model.state_dict(), str(save_path_obj))
+        checkpoint = {
+            'state_dict': model.state_dict(),
+            'val_auc': val_auc
+        }
+        torch.save(checkpoint, str(save_path_obj))
 
-        dbg.log(f"最終模型權重已儲存至: {save_path_obj}")
+        dbg.log(f"最終模型權重 (含 AUC 資訊) 已儲存至: {save_path_obj}")
         return final_scaler
 
     def _create_dataloader(self, X: np.ndarray, y: np.ndarray | None = None, shuffle: bool = False) -> DataLoader:
@@ -299,7 +314,7 @@ class DLTrainer:
         )
 
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
-        """【供 UI 推論端使用】載入訓練好的模型權重"""
+        """ 載入訓練好的模型權重與 AUC """
         try:
             model_path = Path(model_path)
             if not model_path.exists():
@@ -313,10 +328,18 @@ class DLTrainer:
                 rnn_type=self.rnn_type
             ).to(self.device)
 
-            model.load_state_dict(torch.load(str(model_path), map_location=self.device, weights_only=True))
+            # 讀取磁碟中的檔案
+            checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=True)
+
+            model.load_state_dict(checkpoint['state_dict'])
+            model.val_auc = checkpoint.get('val_auc', None)
 
             model.eval()
-            dbg.log(f"✅ 成功載入 DL 模型: {model_path}")
+            if model.val_auc is None:
+                model.val_auc = 0.5
+                dbg.log(f"找不到 model 中含有 val_auc 因此啟用預設model.val_auc = 0.5")
+
+            dbg.log(f"✅ 成功載入 DL 模型 (紀錄 AUC: {model.val_auc:.4f}): {model_path}")
             return model
 
         except RuntimeError as re:

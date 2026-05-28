@@ -120,6 +120,9 @@ class XGBTrainer:
         final_model = xgb.XGBClassifier(**final_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
+        preds_proba = final_model.predict_proba(X)[:, 1]
+        final_model.val_auc = MLTool.evaluate_auc(y.values, preds_proba)
+
         save_path_obj = Path(save_path)
         save_path_obj.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(final_model, str(save_path_obj))

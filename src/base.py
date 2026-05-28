@@ -1,11 +1,14 @@
 import traceback
 
+import numpy as np
 import pandas as pd
 from dotenv import dotenv_values
 from numpy.typing import NDArray
+from sklearn.metrics import roc_auc_score
 
 from const import GlobalVar
 from debug import dbg
+from ml.const import MLDefault
 from path import PathConfig
 
 
@@ -30,6 +33,15 @@ class MLTool:
         pos_count = y.sum()
         neg_count = len(y) - pos_count
         return float(neg_count / pos_count) if pos_count > 0 else 1.0
+
+    @staticmethod
+    def evaluate_auc(y_true: np.ndarray, y_prob: np.ndarray) -> float:
+        """模型共用：計算 UI 顯示 AUC"""
+        if len(np.unique(y_true)) > 1:
+            return float(roc_auc_score(y_true, y_prob))
+        else:
+            dbg.war(f"{len(np.unique(y_true))} < 1，所以無法計算UI AUC，啟用預設{MLDefault.FALLBACK_AUC}")
+            return MLDefault.FALLBACK_AUC
 
 
 class KeyManager:

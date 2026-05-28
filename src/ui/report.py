@@ -5,7 +5,7 @@ import streamlit as st
 
 from bt.const import TradeDecision
 from const import Color, StatusCol
-from ml.const import OracleCol, QuoteCol, SignalCol
+from ml.const import MetricsCol, MLDefault, OracleCol, QuoteCol, SignalCol
 from ui.const import APIKey
 
 
@@ -81,6 +81,35 @@ def render_report(result: dict):
     m2.metric("技術面動能 (XGB)", f"{ai_sigs[SignalCol.PROB_XGB.value]:.2%}")
     m3.metric("K線型態辨識 (DL)", f"{ai_sigs[SignalCol.PROB_DL.value]:.2%}")
     m4.metric("大盤環境安全度", f"{ai_sigs[SignalCol.PROB_MARKET_SAFE.value]:.2%}")
+
+    # AI 引擎底層健康度
+    metrics = result.get(MetricsCol.DICT_KEY.value, {})
+    if metrics:
+        with st.expander("⚙️ AI 引擎底層健康度 (點擊查看進階指標)"):
+
+            def get_health_status(auc):
+                if auc >= MLDefault.HIGH_AUC: return "🟢 **極佳** (具備強大預測優勢)"
+                elif auc >= MLDefault.MID_AUC: return "🟡 **正常** (穩定運作中)"
+                else: return "🔴 **重新適應中** (建議過幾天後執行重新訓練)"
+
+            # 這裡全部改用 MetricsCol 去取值，並帶入 MLDefault 作為防呆底線
+            xgb_auc = metrics.get(MetricsCol.XGB_AUC.value, MLDefault.FALLBACK_AUC)
+            dl_auc = metrics.get(MetricsCol.DL_AUC.value, MLDefault.FALLBACK_AUC)
+            market_auc = metrics.get(MetricsCol.MARKET_AUC.value, MLDefault.FALLBACK_AUC)
+            market_thresh = metrics.get(MetricsCol.MARKET_THRESH.value, MLDefault.FALLBACK_THRESH)
+
+            st.markdown(f"""
+            - **大盤防禦雷達 (Market Brain):** 狀態 {get_health_status(market_auc)}
+              - 交叉驗證 AUC: `{market_auc:.4f}`
+              - 實戰防禦警戒線: `{market_thresh:.4f}`
+            - **技術面動能 (XGBoost):** 狀態 {get_health_status(xgb_auc)}
+              - 交叉驗證 AUC: `{xgb_auc:.4f}`
+            - **K線型態辨識 (Deep Learning):** 狀態 {get_health_status(dl_auc)}
+              - 交叉驗證 AUC: `{dl_auc:.4f}`
+
+            *(💡 溫馨提示：金融市場充滿極高隨機性雜訊，模型 AUC 只要突破 0.55 即屬華爾街頂尖水準)*
+            """)
+    st.markdown("---")
 
     st.markdown("### 📰 Gemini 新聞情緒")
     sentiment = result[APIKey.SENTIMENT.value]

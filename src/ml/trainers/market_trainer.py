@@ -130,8 +130,11 @@ class MarketTrainer:
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
         final_model.fit(X, y)
 
+        # 紀錄模型AUC
+        preds_proba = final_model.predict_proba(X)[:, 1]
+        final_model.val_auc = MLTool.evaluate_auc(y.values, preds_proba)
+        # 根據 F-beta 尋找最佳防禦門檻
         try:
-            preds_proba = final_model.predict_proba(X)[:, 1]
             precisions, recalls, thresholds = precision_recall_curve(y, preds_proba)
 
             beta = thresh_config.BETA

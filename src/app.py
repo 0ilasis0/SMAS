@@ -3,7 +3,6 @@ import warnings
 
 if 'warnings' not in sys.modules:
     sys.modules['warnings'] = warnings
-
 import time
 import traceback
 from enum import StrEnum
@@ -17,6 +16,7 @@ from controller import IDSSController
 from data.manager import DataManager
 from data.updater import DataUpdater
 from debug import dbg
+from ml.const import MetricsCol, MLDefault, ModelAttr
 from ml.engine import QuantAIEngine
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
@@ -332,13 +332,25 @@ def main():
             with st.spinner("神經網路推論中，正在呼叫 Gemini 分析市場新聞空氣..."):
                 ctrl_live = st.session_state.get(SessionKey.CTRL_LIVE.value)
 
-                # 4. 餵給 AI 的資金變成 usable_cash
+                # 餵給 AI 的資金變成 usable_cash
                 result = ctrl_live.execute_decision(
                     available_cash=usable_cash,
                     current_position=my_shares,
                     avg_cost=my_avg_cost,
                     persona=selected_persona
                 )
+
+                # 把底層模型的 AUC 抽出來，塞進 result 字典給 UI 渲染！
+                if result and APIKey.STATUS.value in result and result[APIKey.STATUS.value] == StatusCol.SUCCESS:
+                    engine = ctrl_live.engine
+
+                    result[MetricsCol.DICT_KEY.value] = {
+                        MetricsCol.XGB_AUC.value: getattr(engine.xgb_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.DL_AUC.value: getattr(engine.dl_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.MARKET_AUC.value: getattr(engine.market_model, ModelAttr.VAL_AUC, MLDefault.FALLBACK_AUC),
+                        MetricsCol.MARKET_THRESH.value: getattr(engine.market_model, ModelAttr.DYNAMIC_THRESH, MLDefault.FALLBACK_THRESH)
+                    }
+
                 st.session_state[SessionKey.LAST_RESULT.value] = result
 
         last_result = st.session_state.get(SessionKey.LAST_RESULT.value)
