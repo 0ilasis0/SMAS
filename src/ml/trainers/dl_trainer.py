@@ -315,8 +315,8 @@ class DLTrainer:
 
     def load_inference_model(self, num_features: int, model_path: Path | str) -> nn.Module:
         """ 載入訓練好的模型權重與 AUC (極限 Debug 追蹤版) """
-        dbg.log(f"🐛 [DL Debug] 準備載入 DL 模型，路徑: {model_path}")
-        dbg.log(f"🐛 [DL Debug] 傳入的特徵數量 num_features: {num_features}")
+        dbg.log(f"準備載入 DL 模型，路徑: {model_path}")
+        dbg.log(f"傳入的特徵數量 num_features: {num_features}")
 
         try:
             model_path = Path(model_path)
@@ -324,7 +324,7 @@ class DLTrainer:
                 dbg.error(f"❌ 深度學習模型載入失敗: 找不到檔案 {model_path}")
                 return None
 
-            dbg.log(f"🐛 [DL Debug] 開始建立模型架構 (Factory)...")
+            dbg.log(f"開始建立模型架構 (Factory)...")
             model = DLModelFactory.create(
                 model_type=self.dl_model_type,
                 num_features=num_features,
@@ -333,11 +333,11 @@ class DLTrainer:
             ).to(self.device)
 
             checkpoint = torch.load(str(model_path), map_location=self.device, weights_only=False)
-            dbg.log(f"🐛 [DL Debug] 硬碟檔案讀取成功！檔案類型: {type(checkpoint)}")
+            dbg.log(f"硬碟檔案讀取成功！檔案類型: {type(checkpoint)}")
 
             model.load_state_dict(checkpoint.get(ModelAttr.STATE_DICT))
-            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, checkpoint.get(ModelAttr.VAL_AUC, 0.5))
-            model.train_scale_weight = checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT, checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT, 1.0))
+            model.val_auc = checkpoint.get(ModelAttr.VAL_AUC, checkpoint.get(ModelAttr.VAL_AUC))
+            model.train_scale_weight = checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT, checkpoint.get(ModelAttr.TRAIN_SCALE_WEIGHT))
 
             model.eval()
             dbg.log(f"✅ 成功載入 DL 模型 (紀錄 AUC: {model.val_auc:.4f}): {model_path}")

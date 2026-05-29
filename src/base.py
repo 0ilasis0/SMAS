@@ -4,11 +4,9 @@ import numpy as np
 import pandas as pd
 from dotenv import dotenv_values
 from numpy.typing import NDArray
-from sklearn.metrics import precision_recall_curve, roc_auc_score
 
 from const import GlobalVar
 from debug import dbg
-from ml.params import MLDefault
 from path import PathConfig
 
 

@@ -1,0 +1,7 @@
+[server]
+# 1. 將監視模式從敏感的 watchdog 改為較穩定的 poll（輪詢機制），能有效避免字典衝突
+fileWatcherType = "poll"
+
+# 2. 強制 Streamlit 忽略您的模型庫與數據庫資料夾
+# 請根據您的實際路徑替換，例如 "models" 或 "data"
+folderWatchBlacklist = ["models", "data", "logs"]
