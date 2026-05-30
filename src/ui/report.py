@@ -76,28 +76,59 @@ def render_report(result: dict):
     st.markdown("---")
 
     st.markdown("### 📈 AI 雙腦與大盤雷達指標")
+
+    metrics = result.get(MetricsCol.DICT_KEY.value, {})
+    xgb_auc = metrics.get(MetricsCol.XGB_AUC, MLDefault.FALLBACK_AUC)
+    dl_auc = metrics.get(MetricsCol.DL_AUC, MLDefault.FALLBACK_AUC)
+    market_auc = metrics.get(MetricsCol.MARKET_AUC, MLDefault.FALLBACK_AUC)
+    market_thresh = metrics.get(MetricsCol.MARKET_THRESH, MLDefault.FALLBACK_THRESH)
+
+    def get_health_icon(auc):
+        """根據 AUC 回傳簡化的燈號圖示"""
+        if auc >= MLDefault.HIGH_AUC: return "🟢"
+        elif auc >= MLDefault.MID_AUC: return "🟡"
+        else: return "🔴"
+
+    # 建立一個客製化的 HTML 渲染器，完美模擬 st.metric，並把 icon 變為右上角的上標 (sup)
+    def render_custom_metric(label, value_str, icon=""):
+        return f"""
+        <div style="display: flex; flex-direction: column; margin-bottom: 1rem;">
+            <span style="font-size: 14px; color: #7f8c8d; font-family: sans-serif;">{label}</span>
+            <span style="font-size: 2.25rem; font-weight: 600; line-height: 1.2; font-family: sans-serif;">
+                {value_str}<sup style="font-size: 1.2rem; margin-left: 2px;">{icon}</sup>
+            </span>
+        </div>
+        """
+
     m1, m2, m3, m4 = st.columns(4)
     ai_sigs = result[APIKey.AI_SIGNALS.value]
-    m1.metric("綜合決策勝率 (Meta)", f"{ai_sigs[SignalCol.PROB_FINAL.value]:.2%}")
-    m2.metric("技術面動能 (XGB)", f"{ai_sigs[SignalCol.PROB_XGB.value]:.2%}")
-    m3.metric("K線型態辨識 (DL)", f"{ai_sigs[SignalCol.PROB_DL.value]:.2%}")
-    m4.metric("大盤環境安全度", f"{ai_sigs[SignalCol.PROB_MARKET_SAFE.value]:.2%}")
 
-    # AI 引擎底層健康度
-    metrics = result.get(MetricsCol.DICT_KEY.value, {})
+    # 使用 custom HTML 取代原生的 st.metric
+    m1.markdown(
+        render_custom_metric("綜合決策勝率 (Meta)", f"{ai_sigs[SignalCol.PROB_FINAL.value]:.2%}"),
+        unsafe_allow_html=True
+    )
+    m2.markdown(
+        render_custom_metric("技術面動能 (XGB)", f"{ai_sigs[SignalCol.PROB_XGB.value]:.2%}", get_health_icon(xgb_auc)),
+        unsafe_allow_html=True
+    )
+    m3.markdown(
+        render_custom_metric("K線型態辨識 (DL)", f"{ai_sigs[SignalCol.PROB_DL.value]:.2%}", get_health_icon(dl_auc)),
+        unsafe_allow_html=True
+    )
+    m4.markdown(
+        render_custom_metric("大盤環境安全度", f"{ai_sigs[SignalCol.PROB_MARKET_SAFE.value]:.2%}", get_health_icon(market_auc)),
+        unsafe_allow_html=True
+    )
+
+    # AI 引擎底層健康度：收合成齒輪圖示
     if metrics:
-        with st.expander("⚙️ AI 引擎底層健康度 (點擊查看進階指標)"):
+        def get_health_status(auc):
+            if auc >= MLDefault.HIGH_AUC: return "🟢 **極佳** (具備強大預測優勢)"
+            elif auc >= MLDefault.MID_AUC: return "🟡 **正常** (穩定運作中)"
+            else: return "🔴 **重新適應中** (建議過幾天後執行重新訓練)"
 
-            def get_health_status(auc):
-                if auc >= MLDefault.HIGH_AUC: return "🟢 **極佳** (具備強大預測優勢)"
-                elif auc >= MLDefault.MID_AUC: return "🟡 **正常** (穩定運作中)"
-                else: return "🔴 **重新適應中** (建議過幾天後執行重新訓練)"
-
-            xgb_auc = metrics.get(MetricsCol.XGB_AUC, MLDefault.FALLBACK_AUC)
-            dl_auc = metrics.get(MetricsCol.DL_AUC, MLDefault.FALLBACK_AUC)
-            market_auc = metrics.get(MetricsCol.MARKET_AUC, MLDefault.FALLBACK_AUC)
-            market_thresh = metrics.get(MetricsCol.MARKET_THRESH, MLDefault.FALLBACK_THRESH)
-
+        with st.popover("⚙️", help="AI 引擎底層健康度 (點擊查看進階指標)"):
             st.markdown(f"""
             - **大盤防禦雷達 (Market Brain):** 狀態 {get_health_status(market_auc)}
               - 交叉驗證 AUC: `{market_auc:.4f}`
@@ -109,6 +140,7 @@ def render_report(result: dict):
 
             *(💡 溫馨提示：金融市場充滿極高隨機性雜訊，模型 AUC 只要突破 {MLDefault.HIGH_AUC} 即屬華爾街頂尖水準)*
             """)
+
     st.markdown("---")
 
     st.markdown("### 📰 Gemini 新聞情緒")
