@@ -14,7 +14,7 @@ from ml.data.dl_features import DLFeatureEngine
 from ml.data.market_features import MarketFeatureCol, MarketFeatureEngine
 from ml.data.xgb_features import XGBFeatureEngine
 from ml.model.meta_learner import MetaLearner
-from ml.params import DLHyperParams, MarketThresholdConfig
+from ml.params import DLHyperParams
 from ml.trainers.dl_trainer import DLTrainer
 from ml.trainers.market_trainer import MarketTrainer
 from ml.trainers.xgb_trainer import XGBTrainer
@@ -50,13 +50,7 @@ class ModelPredictor:
             engine.meta_learner.load_inference_model(engine.paths[ModelCol.META])
 
             engine.market_model = MarketTrainer.load_inference_model(engine.paths[ModelCol.MARKET])
-
-            if hasattr(engine.market_model, 'dynamic_threshold'):
-                engine.config.dynamic_market_threshold = engine.market_model.dynamic_threshold
-                dbg.log(f"🛡️ 成功讀取大盤防禦動態門檻: {engine.config.dynamic_market_threshold:.4f}")
-            else:
-                engine.config.dynamic_market_threshold = MarketThresholdConfig.FALLBACK_THRESHOLD
-                dbg.war(f"⚠️ 舊版模型未攜帶動態門檻，已套用預設值 {MarketThresholdConfig.FALLBACK_THRESHOLD}")
+            engine.config.dynamic_market_threshold = engine.market_model.dynamic_threshold
 
             loaded_status = {
                 ModelCol.XGB: engine.xgb_model,

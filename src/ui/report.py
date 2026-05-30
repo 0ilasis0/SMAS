@@ -93,11 +93,10 @@ def render_report(result: dict):
                 elif auc >= MLDefault.MID_AUC: return "🟡 **正常** (穩定運作中)"
                 else: return "🔴 **重新適應中** (建議過幾天後執行重新訓練)"
 
-            # 這裡全部改用 MetricsCol 去取值，並帶入 MLDefault 作為防呆底線
-            xgb_auc = metrics.get(MetricsCol.XGB_AUC.value, MLDefault.FALLBACK_AUC)
-            dl_auc = metrics.get(MetricsCol.DL_AUC.value, MLDefault.FALLBACK_AUC)
-            market_auc = metrics.get(MetricsCol.MARKET_AUC.value, MLDefault.FALLBACK_AUC)
-            market_thresh = metrics.get(MetricsCol.MARKET_THRESH.value, MLDefault.FALLBACK_THRESH)
+            xgb_auc = metrics.get(MetricsCol.XGB_AUC, MLDefault.FALLBACK_AUC)
+            dl_auc = metrics.get(MetricsCol.DL_AUC, MLDefault.FALLBACK_AUC)
+            market_auc = metrics.get(MetricsCol.MARKET_AUC, MLDefault.FALLBACK_AUC)
+            market_thresh = metrics.get(MetricsCol.MARKET_THRESH, MLDefault.FALLBACK_THRESH)
 
             st.markdown(f"""
             - **大盤防禦雷達 (Market Brain):** 狀態 {get_health_status(market_auc)}

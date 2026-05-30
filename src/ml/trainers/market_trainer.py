@@ -166,7 +166,7 @@ class MarketTrainer:
         dbg.log(f"大盤防禦模型已成功儲存至: {save_path}")
 
     @staticmethod
-    def _tune_danger_threshold(y_true: np.ndarray, y_prob: np.ndarray, config) -> float:
+    def _tune_danger_threshold(y_true: np.ndarray, y_prob: np.ndarray, config: MarketThresholdConfig) -> float:
         """大盤專用：根據 F-beta 尋找最佳防禦門檻"""
         # 防線 1：先檢查標籤是否單一，避免 sklearn 拋出錯誤
         if len(np.unique(y_true)) < 2:
