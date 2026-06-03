@@ -3,6 +3,7 @@ import warnings
 
 # test
 # test2
+# test3
 if 'warnings' not in sys.modules:
     sys.modules['warnings'] = warnings
 import time
