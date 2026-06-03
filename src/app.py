@@ -2,6 +2,7 @@ import sys
 import warnings
 
 # test2
+# test7
 
 if 'warnings' not in sys.modules:
     sys.modules['warnings'] = warnings
