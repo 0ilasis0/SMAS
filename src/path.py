@@ -26,11 +26,11 @@ def _resource_path(*paths):
 
 @dataclass(frozen = True)
 class _PathFile:
+    root = _resource_path()
     processed = _resource_path("data", "processed")
     model = _resource_path("data", "processed", "model")
     report = _resource_path("data", "processed", "report")
     report_chart = _resource_path("data", "processed", "report_chart")
-    raw = _resource_path("data", "raw")
 
     @classmethod
     def get_all_paths(cls):
@@ -48,7 +48,7 @@ class PathConfig:
     CACHE_FILE = _PathFile.processed / "update_cache.json"
     IDSS_DATA = _PathFile.processed / "idss_data.db"
     LLM_CACHE = _PathFile.processed / "llm_cache.db"
-    GEMINI_KEY = _PathFile.raw / "key.env"
+    GEMINI_KEY = _PathFile.root / "key.env"
 
     @classmethod
     def get_chart_report_path(cls, ticker: str) -> Path:
