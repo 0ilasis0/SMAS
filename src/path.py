@@ -26,6 +26,7 @@ def _resource_path(*paths):
 
 @dataclass(frozen = True)
 class _PathFile:
+    """第一層：專門定義資料夾骨架，確保裡面全部都是純目錄"""
     root = _resource_path()
     processed = _resource_path("data", "processed")
     model = _resource_path("data", "processed", "model")
@@ -34,10 +35,11 @@ class _PathFile:
 
     @classmethod
     def get_all_paths(cls):
-        return [v for _, v in vars(cls).items() if isinstance(v, Path)]
+        return [v for k, v in vars(cls).items() if isinstance(v, Path) and not k.startswith("_")]
 
 @dataclass(frozen = True)
 class PathConfig:
+    """第二層：面向應用的配置，組合或繼承第一層，可以包含檔案"""
     REPORT_RESULT = _PathFile.report
     EXPERIMENT_DETAILS = _PathFile.report / "experiment_detail.csv"
     EXPERIMENT_SUMMARY = _PathFile.report / "experiment_summary.csv"
@@ -100,10 +102,10 @@ def setup_filesystem():
     確保所有靜態路徑的「資料夾」都存在。
     """
     try:
-        for d in _PathFile.get_all_paths():
-            if not d.exists():
-                d.mkdir(parents=True, exist_ok=True)
-                dbg.log(f"[系統初始化] 建立新資料夾: {d}")
+        for folder in _PathFile.get_all_paths():
+            if not folder.exists():
+                folder.mkdir(parents=True, exist_ok=True)
+                dbg.log(f"[系統初始化] 建立新資料夾: {folder}")
 
     except Exception as e:
         dbg.error(f"路徑系統初始化警告: {e}")
