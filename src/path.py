@@ -50,7 +50,7 @@ class PathConfig:
     CACHE_FILE = _PathFile.processed / "update_cache.json"
     IDSS_DATA = _PathFile.processed / "idss_data.db"
     LLM_CACHE = _PathFile.processed / "llm_cache.db"
-    GEMINI_KEY = _PathFile.root / "key.env"
+    ENV_FILE = _PathFile.root / "key.env"
 
     @classmethod
     def get_chart_report_path(cls, ticker: str) -> Path:

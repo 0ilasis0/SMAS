@@ -2,6 +2,7 @@ from base import FrozenMeta
 
 
 class DataLimit(metaclass=FrozenMeta):
+    DAILY_RETAIL_LS_YEAR: int = 5
     DAILY_DEFAULT_YEAR: int = 20
     DAILY_MAX_YEAR: int = 40
     DAILY_MAX_MONTH: int = 480

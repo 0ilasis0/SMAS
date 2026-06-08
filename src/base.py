@@ -48,7 +48,7 @@ class KeyManager:
     """自動從 .env 讀取並管理 API Key 池"""
     @staticmethod
     def get_gemini_keys() -> list[str]:
-        env_path = PathConfig.GEMINI_KEY
+        env_path = PathConfig.ENV_FILE
         if not env_path.exists():
             dbg.error(f"❌ 找不到設定檔: {env_path}")
             return []

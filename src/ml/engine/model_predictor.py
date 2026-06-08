@@ -148,6 +148,14 @@ class ModelPredictor:
         prob_danger = MLTool.unscale_probability(raw_prob_danger, float(weight))
         prob_market_safe = 1.0 - prob_danger
 
+        # # 硬規則斷路器 (Circuit Breaker)
+        # sox_crash = float(df_market_clean[MarketFeatureCol.SOX_RET_1D].iloc[-1]) < -0.04
+        # vix_panic = float(df_market_clean[MarketFeatureCol.VIX_SURGE].iloc[-1]) > 0.20
+
+        # if sox_crash or vix_panic:
+        #     prob_market_safe = 0.0  # 強制大盤安全度歸零，啟動最高防禦！
+        #     dbg.war("🚨 偵測到全球極端恐慌特徵 (VIX飆升 或 費半暴跌)！已觸發硬規則斷路器，大盤安全度強制歸零！")
+
         # 總指揮融合
         final_prob = engine.meta_learner.predict_final_probability(prob_xgb, prob_dl)
 
@@ -219,7 +227,7 @@ class ModelPredictor:
         raw_prob_danger_array = engine.market_model.predict_proba(df_market_clean[MarketFeatureCol.get_features()])[:, 1]
 
         # 2. 取出權重金鑰
-        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT, 1.0)
+        weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT.value, 1.0)
 
         # 3. 陣列化數學還原
         prob_danger_array = MLTool.unscale_probability(raw_prob_danger_array, float(weight))
@@ -230,6 +238,11 @@ class ModelPredictor:
             index=df_market_clean.index,
             name=SignalCol.PROB_MARKET_SAFE.value
         )
+
+        # sox_crash_mask = df_market_clean[MarketFeatureCol.SOX_RET_1D] < -0.04
+        # vix_panic_mask = df_market_clean[MarketFeatureCol.VIX_SURGE] > 0.20
+        # panic_mask = sox_crash_mask | vix_panic_mask
+        # prob_market_safe_series.loc[panic_mask] = 0.0
 
         df_backtest = df_raw.copy().join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
         df_backtest.dropna(subset=[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value, SignalCol.PROB_MARKET_SAFE.value], inplace=True)

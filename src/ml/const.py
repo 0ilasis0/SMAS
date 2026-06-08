@@ -102,20 +102,30 @@ class MarketFeatureCol(StrEnum):
     TWII_RSI = "twii_rsi"
     TWII_MACD = "twii_macd"
     TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
-    # TWII_VOL_CHG = "twii_vol_chg"
+    TWII_VOL_CHG = "twii_vol_chg"
 
     US10Y_SURGE = "us10y_surge"
     FUTURES_OI_LEVEL = "futures_oi_level"
 
+    # 籌碼面特徵
+    RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
+    RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
+
+    # 選擇權特徵
+    PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
+    PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
+
+    # 廣度背離特徵
+    TWII_ADL_DIVERGENCE = "twii_adl_divergence"              # 大盤與 ADL 的量價背離指標
+
     # 大盤 K 線幾何特徵
-    # TWII_K_UPPER = "twii_k_upper"
-    # TWII_K_LOWER = "twii_k_lower"
-    # TWII_K_BODY = "twii_k_body"
+    TWII_K_UPPER = "twii_k_upper"
+    TWII_K_LOWER = "twii_k_lower"
+    TWII_K_BODY = "twii_k_body"
 
     SOX_RET_1D = "sox_ret_1d"
     SOX_RET_5D = "sox_ret_5d"
     SOX_CLOSE  = "sox_close"
-    # SOX_TWII_SPREAD = "sox_twii_spread" # 台美相對強弱差
 
     VIX_CLOSE = "vix_close"
     VIX_SURGE = "vix_surge"

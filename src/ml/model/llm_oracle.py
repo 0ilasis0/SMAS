@@ -9,17 +9,16 @@ from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 
 import requests
+from bt.params import LLMParams
+from debug import dbg
 from google import genai
 from google.genai import types
 from google.genai.errors import APIError
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-
-from bt.params import LLMParams
-from debug import dbg
 from ml.const import OracleCol, TradingMode
 from path import PathConfig
+from requests.adapters import HTTPAdapter
 from ui.const import EncodingConst
+from urllib3.util.retry import Retry
 
 
 class GeminiOracle:
@@ -249,7 +248,6 @@ class GeminiOracle:
 
     def _call_gemini_with_fallback(self, prompt: str) -> dict | None:
         """嘗試以二維機制呼叫 Gemini """
-
         for model_name in self.FALLBACK_MODELS:
             for key_idx, current_key in enumerate(self.api_keys):
                 dbg.log(f"嘗試使用模型: {model_name} (API Key: #{key_idx + 1})...")
