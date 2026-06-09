@@ -1,11 +1,14 @@
+import os
 from datetime import datetime
 
 import pandas as pd
 import requests
 import yfinance as yf
+from dotenv import load_dotenv
 
-from const import StatusCol
+from const import GlobalCol, StatusCol
 from debug import dbg
+from path import PathConfig
 
 
 class HybridEventFetcher:
@@ -17,6 +20,9 @@ class HybridEventFetcher:
     _finmind_circuit_breaker_tripped = False
 
     def __init__(self):
+        load_dotenv(PathConfig.ENV_FILE)
+        self.finmind_token = os.getenv(GlobalCol.FINMIND_API_KEYS)
+
         self.finmind_url = "https://api.finmindtrade.com/api/v4/data"
 
     def fetch_upcoming_events(self, ticker: str) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -47,7 +53,8 @@ class HybridEventFetcher:
             params = {
                 "dataset": "TaiwanStockDividend",
                 "data_id": stock_id,
-                "start_date": start_date
+                "start_date": start_date,
+                "token": self.finmind_token
             }
             resp = requests.get(self.finmind_url, params=params, timeout=10)
             data = resp.json()

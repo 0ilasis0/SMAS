@@ -108,12 +108,12 @@ class MarketFeatureCol(StrEnum):
     FUTURES_OI_LEVEL = "futures_oi_level"
 
     # 籌碼面特徵
-    RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
-    RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
+    # RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
+    # RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
 
-    # 選擇權特徵
-    PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
-    PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
+    # # 選擇權特徵
+    # PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
+    # PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
 
     # 廣度背離特徵
     TWII_ADL_DIVERGENCE = "twii_adl_divergence"              # 大盤與 ADL 的量價背離指標

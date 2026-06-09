@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 
-class GlobalVar:
+class GlobalCol:
     GEMINI_API_KEYS: str = "GEMINI_API_KEYS"
     FINMIND_API_KEYS: str = "FINMIND_API_KEYS"
 

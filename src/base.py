@@ -5,7 +5,7 @@ import pandas as pd
 from dotenv import dotenv_values
 from numpy.typing import NDArray
 
-from const import GlobalVar
+from const import GlobalCol
 from debug import dbg
 from path import PathConfig
 
@@ -58,7 +58,7 @@ class KeyManager:
             env_dict = dotenv_values(dotenv_path=env_path)
 
             # 雙重保險防呆：同時找尋「複數」與「單數」的變數名稱
-            keys_str = env_dict.get(GlobalVar.GEMINI_API_KEYS)
+            keys_str = env_dict.get(GlobalCol.GEMINI_API_KEYS)
             if not keys_str:
                 keys_str = env_dict.get("GEMINI_API_KEY", "")
 

@@ -1,3 +1,4 @@
+import os
 import time
 import traceback
 from datetime import datetime, timedelta
@@ -5,11 +6,14 @@ from datetime import datetime, timedelta
 import pandas as pd
 import requests
 import yfinance as yf
+from dotenv import load_dotenv
 
 from base import MathTool
+from const import GlobalCol
 from data.const import StockCol, TimeUnit, YfInterval
 from data.params import DataLimit
 from debug import dbg
+from path import PathConfig
 
 try:
     _ = yf.Ticker("SPY").history(period="1d")
@@ -23,6 +27,10 @@ class Fetcher:
 
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 2
+
+    def __init__(self) -> None:
+        load_dotenv(PathConfig.ENV_FILE)
+        self.finmind_token = os.getenv(GlobalCol.FINMIND_API_KEYS)
 
     def fetch_daily_data(self, ticker_symbol: str, period: int, unit: str) -> pd.DataFrame:
         """
@@ -102,7 +110,21 @@ class Fetcher:
                 df = ticker.history(**kwargs)
                 if not df.empty: return df
 
-                dbg.war(f"抓取回傳空資料，可能無資料或遭限流 (嘗試 {attempt + 1}/{self.MAX_RETRIES})")
+                history_metadata = getattr(ticker, '_history', None)
+                last_error = "未知 (yfinance 未拋出標準異常)"
+
+                if history_metadata and hasattr(history_metadata, 'errors'):
+                    last_error = history_metadata.errors
+
+                dbg.war(f"❌ [yfinance 偵錯] 伺服器回傳空資料！(嘗試 {attempt + 1}/{self.MAX_RETRIES})")
+                dbg.war(f"   👉 內部可能原因: {last_error}")
+
+                try:
+                    info_keys = list(ticker.info.keys())[:3] if ticker.info else []
+                    dbg.log(f"   ℹ️ Ticker 狀態確認: 代號存在且可連線，部分欄位快照: {info_keys}")
+                except Exception as info_err:
+                    dbg.error(f"   🚨 Ticker 狀態確認失敗 (可能代號不合法或 IP 遭封鎖): {info_err}")
+
             except Exception as e:
                 dbg.war(f"抓取發生例外錯誤: {e} (嘗試 {attempt + 1}/{self.MAX_RETRIES}):\n{traceback.format_exc()}")
 
@@ -115,9 +137,66 @@ class Fetcher:
 
         return pd.DataFrame()
 
+    def fetch_twse_adl_value(self, days: int = DataLimit.DAILY_RETAIL_LS_YEAR * 365) -> pd.DataFrame:
+        """
+        [防禦升級] 利用 FinMind 的「櫃買報酬指數 (TPEx)」完美替代傳統 ADL 騰落指標。
+        🟢 終極破案版：徹底拋棄不穩定的 yfinance，改用 FinMind 官方免費、零時區 Bug 的報酬指數表！
+        來源: FinMind Open API (TaiwanStockTotalReturnIndex)
+        """
+        dbg.log("正在透過 FinMind API 獲取櫃買報酬指數 (TPEx) 建立大盤廣度背離指標...")
+
+        start_date = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        url = "https://api.finmindtrade.com/api/v4/data"
+
+        params = {
+            "dataset": "TaiwanStockTotalReturnIndex",  # 官方正宗大盤報酬指數資料集
+            "data_id": "TPEx",                         # 精準指定：櫃買報酬指數
+            "start_date": start_date,
+            "token": self.finmind_token
+        }
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+
+                # 取得資料陣列
+                data_list = response.json().get("data", [])
+
+                if not data_list:
+                    continue
+
+                df = pd.DataFrame(data_list)
+                df['date'] = pd.to_datetime(df['date'])
+                df.set_index('date', inplace=True)
+                df.index.name = StockCol.DATE
+
+                # 確保收盤價欄位存在 (FinMind 此資料集通常將指數數值放在 'price' 欄位)
+                price_col = 'price' if 'price' in df.columns else 'close'
+
+                if price_col not in df.columns:
+                    dbg.error(f"❌ TPEx 資料集缺失價格欄位，現有欄位: {df.columns.tolist()}")
+                    return pd.DataFrame()
+
+                # 將數值重新命名為 'adl_value'，完美對接後端的特徵工程
+                df_res = pd.DataFrame(index=df.index)
+                df_res['adl_value'] = df[price_col].astype(float)
+
+                dbg.log(f"✅ 成功載入櫃買報酬指數 (TPEx)，共 {len(df_res)} 筆交易日。")
+                return df_res[['adl_value']]
+
+            except Exception as e:
+                dbg.war(f"FinMind TPEx 指數抓取失敗 (嘗試 {attempt + 1}/{self.MAX_RETRIES}): {e}")
+
+            if attempt < self.MAX_RETRIES - 1:
+                time.sleep(self.BACKOFF_FACTOR ** attempt)
+
+        dbg.error("❌ 櫃買報酬指數 (TPEx) 連線重試耗盡，放棄抓取。")
+        return pd.DataFrame()
+
     def fetch_foreign_futures_oi(self, days: int = DataLimit.DAILY_DEFAULT_YEAR * 365) -> pd.DataFrame:
         """
-        [宏觀升級] 抓取外資「台指期 (TX) 未平倉淨部位 (Net Open Interest)」。
+        抓取外資「台指期 (TX) 未平倉淨部位 (Net Open Interest)」。
         負數代表外資滿手空單，是台股崩盤的最強領先指標。
         來源: FinMind Open API
         """
@@ -174,3 +253,5 @@ class Fetcher:
 
         dbg.error("外資期貨 OI 抓取已達最大重試次數，放棄。")
         return pd.DataFrame()
+
+

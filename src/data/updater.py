@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from data.const import MacroTicker, TimeUnit
@@ -73,18 +73,64 @@ class DataUpdater:
         else:
             dbg.log(f"⚡ [{ticker}] [事件日曆] 今日已同步過該股事件，跳過網路抓取。")
 
-        # ================== 4. 宏觀籌碼更新 (外資期貨空單) ==================
-        futures_cache_key = "macro_futures_oi"
-        # 為了避免每跑一檔股票就抓一次大盤期貨，這裡用獨立的 cache_key 控制，一天只會進來一次
-        if force_wipe or force_sync or self._needs_update(futures_cache_key):
-            dbg.log("[宏觀防禦] 正在同步外資台指期未平倉空單 (Futures OI)...")
-            df_futures_oi = self.fetcher.fetch_foreign_futures_oi()
+        # ================== 4. 宏觀與籌碼更新 (四大黑天鵝防禦指標完全體) ==================
+        macro_features = {
+            "macro_futures_oi": {
+                "name": "外資台指期未平倉淨部位",
+                "fetch_func": self.fetcher.fetch_foreign_futures_oi,
+                "db_key": "FUTURES_OI"
+            },
+            # "macro_retail_ls": {
+            #     "name": "散戶小台多空比",
+            #     "fetch_func": self.fetcher.fetch_retail_ls_ratio,
+            #     "db_key": "RETAIL_LS_RATIO"
+            # },
+            # "macro_pc_ratio": {
+            #     "name": "選擇權 Put/Call Ratio",
+            #     "fetch_func": self.fetcher.fetch_options_pc_ratio,
+            #     "db_key": "PC_RATIO_CLOSE"
+            # },
+            "macro_adl_value": {
+                "name": "騰落指標 (ADL 替代: 櫃買指數)",
+                "fetch_func": self.fetcher.fetch_twse_adl_value,
+                "db_key": "ADL_VALUE"
+            }
+        }
 
-            if not df_futures_oi.empty:
-                self.db.save_macro_data("FUTURES_OI", df_futures_oi)
-                self._mark_updated(futures_cache_key)
-            else:
-                dbg.war("[宏觀防禦] 外資期貨未平倉資料抓取失敗。")
+        # 取得前一個交易日的大致基準（通常是昨天或前天）
+        target_fresh_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+        for cache_key, config in macro_features.items():
+            # 🔍 第一重檢查：從 .db 資料庫實體讀取歷史 Series
+            db_series = self.db.get_macro_data(config["db_key"])
+
+            db_is_fresh = False
+            latest_db_date = "無"
+            if not db_series.empty:
+                # 檢索資料庫裡最新一筆資料的日期
+                latest_db_date = db_series.index[-1].strftime('%Y-%m-%d')
+                if latest_db_date >= target_fresh_date:
+                    db_is_fresh = True
+
+            # 🔍 第二重檢查：結合 force 參數與資料庫新鮮度
+            should_fetch = force_wipe or force_sync or (not db_is_fresh)
+
+            if should_fetch:
+                # 🛡️ 第三重檢查安全網：如果這趟批次中「剛剛已經試過且蓋章了」，先跳過
+                if not force_sync and not self._needs_update(cache_key):
+                    continue
+
+                dbg.log(f"[宏觀防禦] 正在從網路同步更新 {config['name']} ...")
+                df_macro_feat = config["fetch_func"]()
+
+                if not df_macro_feat.empty:
+                    # 🟢 真正抓到資料：寫入資料庫並更新 JSON 快取日期
+                    self.db.save_macro_data(config["db_key"], df_macro_feat)
+                    self._mark_updated(cache_key)
+                else:
+                    # ❌ 真正沒抓到：印出警告，但「依然在 JSON 蓋章」防止當日無限迴圈
+                    dbg.war(f"[宏觀防禦] {config['name']} 本次同步失敗。將在下一趟任務重試。")
+                    self._mark_updated(cache_key)
 
         return success
 
