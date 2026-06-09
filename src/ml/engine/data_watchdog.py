@@ -77,7 +77,7 @@ class DataWatchdog:
             dbg.war(f"🚨 [Watchdog] 偵測到 {ticker} 出現異常跳空 (大於 {int(DataConst.RETURNS_ABS * 100)}%)！")
 
             self.engine.db.clear_ticker_data(ticker)
-            df_healed = self.engine.fetcher.fetch_daily_data(
+            df_healed = self.engine.stock_fetcher.fetch_daily_data(
                 ticker,
                 period=DataConst.HEAL_PERIOD,
                 unit=DataConst.HEAL_UNIT

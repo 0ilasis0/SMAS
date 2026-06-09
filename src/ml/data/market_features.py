@@ -25,9 +25,6 @@ class MarketFeatureEngine:
 
         df_market.columns = [str(c).strip().lower() for c in df_market.columns]
 
-        # TODO
-        dbg.error(f"🕵️ [特徵引擎偵錯] 進入特徵引擎的可用欄位: {df_market.columns.tolist()}")
-
         dbg.log("開始計算 LightGBM 大盤防禦特徵 (包含美債與期貨空單)...")
         data = df_market.copy()
         ai_vision_col = str(StockCol.ADJ_CLOSE)

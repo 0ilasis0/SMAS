@@ -3,8 +3,8 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from data.fetcher import Fetcher
 from data.manager import DataManager
+from data.stock_fetcher import StockFetcher
 from ml.const import DLModelType, ModelCol, RNNType, TradingMode
 from ml.model.llm_oracle import GeminiOracle
 from ml.params import SessionConfig
@@ -55,7 +55,7 @@ class QuantAIEngine:
 
         # ================= 2. 基礎設施 =================
         self.db = DataManager()
-        self.fetcher = Fetcher()
+        self.stock_fetcher = StockFetcher()
         self.oracle = GeminiOracle(api_keys=api_keys) if api_keys else None
         self.cache_file = Path(PathConfig.CACHE_FILE)
 

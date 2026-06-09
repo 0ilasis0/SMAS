@@ -4,9 +4,10 @@ from pathlib import Path
 
 from data.const import MacroTicker, TimeUnit
 from data.event_fetcher import HybridEventFetcher
-from data.fetcher import Fetcher
+from data.macro_fetcher import MacroFetcher
 from data.manager import DataManager
 from data.params import DataLimit
+from data.stock_fetcher import StockFetcher
 from debug import dbg
 from ml.const import MacroDbKey
 from path import PathConfig
@@ -17,10 +18,16 @@ class DataUpdater:
     資料更新專員 (獨立運行版)
     負責管理每日資料抓取邏輯與更新快取檔紀錄。
     """
-    def __init__(self, db: DataManager, fetcher: Fetcher = Fetcher(), event_fetcher: HybridEventFetcher = HybridEventFetcher()):
+    def __init__(self,
+                 db: DataManager,
+                 stock_fetcher: StockFetcher = None,
+                 macro_fetcher: MacroFetcher = None,
+                 event_fetcher: HybridEventFetcher = None
+                ):
         self.db = db
-        self.fetcher = fetcher
-        self.event_fetcher = event_fetcher
+        self.stock_fetcher = stock_fetcher or StockFetcher()
+        self.macro_fetcher = macro_fetcher or MacroFetcher()
+        self.event_fetcher = event_fetcher or HybridEventFetcher()
         self.cache_file = Path(PathConfig.CACHE_FILE)
 
     def update_market_data(self, ticker: str, period: int = DataLimit.DAILY_DEFAULT_YEAR, unit: TimeUnit = TimeUnit.YEAR, force_wipe: bool = False, force_sync: bool = False) -> bool:
@@ -33,7 +40,7 @@ class DataUpdater:
         # ================== 1. 個股更新 ==================
         if force_wipe or force_sync or self._needs_update(ticker):
             dbg.log(f"[{ticker}] 正在從網路更新個股歷史資料...")
-            daily_df = self.fetcher.fetch_daily_data(ticker, period=period, unit=unit)
+            daily_df = self.stock_fetcher.fetch_daily_data(ticker, period=period, unit=unit)
             if not daily_df.empty:
                 self.db.save_daily_data(ticker, daily_df)
                 self._mark_updated(ticker)
@@ -49,7 +56,7 @@ class DataUpdater:
             m_ticker = macro_item.value
             if force_wipe or force_sync or self._needs_update(m_ticker):
                 dbg.log(f"[{m_ticker}] 正在同步更新大盤/總經資料...")
-                df_macro = self.fetcher.fetch_daily_data(m_ticker, period=period, unit=unit)
+                df_macro = self.stock_fetcher.fetch_daily_data(m_ticker, period=period, unit=unit)
                 if not df_macro.empty:
                     self.db.save_daily_data(m_ticker, df_macro)
                     self._mark_updated(m_ticker)
@@ -78,22 +85,22 @@ class DataUpdater:
         macro_features = {
             "macro_futures_oi": {
                 "name": "外資台指期未平倉淨部位",
-                "fetch_func": self.fetcher.fetch_foreign_futures_oi,
+                "fetch_func": self.macro_fetcher.fetch_foreign_futures_oi,
                 "db_key": MacroDbKey.FUTURES_OI
             },
             "macro_retail_ls": {
                 "name": "散戶小台多空比",
-                "fetch_func": self.fetcher.fetch_retail_ls_ratio,
+                "fetch_func": self.macro_fetcher.fetch_retail_ls_ratio,
                 "db_key": MacroDbKey.RETAIL_LS_RATIO
             },
             "macro_pc_ratio": {
                 "name": "選擇權 Put/Call Ratio",
-                "fetch_func": self.fetcher.fetch_options_pc_ratio,
+                "fetch_func": self.macro_fetcher.fetch_options_pc_ratio,
                 "db_key": MacroDbKey.PC_RATIO_CLOSE
             },
             "macro_adl_value": {
                 "name": "騰落指標 (ADL 替代: 櫃買指數)",
-                "fetch_func": self.fetcher.fetch_twse_adl_value,
+                "fetch_func": self.macro_fetcher.fetch_twse_adl_value,
                 "db_key": MacroDbKey.ADL_VALUE
             }
         }

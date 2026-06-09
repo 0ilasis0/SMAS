@@ -8,9 +8,8 @@ import requests
 import yfinance as yf
 from dotenv import load_dotenv
 
-from base import MathTool
 from const import GlobalCol
-from data.const import StockCol, TimeUnit, YfInterval
+from data.const import StockCol
 from data.params import DataLimit
 from debug import dbg
 from ml.const import MacroRawCol
@@ -21,11 +20,7 @@ try:
 except Exception:
     pass
 
-class Fetcher:
-
-    INTRADAY_INDEX = 'Datetime'
-    address = "Asia/Taipei"
-
+class MacroFetcher:
     MAX_RETRIES = 3
     BACKOFF_FACTOR = 2
 
@@ -33,115 +28,10 @@ class Fetcher:
         load_dotenv(PathConfig.ENV_FILE)
         self.finmind_token = os.getenv(GlobalCol.FINMIND_API_KEYS)
 
-    def fetch_daily_data(self, ticker_symbol: str, period: int, unit: str) -> pd.DataFrame:
-        """
-        抓取指定標的的中長期日 K 線歷史資料。
-        """
-        if unit == TimeUnit.YEAR:
-            valid_period = MathTool.clamp(period, 1, DataLimit.DAILY_MAX_YEAR)
-        elif unit == TimeUnit.MONTH:
-            valid_period = MathTool.clamp(period, 1, DataLimit.DAILY_MAX_MONTH)
-        else:
-            dbg.war("時間單位輸入錯誤")
-            return pd.DataFrame()
-
-        ticker = yf.Ticker(ticker_symbol)
-
-        df = self._safe_fetch(
-            ticker,
-            period=f"{valid_period}{unit}",
-            interval=f"{YfInterval.DAILY}",
-            auto_adjust=False,
-            actions=False
-        )
-
-        return self._process_fetched_data(df, ticker_symbol, index_name=StockCol.DATE)
-
-    def fetch_intraday_data(self, ticker_symbol: str, days: int = DataLimit.INTRADAY_DEFAULT_DAY) -> pd.DataFrame:
-        """
-        抓取指定標的的分時資料 (預設 5 分鐘 K 線)。
-        """
-        valid_days = MathTool.clamp(days, 1, DataLimit.INTRADAY_MAX_DAY)
-
-        ticker = yf.Ticker(ticker_symbol)
-
-        df = self._safe_fetch(
-            ticker,
-            period=f"{valid_days}{TimeUnit.DAY}",
-            interval=f"{YfInterval.INTRADAY_5M}",
-            auto_adjust=False,
-            actions=False
-        )
-
-        return self._process_fetched_data(df, ticker_symbol, index_name=self.INTRADAY_INDEX)
-
-    def _process_fetched_data(self, df: pd.DataFrame, ticker_symbol: str, index_name: str) -> pd.DataFrame:
-        """
-        共用資料處理管線：負責欄位改名、對齊、補零與時區校正。
-        """
-        if df.empty:
-            dbg.war(f"[{ticker_symbol}] 抓取失敗或無資料")
-            return pd.DataFrame()
-
-        df.columns = df.columns.str.lower()
-        df.rename(columns={'adj close': StockCol.ADJ_CLOSE}, inplace=True)
-
-        # 防呆：如果 yfinance 沒有給 adj close，就用 close 代替
-        if StockCol.ADJ_CLOSE not in df.columns:
-            df[StockCol.ADJ_CLOSE] = df[StockCol.CLOSE] if StockCol.CLOSE in df.columns else 0.0
-
-        # 確保 OHLCV 欄位順序正確
-        expected_cols = StockCol.get_ohlcv()
-        df = df.reindex(columns=expected_cols).fillna(0)
-
-        df.index.name = index_name
-
-        # 精準時區校正：轉為當地時間並拔除時區標籤
-        if df.index.tz is not None:
-            df.index = df.index.tz_convert(self.address).tz_localize(None)
-
-        return df
-
-    def _safe_fetch(self, ticker: yf.Ticker, **kwargs) -> pd.DataFrame:
-        """
-        核心抓取引擎：內建 Exponential Backoff (指數退避) 重試機制
-        """
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                df = ticker.history(**kwargs)
-                if not df.empty: return df
-
-                history_metadata = getattr(ticker, '_history', None)
-                last_error = "未知 (yfinance 未拋出標準異常)"
-
-                if history_metadata and hasattr(history_metadata, 'errors'):
-                    last_error = history_metadata.errors
-
-                dbg.war(f"❌ [yfinance 偵錯] 伺服器回傳空資料！(嘗試 {attempt + 1}/{self.MAX_RETRIES})")
-                dbg.war(f"   👉 內部可能原因: {last_error}")
-
-                try:
-                    info_keys = list(ticker.info.keys())[:3] if ticker.info else []
-                    dbg.log(f"   ℹ️ Ticker 狀態確認: 代號存在且可連線，部分欄位快照: {info_keys}")
-                except Exception as info_err:
-                    dbg.error(f"   🚨 Ticker 狀態確認失敗 (可能代號不合法或 IP 遭封鎖): {info_err}")
-
-            except Exception as e:
-                dbg.war(f"抓取發生例外錯誤: {e} (嘗試 {attempt + 1}/{self.MAX_RETRIES}):\n{traceback.format_exc()}")
-
-            if attempt < self.MAX_RETRIES - 1:
-                sleep_time = self.BACKOFF_FACTOR ** attempt
-                dbg.log(f"等待 {sleep_time} 秒後重試...")
-                time.sleep(sleep_time)
-            else:
-                dbg.error("已達最大重試次數，放棄抓取。")
-
-        return pd.DataFrame()
-
     def fetch_twse_adl_value(self, days: int = DataLimit.MARKET_DEFAULT_YEAR * 365) -> pd.DataFrame:
         """
         [防禦升級] 利用 FinMind 的「櫃買報酬指數 (TPEx)」完美替代傳統 ADL 騰落指標。
-        🟢 終極破案版：徹底拋棄不穩定的 yfinance，改用 FinMind 官方免費、零時區 Bug 的報酬指數表！
+        終極破案版：徹底拋棄不穩定的 yfinance，改用 FinMind 官方免費、零時區 Bug 的報酬指數表！
         來源: FinMind Open API (TaiwanStockTotalReturnIndex)
         """
         dbg.log("正在透過 FinMind API 獲取櫃買報酬指數 (TPEx) 建立大盤廣度背離指標...")
@@ -256,7 +146,7 @@ class Fetcher:
     def fetch_retail_ls_ratio(self, days: int = DataLimit.MARKET_DEFAULT_YEAR * 365) -> pd.DataFrame:
         """
         [防禦升級] 抓取「散戶小台指期多空比」。
-        🟢 終極破案版：全市場改用 TaiwanFuturesDaily，完美支援 data_id="MTX"！
+        終極破案版：全市場改用 TaiwanFuturesDaily，完美支援 data_id="MTX"！
         來源: FinMind Open API
         """
         dbg.log("正在透過 FinMind API 抓取散戶小台期貨多空部位...")
@@ -298,7 +188,7 @@ class Fetcher:
 
                 # ==========================================
                 # 2. 抓取「全市場」小台指 (MTX) 總未平倉量 (Total Open Interest)
-                # 🟢 修正：改用正宗 TaiwanFuturesDaily 資料集
+                # 修正：改用正宗 TaiwanFuturesDaily 資料集
                 # ==========================================
                 res_total = requests.get(url, params={
                     "dataset": "TaiwanFuturesDaily",  # 依據文檔精準對齊資料集名稱
@@ -314,7 +204,7 @@ class Fetcher:
                 df_total = pd.DataFrame(data_total)
                 df_total['date'] = pd.to_datetime(df_total['date'])
 
-                # 🛠️ TaiwanFuturesDaily 會回傳當天所有不同月份契約的明細
+                # TaiwanFuturesDaily 會回傳當天所有不同月份契約的明細
                 # 直接 groupby('date') 並將 open_interest 加總，就是最精準的全市場總未平倉量！
                 total_oi = df_total.groupby('date')['open_interest'].sum()
 
@@ -342,7 +232,7 @@ class Fetcher:
     def fetch_options_pc_ratio(self, days: int = DataLimit.MARKET_DEFAULT_YEAR * 365) -> pd.DataFrame:
         """
         [防禦升級] 抓取臺期所「臺指選擇權 Put/Call Ratio (未平倉量比率)」。
-        🟢 終極防爆版：採用時間分段抓取法 (Chunked Fetching)，每次只抓 1 年，徹底解決巨量資料造成的 Read timed out。
+        終極防爆版：採用時間分段抓取法 (Chunked Fetching)，每次只抓 1 年，徹底解決巨量資料造成的 Read timed out。
         來源: FinMind Open API (TaiwanOptionDaily)
         """
         dbg.log(f"正在透過 FinMind API 分段抓取歷史選擇權日成交資料 (總計回推 {days} 天)...")
@@ -365,7 +255,7 @@ class Fetcher:
 
             dbg.log(f" ⏳ 正在分批撈取選擇權時段資料: {start_str} 至 {end_str} ...")
 
-            # 🟢 參數對齊：與 fetch_retail_ls_ratio 一致，直接透過 params 傳遞 token
+            # 參數對齊：與 fetch_retail_ls_ratio 一致，直接透過 params 傳遞 token
             params = {
                 "dataset": "TaiwanOptionDaily", # 官方正宗選擇權日成交資料集
                 "data_id": "TXO",               # 臺指選擇權
@@ -411,7 +301,7 @@ class Fetcher:
             df = pd.concat(all_chunks, ignore_index=True)
             df['date'] = pd.to_datetime(df['date'])
 
-            # 🟢 頂級防護：直接用合約關鍵主鍵去重，100% 防止日夜盤重複加總且絕不誤殺
+            # 頂級防護：直接用合約關鍵主鍵去重，100% 防止日夜盤重複加總且絕不誤殺
             df = df.drop_duplicates(subset=['date', 'option_id', 'strike_price', 'call_put'], keep='first')
 
             type_col = 'call_put' if 'call_put' in df.columns else 'type'
@@ -437,7 +327,7 @@ class Fetcher:
             total_call = df_pivot[call_col[0]]
             total_put = df_pivot[put_col[0]]
 
-            # 🟢 公式：Put/Call Ratio = 賣權未平倉量 / 買權未平倉量
+            # 公式：Put/Call Ratio = 賣權未平倉量 / 買權未平倉量
             df_res = pd.DataFrame(index=df_pivot.index)
             df_res[MacroRawCol.PC_RATIO_CLOSE] = total_put / (total_call + 1e-9)
             df_res.index.name = StockCol.DATE
