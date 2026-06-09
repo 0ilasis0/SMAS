@@ -286,18 +286,52 @@ class BacktestEngine:
 
             # 右 Y 軸：大盤 (TWII) 真實走勢 (從 df 中撈取)
             ax4_market = ax4.twinx()
-            twii_ticker = "^TWII"
 
-            # 檢查原始 DataFrame 是否有大盤資料，如果有的話就畫上去
-            if df is not None and twii_ticker in df.columns:
-                twii_data = df.loc[df_res.index, twii_ticker]
-                line_twii, = ax4_market.plot(df_res.index, twii_data, label='TWII Index', color='darkgray', alpha=0.5, linewidth=2)
-                ax4_market.set_ylabel('TWII Score/Price', color='gray')
-                ax4_market.tick_params(axis='y', labelcolor='gray')
+            if df is not None:
+                # 將所有欄位名稱強轉為字串並轉小寫，徹底洗掉 <MacroRawCol...> 雜質
+                df_cleaned_cols = df.copy()
+                df_cleaned_cols.columns = [str(c).strip().lower() for c in df_cleaned_cols.columns]
 
-                ax4.legend([line_mkt, line_thresh, line_twii, danger_patch],
-                           ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'TWII Index', 'Market Danger Zone'], loc='upper left')
+                # 同步處理 Enum 轉字串後的各種變體名稱
+                twii_candidates = [
+                    "twii_close",
+                    "twii_close_col",
+                    "<macrorawcol.adl_value: 'adl_value'>", # 萬一有殘留的字串化 Enum
+                    "twii"
+                ]
+
+                matched_col_idx = None
+                for cand in twii_candidates:
+                    # 在已經清洗小寫化的欄位清單中尋找
+                    if cand in df_cleaned_cols.columns:
+                        # 找到對應在原始 df 中的真實欄位位置索引 (維持大小寫一致性)
+                        matched_col_idx = df.columns[df_cleaned_cols.columns == cand][0]
+                        dbg.error(f"{matched_col_idx}---------------------------")
+                        break
             else:
+                dbg.war("⚠️ [回測圖表偵錯] 傳入的 df 實體為 None，無法繪製大盤走勢！")
+                matched_col_idx = None
+
+            # 檢查原始 DataFrame 是否有大盤收盤價資料
+            if matched_col_idx is not None:
+                try:
+                    # 使用找到的真實索引位置 (例如 'TWII_close') 提取數據
+                    twii_data = df.loc[df_res.index, matched_col_idx]
+
+                    line_twii, = ax4_market.plot(df_res.index, twii_data, label='TWII Index', color='darkgray', alpha=0.5, linewidth=2)
+                    ax4_market.set_ylabel('TWII Index Price', color='gray')
+                    ax4_market.tick_params(axis='y', labelcolor='gray')
+
+                    ax4.legend([line_mkt, line_thresh, line_twii, danger_patch],
+                               ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'TWII Index', 'Market Danger Zone'],
+                               loc='upper left')
+                    dbg.log(f"✅ [圖表對齊成功] 成功使用對齊欄位 '{matched_col_idx}' 繪製第四層大盤現行曲線。")
+                except Exception as chart_err:
+                    dbg.error(f"❌ [圖表繪製異常] 雖然找到欄位 '{matched_col_idx}'，但在對齊時間軸或繪圖時失敗: {chart_err}")
+                    ax4.legend([line_mkt, line_thresh, danger_patch],
+                               ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'Market Danger Zone'], loc='upper left')
+            else:
+                dbg.war(f"⚠️ [圖表對齊失敗] 在可用欄位中找不到任何符合大盤的特徵，第四層將不重疊大盤走勢。")
                 ax4.legend([line_mkt, line_thresh, danger_patch],
                            ['Market Safety Prob', f'Threshold ({dynamic_safe_thresh:.2f})', 'Market Danger Zone'], loc='upper left')
 

@@ -1,6 +1,5 @@
 import os
 import time
-import traceback
 from datetime import datetime, timedelta
 
 import pandas as pd
