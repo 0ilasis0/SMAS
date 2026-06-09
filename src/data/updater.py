@@ -8,6 +8,7 @@ from data.fetcher import Fetcher
 from data.manager import DataManager
 from data.params import DataLimit
 from debug import dbg
+from ml.const import MacroDbKey
 from path import PathConfig
 
 
@@ -78,22 +79,22 @@ class DataUpdater:
             "macro_futures_oi": {
                 "name": "外資台指期未平倉淨部位",
                 "fetch_func": self.fetcher.fetch_foreign_futures_oi,
-                "db_key": "FUTURES_OI"
+                "db_key": MacroDbKey.FUTURES_OI
             },
-            # "macro_retail_ls": {
-            #     "name": "散戶小台多空比",
-            #     "fetch_func": self.fetcher.fetch_retail_ls_ratio,
-            #     "db_key": "RETAIL_LS_RATIO"
-            # },
-            # "macro_pc_ratio": {
-            #     "name": "選擇權 Put/Call Ratio",
-            #     "fetch_func": self.fetcher.fetch_options_pc_ratio,
-            #     "db_key": "PC_RATIO_CLOSE"
-            # },
+            "macro_retail_ls": {
+                "name": "散戶小台多空比",
+                "fetch_func": self.fetcher.fetch_retail_ls_ratio,
+                "db_key": MacroDbKey.RETAIL_LS_RATIO
+            },
+            "macro_pc_ratio": {
+                "name": "選擇權 Put/Call Ratio",
+                "fetch_func": self.fetcher.fetch_options_pc_ratio,
+                "db_key": MacroDbKey.PC_RATIO_CLOSE
+            },
             "macro_adl_value": {
                 "name": "騰落指標 (ADL 替代: 櫃買指數)",
                 "fetch_func": self.fetcher.fetch_twse_adl_value,
-                "db_key": "ADL_VALUE"
+                "db_key": MacroDbKey.ADL_VALUE
             }
         }
 

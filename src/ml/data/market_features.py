@@ -5,7 +5,7 @@ import pandas as pd
 
 from data.const import MacroTicker, StockCol
 from debug import dbg
-from ml.const import MarketFeatureCol
+from ml.const import MacroRawCol, MarketFeatureCol
 from ml.params import IndicatorParams, MarketRiskCriteria
 
 
@@ -25,6 +25,9 @@ class MarketFeatureEngine:
 
         df_market.columns = [str(c).strip().lower() for c in df_market.columns]
 
+        # TODO
+        dbg.error(f"🕵️ [特徵引擎偵錯] 進入特徵引擎的可用欄位: {df_market.columns.tolist()}")
+
         dbg.log("開始計算 LightGBM 大盤防禦特徵 (包含美債與期貨空單)...")
         data = df_market.copy()
         ai_vision_col = str(StockCol.ADJ_CLOSE)
@@ -39,10 +42,10 @@ class MarketFeatureEngine:
         # ==========================================
         sox_close_col = self._get_ticker_col_name(MacroTicker.SOX)
         if sox_close_col in data.columns:
-            data[MarketFeatureCol.SOX_RET_1D] = data[sox_close_col].pct_change()
+            # data[MarketFeatureCol.SOX_RET_1D] = data[sox_close_col].pct_change()
             data[MarketFeatureCol.SOX_RET_5D] = data[sox_close_col].pct_change(periods=5)
         else:
-            data[MarketFeatureCol.SOX_RET_1D] = 0.0
+            # data[MarketFeatureCol.SOX_RET_1D] = 0.0
             data[MarketFeatureCol.SOX_RET_5D] = 0.0
 
         # ==========================================
@@ -64,25 +67,12 @@ class MarketFeatureEngine:
         ema_slow = data[ai_vision_col].ewm(span=self.params.MACD_SLOW, adjust=False).mean()
         data[MarketFeatureCol.TWII_MACD] = (ema_fast - ema_slow) / (data[ai_vision_col] + 1e-9) * 100
 
-        # 成交量取 Log 差分，消除極端節日效應
-        vol_col = str(StockCol.VOLUME)
-        data[MarketFeatureCol.TWII_VOL_CHG] = np.log1p(data[vol_col]) - np.log1p(data[vol_col].shift(1))
-
         prev_close = data[ai_vision_col].shift(1)
         tr1 = data.get(StockCol.HIGH, data[ai_vision_col]) - data.get(StockCol.LOW, data[ai_vision_col])
         tr2 = (data.get(StockCol.HIGH, data[ai_vision_col]) - prev_close).abs()
         tr3 = (data.get(StockCol.LOW, data[ai_vision_col]) - prev_close).abs()
         true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
         data[MarketFeatureCol.TWII_ATR_RATIO] = (true_range / (prev_close + 1e-9)).rolling(window=self.params.MA_WEEK).mean()
-
-        # === 大盤 K 線型態 (判斷大盤恐慌下殺或強勢軋空) ===
-        max_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].max(axis=1)
-        min_open_close = data[[StockCol.OPEN, StockCol.CLOSE]].min(axis=1)
-        price_range = (data.get(StockCol.HIGH, data[StockCol.CLOSE]) - data.get(StockCol.LOW, data[StockCol.CLOSE])).clip(lower=0.01)
-
-        data[MarketFeatureCol.TWII_K_UPPER] = (data[StockCol.HIGH] - max_open_close) / price_range
-        data[MarketFeatureCol.TWII_K_LOWER] = (min_open_close - data[StockCol.LOW]) / price_range
-        data[MarketFeatureCol.TWII_K_BODY] = (data[StockCol.CLOSE] - data.get(StockCol.OPEN, data[StockCol.CLOSE])) / price_range
 
         # ==========================================
         # 4. 總經與籌碼特徵 (VIX, 匯率, 美債, 期貨空單)
@@ -113,15 +103,44 @@ class MarketFeatureEngine:
             dbg.war("未偵測到美債殖利率 (^TNX) 資料，此特徵將補 0。")
             data[MarketFeatureCol.US10Y_SURGE] = 0.0
 
-        # 外資台指期未平倉淨空單 (Futures OI)
-        # 捕捉外資假拉抬、真佈空的台股專屬核彈級前兆
-        futures_oi_col = "futures_oi" # 假設 DataManager 讀取出來的欄位名為此
-        if futures_oi_col in data.columns:
+        # 外資台指期未平倉淨空單
+        if MacroRawCol.FUTURES_NET_OI in data.columns:
             # 同時保留絕對水位，若低於 -20000 絕對是極度危險
-            data[MarketFeatureCol.FUTURES_OI_LEVEL] = data[futures_oi_col]
+            data[MarketFeatureCol.FUTURES_OI_LEVEL] = data[MacroRawCol.FUTURES_NET_OI]
         else:
             dbg.war("未偵測到外資期貨空單 (FUTURES_OI) 資料，此特徵將補 0。")
             data[MarketFeatureCol.FUTURES_OI_LEVEL] = 0.0
+
+        # 散戶小台多空比 (RETAIL_LS_RATIO & RETAIL_LS_SURGE)
+        if MacroRawCol.RETAIL_LS_RATIO in data.columns:
+            data[MarketFeatureCol.RETAIL_LS_RATIO] = data[MacroRawCol.RETAIL_LS_RATIO]
+            # 因為多空比有正有負，使用差分 (diff) 來算斜率比 pct_change 安全，不會因為除以負數而失真
+            data[MarketFeatureCol.RETAIL_LS_SURGE] = data[MacroRawCol.RETAIL_LS_RATIO].diff(periods=3)
+        else:
+            dbg.war("未偵測到 'retail_ls_ratio' 欄位，散戶多空比特徵補 0")
+            data[MarketFeatureCol.RETAIL_LS_RATIO] = 0.0
+            data[MarketFeatureCol.RETAIL_LS_SURGE] = 0.0
+
+        # 選擇權 Put/Call Ratio (PC_RATIO_CLOSE & PC_RATIO_BIAS_20)
+        if MacroRawCol.PC_RATIO_CLOSE in data.columns:
+            data[MarketFeatureCol.PC_RATIO_CLOSE] = data[MacroRawCol.PC_RATIO_CLOSE]
+            # 計算 20 日均線乖離率
+            pc_ma20 = data[MacroRawCol.PC_RATIO_CLOSE].rolling(window=20).mean()
+            data[MarketFeatureCol.PC_RATIO_BIAS_20] = (data[MacroRawCol.PC_RATIO_CLOSE] - pc_ma20) / (pc_ma20 + 1e-9)
+        else:
+            dbg.war("未偵測到 'pc_ratio_close' 欄位，選擇權特徵補 0")
+            data[MarketFeatureCol.PC_RATIO_CLOSE] = 0.0
+            data[MarketFeatureCol.PC_RATIO_BIAS_20] = 0.0
+
+        # 市場廣度背離
+        if MacroRawCol.ADL_VALUE in data.columns:
+            data[MacroRawCol.ADL_VALUE] = data[MacroRawCol.ADL_VALUE].ffill()
+            twii_roc_10 = data[ai_vision_col].pct_change(periods=10)
+            adl_roc_10 = data[MacroRawCol.ADL_VALUE].pct_change(periods=10)
+            data[MarketFeatureCol.TWII_ADL_DIVERGENCE] = twii_roc_10 - adl_roc_10
+        else:
+            dbg.war("未偵測到 'adl_value' 欄位，廣度背離特徵補 0")
+            data[MarketFeatureCol.TWII_ADL_DIVERGENCE] = 0.0
 
         # ==========================================
         # 5. 標籤：預測未來是否會有「大跌」 (Danger = 1)

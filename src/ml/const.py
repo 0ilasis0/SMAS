@@ -102,28 +102,22 @@ class MarketFeatureCol(StrEnum):
     TWII_RSI = "twii_rsi"
     TWII_MACD = "twii_macd"
     TWII_ATR_RATIO = "twii_atr_ratio"   # 波動率 (恐慌度)
-    TWII_VOL_CHG = "twii_vol_chg"
 
     US10Y_SURGE = "us10y_surge"
     FUTURES_OI_LEVEL = "futures_oi_level"
 
     # 籌碼面特徵
-    # RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
-    # RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
+    RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
+    RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
 
     # # 選擇權特徵
-    # PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
-    # PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
+    PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
+    PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
 
     # 廣度背離特徵
     TWII_ADL_DIVERGENCE = "twii_adl_divergence"              # 大盤與 ADL 的量價背離指標
 
-    # 大盤 K 線幾何特徵
-    TWII_K_UPPER = "twii_k_upper"
-    TWII_K_LOWER = "twii_k_lower"
-    TWII_K_BODY = "twii_k_body"
-
-    SOX_RET_1D = "sox_ret_1d"
+    # SOX_RET_1D = "sox_ret_1d"
     SOX_RET_5D = "sox_ret_5d"
     SOX_CLOSE  = "sox_close"
 
@@ -137,6 +131,25 @@ class MarketFeatureCol(StrEnum):
     def get_features(cls) -> list[str]:
         """自動回傳所有特徵名稱 (排除 Target)"""
         return [e.value for e in cls if e.value != cls.TARGET_DANGER.value]
+
+# ==========================================
+# Market用的COL與key
+# ==========================================
+class MacroDbKey(StrEnum):
+    """資料庫 macro_time_series 表中的 metric_name 實體鍵值"""
+    FUTURES_OI = "FUTURES_OI"
+    RETAIL_LS_RATIO = "RETAIL_LS_RATIO"
+    PC_RATIO_CLOSE = "PC_RATIO_CLOSE"
+    ADL_VALUE = "ADL_VALUE"
+
+
+class MacroRawCol(StrEnum):
+    """從資料庫讀出並完成 left join 對齊後的原始大盤/籌碼欄位名稱 (特徵工程的輸入原料)"""
+    FUTURES_NET_OI = "futures_net_oi"
+    RETAIL_LS_RATIO = "retail_ls_ratio"
+    PC_RATIO_CLOSE = "pc_ratio_close"
+    ADL_VALUE = "adl_value"
+
 
 # ==========================================
 # 系統通訊與資料交換定義 (API, Blackboard)

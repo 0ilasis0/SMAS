@@ -6,6 +6,7 @@ import pandas as pd
 
 from data.const import MacroTicker, StockCol
 from debug import dbg
+from ml.const import MacroDbKey, MacroRawCol
 from path import PathConfig
 
 
@@ -209,15 +210,27 @@ class DataManager:
             else:
                 aligned_df = aligned_df.join(df_macro, how='left')
 
-        #  將獨立的宏觀籌碼指標 (如: 外資期指空單) 加入對齊
-        # 注意：我們將這個 Series 命名為 'futures_oi'，這樣 MarketFeatureEngine 才抓得到
-        s_futures_oi = self.get_macro_data("FUTURES_OI")
-        if not s_futures_oi.empty:
-            # 將 Series 轉為 DataFrame，並指定欄位名稱
-            df_futures = s_futures_oi.to_frame(name="futures_oi")
-            macro_cols.append("futures_oi")
-            # 台指期與台股同步開盤，所以不需要像美股那樣 shift(1)
-            aligned_df = aligned_df.join(df_futures, how='left')
+        # 2. 將五大獨立的宏觀籌碼指標加入對齊
+        # 定義 DB Key 與 對應的 DataFrame 欄位名稱 (必須與 MarketFeatureEngine 一致)
+        chip_features = {
+            MacroDbKey.FUTURES_OI: MacroRawCol.FUTURES_NET_OI,
+            MacroDbKey.RETAIL_LS_RATIO: MacroRawCol.RETAIL_LS_RATIO,
+            MacroDbKey.PC_RATIO_CLOSE: MacroRawCol.PC_RATIO_CLOSE,
+            MacroDbKey.ADL_VALUE: MacroRawCol.ADL_VALUE
+        }
+
+        for db_key, col_name in chip_features.items():
+            # 從資料庫提取出該指標的 Series
+            s_chip = self.get_macro_data(db_key)
+            if not s_chip.empty:
+                # 將 Series 轉為 DataFrame，並指定我們需要的欄位名稱
+                df_chip = s_chip.to_frame(name=col_name)
+                macro_cols.append(col_name)
+
+                # 台股本土籌碼與大盤同步開盤，直接使用 left join，無需 shift
+                aligned_df = aligned_df.join(df_chip, how='left')
+            else:
+                dbg.war(f"對齊引擎未能在 DB 找到籌碼指標 [{db_key}]")
 
         # 3. 統一填補所有宏觀資料的假日期缺口 (例如國定假日)
         if macro_cols:
