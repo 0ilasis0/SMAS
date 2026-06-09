@@ -146,11 +146,22 @@ class MarketFeatureEngine:
         # 5. 標籤：預測未來是否會有「大跌」 (Danger = 1)
         # ==========================================
         if is_training:
+            # 取得未來的收盤價與季線 (60日)
             future_close = data[ai_vision_col].shift(-self.lookahead)
-            future_ma20 = data[ai_vision_col].rolling(20).mean().shift(-self.lookahead)
-            future_ret_5d = data[ai_vision_col].pct_change(5).shift(-self.lookahead)
+            future_ma60 = data[ai_vision_col].rolling(60).mean().shift(-self.lookahead)
 
-            danger_condition = (future_close < future_ma20) | (future_ret_5d < -0.01)
+            # 計算未來 N 天的累積漲跌幅
+            future_ret_nd = data[ai_vision_col].pct_change(self.lookahead).shift(-self.lookahead)
+
+            # 🟢 嚴苛化黑天鵝定義：
+            # 條件 A (暴跌)：未來 N 天內，累積跌幅超過 4% (這在台指期代表超過 800 點的回檔)
+            condition_a = (future_ret_nd < -0.04)
+
+            # 條件 B (熊市)：未來收盤價跌破 60 日季線 (中期多空分水嶺)
+            condition_b = (future_close < future_ma60)
+
+            # 模型只會在「暴跌」或「跌破季線」時，才將其標記為危險 (Danger = 1)
+            danger_condition = condition_a | condition_b
 
             data[MarketFeatureCol.TARGET_DANGER] = danger_condition.astype('Int64')
             data.loc[future_close.isna(), MarketFeatureCol.TARGET_DANGER] = pd.NA

@@ -26,11 +26,24 @@ class MathTool:
 
 class MLTool:
     @staticmethod
-    def calculate_scale_weight(y: pd.Series | NDArray) -> float:
-        """計算正負樣本不平衡的權重比例"""
+    def calculate_scale_weight(y: pd.Series | NDArray, adjustment_factor: float = 1.0) -> float:
+        """
+        計算正負樣本不平衡的權重比例
+
+        :param y: 目標標籤陣列
+        :param adjustment_factor: 調整係數 (預設 1.0)。
+                                  若設為 0.5，代表將原始算出的極端權重砍半，
+                                  可用來降低神經質模型的「假陽性 (False Positive)」機率。
+        """
         pos_count = y.sum()
         neg_count = len(y) - pos_count
-        return float(neg_count / pos_count) if pos_count > 0 else 1.0
+
+        if pos_count == 0: return 1.0
+
+        raw_weight = float(neg_count / pos_count)
+        adjusted_weight = max(1.0, raw_weight * adjustment_factor)
+
+        return adjusted_weight
 
     @staticmethod
     def unscale_probability(p_weighted: np.ndarray, weight: float) -> np.ndarray:

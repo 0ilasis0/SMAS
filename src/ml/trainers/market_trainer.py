@@ -130,7 +130,7 @@ class MarketTrainer:
         X = df_clean[features]
         y = df_clean[MarketFeatureCol.TARGET_DANGER].astype(int)
 
-        scale_weight = MLTool.calculate_scale_weight(y)
+        scale_weight = MLTool.calculate_scale_weight(y, adjustment_factor=0.6)
 
         lgbm_params = self.config.to_dict
         lgbm_params[MLCol.N_ESTIMATORS] = self.optimal_trees

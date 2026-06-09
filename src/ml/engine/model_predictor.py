@@ -238,11 +238,11 @@ class ModelPredictor:
             index=df_market_clean.index,
             name=SignalCol.PROB_MARKET_SAFE.value
         )
-
-        # sox_crash_mask = df_market_clean[MarketFeatureCol.SOX_RET_1D] < -0.04
-        # vix_panic_mask = df_market_clean[MarketFeatureCol.VIX_SURGE] > 0.20
-        # panic_mask = sox_crash_mask | vix_panic_mask
-        # prob_market_safe_series.loc[panic_mask] = 0.0
+        # 使用 3 日指數移動平均 (EMA)。
+        # 這意味著：必須連續幾天模型都看壞，安全機率才會真正掉下去。
+        # 單一天的突發性恐慌預測會被平均掉，大幅降低交易成本與誤判率。
+        smooth_span = 3
+        prob_market_safe_series = prob_market_safe_series.ewm(span=smooth_span, adjust=False).mean()
 
         df_backtest = df_raw.copy().join(prob_xgb_series).join(prob_dl_series).join(prob_market_safe_series)
         df_backtest.dropna(subset=[SignalCol.PROB_XGB.value, SignalCol.PROB_DL.value, SignalCol.PROB_MARKET_SAFE.value], inplace=True)

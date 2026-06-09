@@ -61,16 +61,30 @@ class HybridEventFetcher:
 
             if data.get("msg") == StatusCol.SUCCESS and data.get("data"):
                 df_raw = pd.DataFrame(data["data"])
+
+                # 確保除息日欄位存在，否則放棄
+                if "CashExDividendTradingDate" not in df_raw.columns:
+                    dbg.war(f"[{ticker}] FinMind 回傳資料缺失 CashExDividendTradingDate 欄位。")
+                    return pd.DataFrame(), pd.DataFrame()
+
                 # 篩選未來的除息日
                 upcoming = df_raw[df_raw["CashExDividendTradingDate"] >= start_date].copy()
+
                 if not upcoming.empty:
+                    # 總現金股利 = 盈餘分配 + 資本公積，如果該欄位不存在或為空 (NaN)，則補 0.0 後相加
+                    cash_surplus = upcoming.get('CashEarningsDistribution', 0.0).fillna(0.0)
+                    cash_reserve = upcoming.get('CashCapitalReserve', 0.0).fillna(0.0)
+                    total_cash_dividend = cash_surplus + cash_reserve
+
                     df_div = pd.DataFrame({
                         'ticker': ticker,
                         'ex_date': upcoming["CashExDividendTradingDate"],
-                        'cash_dividend': upcoming["CashDividend"]
+                        'cash_dividend': total_cash_dividend
                     })
-                dbg.log(f"[{ticker}] ✅ [FinMind API] 抓取除權息成功！")
+                    dbg.log(f"[{ticker}] ✅ [FinMind API] 抓取除權息成功！")
+
             return df_div, df_earn
+
         except Exception as e:
             dbg.error(f"[{ticker}] ❌ [FinMind API] 發生異常: {e}")
             return pd.DataFrame(), pd.DataFrame()
