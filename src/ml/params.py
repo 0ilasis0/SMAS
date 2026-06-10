@@ -25,7 +25,7 @@ class MarketThresholdConfig:
     # 動態門檻的絕對低標 (防止極端市況下算出太低的機率導致雷達神經過敏)
     ABS_MIN_THRESHOLD: float = 0.25
 
-    # 資料極端異常或計算崩潰時的安全回退門檻 (預設 0.5)
+    # 資料極端異常或計算崩潰時的安全回退門檻
     FALLBACK_THRESHOLD: float = SessionConfig.dynamic_market_threshold
 
 

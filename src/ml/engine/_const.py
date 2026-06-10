@@ -15,13 +15,3 @@ class DataConst:
     # 手動平滑演算法的合理變動倍數邊界
     HEAL_MIN_RATIO: float = 0.05  # 超過這個縮水幅度，視為數值損毀而非除權息
     HEAL_MAX_RATIO: float = 20.0  # 超過這個暴漲幅度，視為數值損毀
-
-@dataclass(frozen=True)
-class CircuitBreakerConfig:
-    """市場極端風險斷路器閥值設定"""
-    # 費半單日暴跌閥值
-    SOX_CRASH_THRESHOLD: float = -0.045
-    # VIX 單日飆升閥值
-    VIX_PANIC_THRESHOLD: float = 0.35
-    # EMA 平滑係數 (用於控制機率波動)
-    SMOOTH_SPAN: int = 3

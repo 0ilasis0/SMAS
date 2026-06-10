@@ -26,11 +26,11 @@ def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
             print(f"\n🔍 [Debug] 開始準備 {ticker} ...")
             engine = QuantAIEngine(ticker=ticker, oos_days=oos_days)
 
-            # 🟢 探測針 1：檢查路徑到底指向哪裡
+            # 探測針 1：檢查路徑到底指向哪裡
             print(f"🔍 [Debug] {ticker} 預期 XGB 路徑: {engine.paths[ModelCol.XGB]}")
             print(f"🔍 [Debug] {ticker} 預期 XGB 檔案是否存在: {Path(engine.paths[ModelCol.XGB]).exists()}")
 
-            # 🟢 探測針 2：攔截載入過程的詳細錯誤
+            # 探測針 2：攔截載入過程的詳細錯誤
             try:
                 load_success = engine.load_inference_models()
                 print(f"🔍 [Debug] {ticker} 模型載入結果: {load_success}")
@@ -43,7 +43,7 @@ def fetch_data_for_optuna(tickers: list[str], oos_days: int) -> dict:
                 df = engine.generate_backtest_data()
                 market_threshold = engine.config.dynamic_market_threshold
 
-                # 🟢 探測針 3：檢查產出的資料狀態
+                # 探測針 3：檢查產出的資料狀態
                 print(f"🔍 [Debug] {ticker} 產出回測資料形狀: {df.shape}")
 
                 if not df.empty:
