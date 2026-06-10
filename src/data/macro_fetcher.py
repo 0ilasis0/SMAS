@@ -1,6 +1,7 @@
 import os
 import time
 from datetime import datetime, timedelta
+from io import StringIO
 
 import pandas as pd
 import requests
@@ -241,3 +242,66 @@ class MacroFetcher:
         except Exception as e:
             dbg.error(f"本地端串接/合成選擇權指標時發生異常: {e}")
             return pd.DataFrame()
+
+    def fetch_us_credit_spread(self, days: int = DataLimit.MARKET_DEFAULT_YEAR * 365) -> pd.DataFrame:
+        start_date = datetime.now() - timedelta(days=days)
+        url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=BAA10Y"
+
+        dbg.log(f"📡 [FRED 診斷] 啟動純淨連線測試 (Timeout=50s，回推 {days} 天)...")
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                # 🟢 調整 1：移除所有 Header 偽裝，使用 Python Requests 原始身分應戰
+                # 🟢 調整 2：將 timeout 分割為 (連線逾時, 讀取逾時) = (15秒, 35秒)，總計 50 秒
+                response = requests.get(url, headers=None, timeout=(15, 35))
+
+                if response.status_code != 200:
+                    dbg.war(f"❌ [FRED 診斷] 伺服器拒絕連線，HTTP 狀態碼: {response.status_code}")
+                    continue
+
+                # 資料解析與清洗
+                df_fred = pd.read_csv(StringIO(response.text))
+                df_fred['DATE'] = pd.to_datetime(df_fred['DATE'], errors='coerce')
+                df_fred = df_fred.dropna(subset=['DATE'])
+                df_fred.set_index('DATE', inplace=True)
+
+                df_fred['BAA10Y'] = pd.to_numeric(df_fred['BAA10Y'], errors='coerce')
+                df_fred = df_fred.ffill()
+
+                df_filtered = df_fred[df_fred.index >= start_date]
+
+                df_res = pd.DataFrame(index=df_filtered.index)
+                df_res[MacroRawCol.US_CREDIT_SPREAD] = df_filtered['BAA10Y'].astype(float)
+
+                dbg.log(f"🎉 [FRED 診斷] 成功突破防線！抓取到 {len(df_res)} 筆歷史資料。")
+                return df_res[[MacroRawCol.US_CREDIT_SPREAD]]
+
+            # ====================================================================
+            # 🚨 核心診斷區：精準攔截不同層級的網路災情
+            # ====================================================================
+            except requests.exceptions.ConnectTimeout:
+                dbg.error(f"❌ [FRED 診斷] (嘗試 {attempt+1}) 發生【連線逾時 (ConnectTimeout)】！")
+                dbg.error("👉 原因：連伺服器的大門都沒摸到。極可能是您的 IP 被 FRED 防火牆直接封鎖，或是節點路由完全不通。")
+
+            except requests.exceptions.ReadTimeout:
+                dbg.error(f"❌ [FRED 診斷] (嘗試 {attempt+1}) 發生【讀取逾時 (ReadTimeout)】！")
+                dbg.error("👉 原因：大門摸到了（交握成功），但伺服器拒絕吐出資料、或故意無限期拖延封包。通常是觸發了人機驗證（WAF 攔截）。")
+
+            except requests.exceptions.SSLError as ssl_err:
+                dbg.error(f"❌ [FRED 診斷] (嘗試 {attempt+1}) 發生【SSL/TLS 握手失敗】！")
+                dbg.error(f"👉 詳情：{ssl_err}")
+                dbg.error("👉 原因：本地 Python 環境的證書庫，與國外伺防護牆的安全協定衝突。")
+
+            except requests.exceptions.ConnectionError as conn_err:
+                dbg.error(f"❌ [FRED 診斷] (嘗試 {attempt+1}) 發生【實體連線錯誤 / DNS 解析失敗】！")
+                dbg.error(f"👉 詳情：{conn_err}")
+
+            except Exception as e:
+                dbg.error(f"❌ [FRED 診斷] (嘗試 {attempt+1}) 遭遇未知的系統級崩潰：{e}")
+                # 🟢 列印出最完整的致命堆疊追蹤，絕不漏看任何細節
+                dbg.error(f"📋 完整 Traceback 詳情：\n{traceback.format_exc()}")
+
+            if attempt < self.MAX_RETRIES - 1:
+                time.sleep(self.BACKOFF_FACTOR ** attempt)
+
+        return pd.DataFrame()

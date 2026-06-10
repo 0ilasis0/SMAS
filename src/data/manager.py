@@ -216,7 +216,8 @@ class DataManager:
             MacroDbKey.FUTURES_OI: MacroRawCol.FUTURES_NET_OI,
             MacroDbKey.RETAIL_LS_RATIO: MacroRawCol.RETAIL_LS_RATIO,
             MacroDbKey.PC_RATIO_CLOSE: MacroRawCol.PC_RATIO_CLOSE,
-            MacroDbKey.ADL_VALUE: MacroRawCol.ADL_VALUE
+            MacroDbKey.ADL_VALUE: MacroRawCol.ADL_VALUE,
+            MacroDbKey.US_CREDIT_SPREAD: MacroRawCol.US_CREDIT_SPREAD
         }
 
         for db_key, col_name in chip_features.items():

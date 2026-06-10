@@ -102,6 +102,11 @@ class DataUpdater:
                 "name": "騰落指標 (ADL 替代: 櫃買指數)",
                 "fetch_func": self.macro_fetcher.fetch_twse_adl_value,
                 "db_key": MacroDbKey.ADL_VALUE
+            },
+            "macro_credit_spread": {
+                "name": "美債信用利差 (FRED)",
+                "fetch_func": self.macro_fetcher.fetch_us_credit_spread,
+                "db_key": MacroDbKey.US_CREDIT_SPREAD
             }
         }
 

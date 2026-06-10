@@ -11,7 +11,7 @@ from ml.params import IndicatorParams, MarketRiskCriteria
 
 class MarketFeatureEngine:
     """
-    大盤/總經大腦的特徵工程 (已升級：股、匯、債、期 四維雷達)。
+    大盤/總經大腦的特徵工程 (股、匯、債、期)。
     專注於合成台股大盤 (^TWII) 與美股費半 (^SOX) 的趨勢指標，並標記崩盤風險。
     """
     def __init__(self, lookahead: int, params: IndicatorParams = IndicatorParams(),
@@ -112,11 +112,11 @@ class MarketFeatureEngine:
         if MacroRawCol.RETAIL_LS_RATIO in data.columns:
             data[MarketFeatureCol.RETAIL_LS_RATIO] = data[MacroRawCol.RETAIL_LS_RATIO]
             # 因為多空比有正有負，使用差分 (diff) 來算斜率比 pct_change 安全，不會因為除以負數而失真
-            data[MarketFeatureCol.RETAIL_LS_SURGE] = data[MacroRawCol.RETAIL_LS_RATIO].diff(periods=3)
+            # data[MarketFeatureCol.RETAIL_LS_SURGE] = data[MacroRawCol.RETAIL_LS_RATIO].diff(periods=3)
         else:
             dbg.war("未偵測到 'retail_ls_ratio' 欄位，散戶多空比特徵補 0")
             data[MarketFeatureCol.RETAIL_LS_RATIO] = 0.0
-            data[MarketFeatureCol.RETAIL_LS_SURGE] = 0.0
+            # data[MarketFeatureCol.RETAIL_LS_SURGE] = 0.0
 
         # 選擇權 Put/Call Ratio (PC_RATIO_CLOSE & PC_RATIO_BIAS_20)
         if MacroRawCol.PC_RATIO_CLOSE in data.columns:
@@ -138,6 +138,23 @@ class MarketFeatureEngine:
         else:
             dbg.war("未偵測到 'adl_value' 欄位，廣度背離特徵補 0")
             data[MarketFeatureCol.TWII_ADL_DIVERGENCE] = 0.0
+
+        # FRED 信用利差動能計算 (Surge)
+        if MacroRawCol.US_CREDIT_SPREAD in data.columns:
+            # 直接保留絕對數值作為特徵之一
+            data[MarketFeatureCol.US_CREDIT_SPREAD] = data[MacroRawCol.US_CREDIT_SPREAD]
+
+            # 計算 Surge (暴衝指標)：今天的利差 減去 20 天前的利差
+            lookback_days = 20
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = (
+                data[MacroRawCol.US_CREDIT_SPREAD] - data[MacroRawCol.US_CREDIT_SPREAD].shift(lookback_days)
+            )
+
+            # 處理剛開始 N 天沒有歷史資料導致的 NaN
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE].fillna(0)
+        else:
+            dbg.war("未偵測到 'US_CREDIT_SPREAD' 欄位，廣度背離特徵補 0")
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = 0.0
 
         # ==========================================
         # 5. 標籤：預測未來是否會有「大跌」 (Danger = 1)

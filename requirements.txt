@@ -1,0 +1,22 @@
+# IDSS 專案核心依賴套件清單 (安全鎖定版)
+seaborn
+pandas<3.0.0
+numpy<2.0.0
+pandas-datareader
+matplotlib
+scikit-learn
+lightgbm
+xgboost
+streamlit
+python-dotenv
+yfinance
+plotly
+requests
+optuna
+tqdm
+torch==2.2.2
+google-generativeai
+google-api-python-client
+sqlalchemy
+typing-extensions
+tenacity<9.0.0

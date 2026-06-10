@@ -108,18 +108,18 @@ class MarketTrainer:
         self.cv_avg_auc = avg_auc
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
 
-        # if cv_importances:
-        #     avg_importance = np.mean(cv_importances, axis=0)
-        #     importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+        if cv_importances:
+            avg_importance = np.mean(cv_importances, axis=0)
+            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-        #     dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
-        #     for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
-        #         dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
 
-        #     dbg.log("\n🗑️ 【Market Brain 貢獻度最低特徵 (Bottom 5)】")
-        #     for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
-        #         # 倒數排名，所以 idx 標示方式稍微不同
-        #         dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("\n🗑️ 【Market Brain 貢獻度最低特徵 (Bottom 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
+                # 倒數排名，所以 idx 標示方式稍微不同
+                dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
 
         return oof_predictions.dropna()
 
@@ -139,6 +139,8 @@ class MarketTrainer:
         # 1. 訓練模型 (這時候讓它看全部資料)
         # ==========================================
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
+        # TODO
+        dbg.error(f"🚨 [訓練集防護檢查] X_train 的實質形狀為: {X.shape}，其中 Target=1 的樣本數為: {np.sum(y == 1)}")
         final_model.fit(X, y)
 
         # ==========================================
