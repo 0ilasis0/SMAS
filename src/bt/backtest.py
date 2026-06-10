@@ -292,22 +292,8 @@ class BacktestEngine:
                 df_cleaned_cols = df.copy()
                 df_cleaned_cols.columns = [str(c).strip().lower() for c in df_cleaned_cols.columns]
 
-                # 同步處理 Enum 轉字串後的各種變體名稱
-                twii_candidates = [
-                    "twii_close",
-                    "twii_close_col",
-                    "<macrorawcol.adl_value: 'adl_value'>", # 萬一有殘留的字串化 Enum
-                    "twii"
-                ]
-
-                matched_col_idx = None
-                for cand in twii_candidates:
-                    # 在已經清洗小寫化的欄位清單中尋找
-                    if cand in df_cleaned_cols.columns:
-                        # 找到對應在原始 df 中的真實欄位位置索引 (維持大小寫一致性)
-                        matched_col_idx = df.columns[df_cleaned_cols.columns == cand][0]
-                        dbg.error(f"{matched_col_idx}---------------------------")
-                        break
+                matched_col_idx = df.columns[df_cleaned_cols.columns == "twii_close"][0]
+                dbg.log(f"{matched_col_idx}---------------------------")
             else:
                 dbg.war("⚠️ [回測圖表偵錯] 傳入的 df 實體為 None，無法繪製大盤走勢！")
                 matched_col_idx = None

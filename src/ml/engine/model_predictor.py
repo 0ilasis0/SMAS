@@ -19,6 +19,8 @@ from ml.trainers.dl_trainer import DLTrainer
 from ml.trainers.market_trainer import MarketTrainer
 from ml.trainers.xgb_trainer import XGBTrainer
 
+from ._const import CircuitBreakerConfig
+
 if TYPE_CHECKING:
     from .core import QuantAIEngine
 
@@ -139,22 +141,28 @@ class ModelPredictor:
             return None
 
         # 1. 取得模型吐出的「膨脹機率」
-        raw_prob_danger = engine.market_model.predict_proba(df_market_clean.loc[[target_date], MarketFeatureCol.get_features()].astype(float).values)[0, 1]
+        market_features = MarketFeatureCol.get_features()
+        raw_prob_danger_array = engine.market_model.predict_proba(
+            df_market_clean[market_features].astype(float).values
+        )[:, 1]
 
         # 2. 取出藏在模型基因裡的「還原金鑰 (權重)」
         weight = getattr(engine.market_model, ModelAttr.TRAIN_SCALE_WEIGHT, 1.0)
 
-        # 3. 呼叫數學公式，將機率精準壓回真實海平面
-        prob_danger = MLTool.unscale_probability(raw_prob_danger, float(weight))
-        prob_market_safe = 1.0 - prob_danger
+        # 3. 陣列化數學還原，並打包成完整的 pandas Series 時間序列
+        prob_danger_array = MLTool.unscale_probability(raw_prob_danger_array, float(weight))
+        # 建立臨時的 Series 以利計算移動平均
+        prob_market_safe_series = pd.Series(
+            1.0 - prob_danger_array,
+            index=df_market_clean.index
+        )
 
-        # # 硬規則斷路器 (Circuit Breaker)
-        # sox_crash = float(df_market_clean[MarketFeatureCol.SOX_RET_1D].iloc[-1]) < -0.04
-        # vix_panic = float(df_market_clean[MarketFeatureCol.VIX_SURGE].iloc[-1]) > 0.20
+        # 4. 獨立防禦模組介入：先進行 3 日 EMA 平滑，再送入斷路器審查
+        prob_market_safe_series = prob_market_safe_series.ewm(span=CircuitBreakerConfig.SMOOTH_SPAN, adjust=False).mean()
+        prob_market_safe_series = self._apply_circuit_breaker(df_market_clean, prob_market_safe_series)
 
-        # if sox_crash or vix_panic:
-        #     prob_market_safe = 0.0  # 強制大盤安全度歸零，啟動最高防禦！
-        #     dbg.war("🚨 偵測到全球極端恐慌特徵 (VIX飆升 或 費半暴跌)！已觸發硬規則斷路器，大盤安全度強制歸零！")
+        # 5. 終端解鎖：精準提取出「今天 (最後一筆)」的平滑安全機率純量
+        prob_market_safe = float(prob_market_safe_series.iloc[-1])
 
         # 總指揮融合
         final_prob = engine.meta_learner.predict_final_probability(prob_xgb, prob_dl)
@@ -185,6 +193,56 @@ class ModelPredictor:
             FeatureCol.BIAS_MONTH.value: float(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.BIAS_MONTH].iloc[-1]) else 0.0,
             FeatureCol.ATR_RATIO.value: float(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) if not pd.isna(df_xgb_clean[FeatureCol.ATR_RATIO].iloc[-1]) else 0.0,
         }
+
+    def _apply_circuit_breaker(self, df_market_clean: pd.DataFrame, prob_market_safe_series: pd.Series) -> pd.Series:
+        """
+        [黑天鵝防禦模組] 終極防爆斷路器
+        直接抓原始收盤價現場計算，絕不引發 KeyError。
+        """
+        if df_market_clean.empty or prob_market_safe_series.empty:
+            return prob_market_safe_series
+
+        sox_crash = False
+        vix_panic = False
+
+        # ====================================================================
+        # 費半 (SOX) 暴跌檢查
+        # ====================================================================
+        sox_ret_1d: str = "sox_ret_1d"
+        if MarketFeatureCol.SOX_CLOSE in df_market_clean.columns and len(df_market_clean) > 1:
+            sox_ret = df_market_clean[MarketFeatureCol.SOX_CLOSE].pct_change().iloc[-1]
+            if pd.notna(sox_ret):
+                sox_crash = float(sox_ret) < CircuitBreakerConfig.SOX_CRASH_THRESHOLD
+
+        # 降級備援：萬一找不到價格，才試著找找看有沒有已經算好的加工特徵
+        elif sox_ret_1d in df_market_clean.columns:
+            sox_crash = float(df_market_clean[sox_ret_1d].iloc[-1]) < CircuitBreakerConfig.SOX_CRASH_THRESHOLD
+
+        else:
+            dbg.error(f"{sox_crash}無法計算也找不到")
+
+        # ====================================================================
+        # 恐慌指數 (VIX) 飆升檢查
+        # ====================================================================
+        vix_surge: str = "vix_surge"
+        if MarketFeatureCol.VIX_CLOSE in df_market_clean.columns and len(df_market_clean) > 1:
+            vix_ret = df_market_clean[MarketFeatureCol.VIX_CLOSE].pct_change().iloc[-1]
+            if pd.notna(vix_ret):
+                vix_panic = float(vix_ret) > CircuitBreakerConfig.VIX_PANIC_THRESHOLD
+
+        elif vix_surge in df_market_clean.columns:
+            vix_panic = float(df_market_clean[vix_surge].iloc[-1]) > CircuitBreakerConfig.VIX_PANIC_THRESHOLD
+        else:
+            dbg.error(f"{vix_surge}無法計算也找不到")
+
+        # ====================================================================
+        # 斷路器一錘定音
+        # ====================================================================
+        if sox_crash or vix_panic:
+            prob_market_safe_series.iloc[-1] = 0.0
+            dbg.war(f"🚨 [核彈級警報] 觸發斷路器！(SOX崩跌或VIX失控)！大盤安全度強行歸零！")
+
+        return prob_market_safe_series
 
     def generate_backtest_data(self) -> pd.DataFrame:
         """批次產生回測資料 (包含預測勝率與大盤安全度)"""
