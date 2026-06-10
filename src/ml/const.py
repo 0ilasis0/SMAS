@@ -106,24 +106,23 @@ class MarketFeatureCol(StrEnum):
     US10Y_SURGE = "us10y_surge"
     FUTURES_OI_LEVEL = "futures_oi_level"
 
-    # 籌碼面特徵
-    RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
-    RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
-
-    # # 選擇權特徵
-    PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
-    PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
-
-    # 廣度背離特徵
-    TWII_ADL_DIVERGENCE = "twii_adl_divergence"              # 大盤與 ADL 的量價背離指標
-
     # SOX_RET_1D = "sox_ret_1d"
     SOX_RET_5D = "sox_ret_5d"
     SOX_CLOSE  = "sox_close"
 
     VIX_CLOSE = "vix_close"
     VIX_SURGE = "vix_surge"
+    SKEW_CLOSE = "skew_close"
     TWD_DEPRECIATION_5D = "twd_depreciation_5d"
+
+    # 籌碼面特徵
+    RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比
+    RETAIL_LS_SURGE = "retail_ls_surge"                      # 散戶多空比 3 日變化斜率
+    # # 選擇權特徵
+    PC_RATIO_CLOSE = "pc_ratio_close"                        # Put/Call Ratio
+    PC_RATIO_BIAS_20 = "pc_ratio_bias_20"                    # P/C Ratio 乖離 (乖離過大代表情緒極端)
+    # 廣度背離特徵
+    TWII_ADL_DIVERGENCE = "twii_adl_divergence"              # 大盤與 ADL 的量價背離指標
 
     TARGET_DANGER = "target_danger"     # 1:危險(將崩盤), 0:安全
 

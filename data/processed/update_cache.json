@@ -29,5 +29,6 @@
     "macro_futures_oi": "2026-06-10",
     "macro_retail_ls": "2026-06-10",
     "macro_pc_ratio": "2026-06-10",
-    "macro_adl_value": "2026-06-10"
+    "macro_adl_value": "2026-06-10",
+    "^SKEW": "2026-06-10"
 }
