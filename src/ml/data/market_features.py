@@ -85,11 +85,11 @@ class MarketFeatureEngine:
             data[MarketFeatureCol.VIX_SURGE] = 0.0
 
         # [台幣匯率]
-        twd_col = self._get_ticker_col_name(MacroTicker.USDTWD)
-        if twd_col in data.columns:
-            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
-        else:
-            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
+        # twd_col = self._get_ticker_col_name(MacroTicker.USDTWD)
+        # if twd_col in data.columns:
+        #     data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
+        # else:
+        #     data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
 
         # 美國 10 年期公債殖利率 (US10Y)
         us10y_col = self._get_ticker_col_name(MacroTicker.US10Y)

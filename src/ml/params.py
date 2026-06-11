@@ -117,7 +117,7 @@ class MarketLGBMConfig:
     max_depth: int = 4
     num_leaves: int = 12             # 限制葉子數以防過擬合
     min_child_samples: int = 25      # 確保每個節點有足夠樣本
-    min_split_gain: float = 0.4   # 門檻，強迫模型只抓強訊號
+    min_split_gain: float = 0.2      # 門檻，強迫模型只抓強訊號
 
     # 學習與正則化
     learning_rate: float = 0.005

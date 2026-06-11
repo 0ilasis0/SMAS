@@ -113,7 +113,7 @@ class MarketFeatureCol(StrEnum):
     VIX_CLOSE = "vix_close"
     VIX_SURGE = "vix_surge"
     SKEW_CLOSE = "skew_close"
-    TWD_DEPRECIATION_5D = "twd_depreciation_5d"
+    # TWD_DEPRECIATION_5D = "twd_depreciation_5d"
 
     # 籌碼面特徵
     RETAIL_LS_RATIO = "retail_ls_ratio"                      # 散戶小台多空比

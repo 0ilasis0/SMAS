@@ -38,7 +38,7 @@ class MacroTicker(StrEnum):
     SOX = "^SOX"    # 費城半導體指數 (海外，需處理時差)
     SKEW = "^SKEW"
     VIX = "^VIX"
-    USDTWD = "TWD=X"
+    # USDTWD = "TWD=X"
     HYG = "HYG"
     IEF = "IEF"
 
