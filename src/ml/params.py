@@ -25,7 +25,7 @@ class MarketThresholdConfig:
     # 動態門檻的絕對低標 (防止極端市況下算出太低的機率導致雷達神經過敏)
     ABS_MIN_THRESHOLD: float = 0.25
 
-    # 資料極端異常或計算崩潰時的安全回退門檻 (預設 0.5)
+    # 資料極端異常或計算崩潰時的安全回退門檻
     FALLBACK_THRESHOLD: float = SessionConfig.dynamic_market_threshold
 
 
@@ -116,11 +116,11 @@ class MarketLGBMConfig:
     # 核心結構參數
     max_depth: int = 4
     num_leaves: int = 12             # 限制葉子數以防過擬合
-    min_child_samples: int = 37      # 確保每個節點有足夠樣本
-    min_split_gain: float = 0.7391   # 門檻，強迫模型只抓強訊號
+    min_child_samples: int = 25      # 確保每個節點有足夠樣本
+    min_split_gain: float = 0.2      # 門檻，強迫模型只抓強訊號
 
     # 學習與正則化
-    learning_rate: float = 0.015
+    learning_rate: float = 0.005
     n_estimators: int = 1000
     subsample: float = 0.6027
     colsample_bytree: float = 0.473 # (對應 feature_fraction)

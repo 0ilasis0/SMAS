@@ -11,7 +11,7 @@ from ml.params import IndicatorParams, MarketRiskCriteria
 
 class MarketFeatureEngine:
     """
-    大盤/總經大腦的特徵工程 (已升級：股、匯、債、期 四維雷達)。
+    大盤/總經大腦的特徵工程 (股、匯、債、期)。
     專注於合成台股大盤 (^TWII) 與美股費半 (^SOX) 的趨勢指標，並標記崩盤風險。
     """
     def __init__(self, lookahead: int, params: IndicatorParams = IndicatorParams(),
@@ -85,11 +85,11 @@ class MarketFeatureEngine:
             data[MarketFeatureCol.VIX_SURGE] = 0.0
 
         # [台幣匯率]
-        twd_col = self._get_ticker_col_name(MacroTicker.USDTWD)
-        if twd_col in data.columns:
-            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
-        else:
-            data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
+        # twd_col = self._get_ticker_col_name(MacroTicker.USDTWD)
+        # if twd_col in data.columns:
+        #     data[MarketFeatureCol.TWD_DEPRECIATION_5D] = data[twd_col].pct_change(periods=5)
+        # else:
+        #     data[MarketFeatureCol.TWD_DEPRECIATION_5D] = 0.0
 
         # 美國 10 年期公債殖利率 (US10Y)
         us10y_col = self._get_ticker_col_name(MacroTicker.US10Y)
@@ -112,11 +112,11 @@ class MarketFeatureEngine:
         if MacroRawCol.RETAIL_LS_RATIO in data.columns:
             data[MarketFeatureCol.RETAIL_LS_RATIO] = data[MacroRawCol.RETAIL_LS_RATIO]
             # 因為多空比有正有負，使用差分 (diff) 來算斜率比 pct_change 安全，不會因為除以負數而失真
-            data[MarketFeatureCol.RETAIL_LS_SURGE] = data[MacroRawCol.RETAIL_LS_RATIO].diff(periods=3)
+            # data[MarketFeatureCol.RETAIL_LS_SURGE] = data[MacroRawCol.RETAIL_LS_RATIO].diff(periods=3)
         else:
             dbg.war("未偵測到 'retail_ls_ratio' 欄位，散戶多空比特徵補 0")
             data[MarketFeatureCol.RETAIL_LS_RATIO] = 0.0
-            data[MarketFeatureCol.RETAIL_LS_SURGE] = 0.0
+            # data[MarketFeatureCol.RETAIL_LS_SURGE] = 0.0
 
         # 選擇權 Put/Call Ratio (PC_RATIO_CLOSE & PC_RATIO_BIAS_20)
         if MacroRawCol.PC_RATIO_CLOSE in data.columns:
@@ -139,6 +139,25 @@ class MarketFeatureEngine:
             dbg.war("未偵測到 'adl_value' 欄位，廣度背離特徵補 0")
             data[MarketFeatureCol.TWII_ADL_DIVERGENCE] = 0.0
 
+        # 由 yfinance 組裝的信用風險動能
+
+        hyg_col = self._get_ticker_col_name(MacroTicker.HYG)
+        ief_col = self._get_ticker_col_name(MacroTicker.IEF)
+        if hyg_col in data.columns and ief_col in data.columns:
+            dbg.log(f"✅ [特徵偵錯] 成功找到 {hyg_col} 與 {ief_col}，開始計算信用風險比值...")
+
+            # 計算這個比值的 20 日變動率 (Surge)
+            lookback_days = 20
+            data[MarketFeatureCol.US_CREDIT_SPREAD] = data[hyg_col] / data[ief_col]
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = (
+                data[MarketFeatureCol.US_CREDIT_SPREAD] - data[MarketFeatureCol.US_CREDIT_SPREAD].shift(lookback_days)
+            )
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE].fillna(0)
+        else:
+            dbg.war(f"❌ [特徵偵錯] 找不到 {hyg_col} 或 {ief_col}！跳過計算，特徵補 0。")
+            data[MarketFeatureCol.US_CREDIT_SPREAD] = 0.0
+            data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = 0.0
+
         # ==========================================
         # 5. 標籤：預測未來是否會有「大跌」 (Danger = 1)
         # ==========================================
@@ -150,7 +169,7 @@ class MarketFeatureEngine:
             # 計算未來 N 天的累積漲跌幅
             future_ret_nd = data[ai_vision_col].pct_change(self.lookahead).shift(-self.lookahead)
 
-            # 🟢 嚴苛化黑天鵝定義：
+            # 嚴苛化黑天鵝定義：
             # 條件 A (暴跌)：未來 N 天內，累積跌幅超過 4% (這在台指期代表超過 800 點的回檔)
             condition_a = (future_ret_nd < -0.04)
 

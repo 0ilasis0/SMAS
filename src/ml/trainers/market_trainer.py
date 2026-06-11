@@ -108,18 +108,18 @@ class MarketTrainer:
         self.cv_avg_auc = avg_auc
         dbg.log(f"【Market Brain CV 結果】平均崩盤預測 AUC: {avg_auc:.4f}")
 
-        # if cv_importances:
-        #     avg_importance = np.mean(cv_importances, axis=0)
-        #     importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
+        if cv_importances:
+            avg_importance = np.mean(cv_importances, axis=0)
+            importance_series = pd.Series(avg_importance, index=features).sort_values(ascending=False)
 
-        #     dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
-        #     for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
-        #         dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("\n🏆 【Market Brain 崩盤預測核心特徵 (Top 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.head(5).items(), 1):
+                dbg.log(f"  {idx}. {feat_name}: {imp_score:.4f}")
 
-        #     dbg.log("\n🗑️ 【Market Brain 貢獻度最低特徵 (Bottom 5)】")
-        #     for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
-        #         # 倒數排名，所以 idx 標示方式稍微不同
-        #         dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
+            dbg.log("\n🗑️ 【Market Brain 貢獻度最低特徵 (Bottom 5)】")
+            for idx, (feat_name, imp_score) in enumerate(importance_series.tail(5).items(), 1):
+                # 倒數排名，所以 idx 標示方式稍微不同
+                dbg.log(f"  倒數 {6-idx}. {feat_name}: {imp_score:.4f}")
 
         return oof_predictions.dropna()
 
@@ -155,7 +155,7 @@ class MarketTrainer:
 
         final_model.train_scale_weight = float(scale_weight)
 
-        dbg.log(f"✅ 已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
+        dbg.log(f"已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
 
         # ==========================================
         # 3. 儲存具備最強權重與真實防禦參數的終極模型

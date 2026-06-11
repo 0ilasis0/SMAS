@@ -19,7 +19,7 @@ from ml.trainers.dl_trainer import DLTrainer
 from ml.trainers.market_trainer import MarketTrainer
 from ml.trainers.xgb_trainer import XGBTrainer
 
-from ._const import CircuitBreakerConfig
+from ._params import CircuitBreakerConfig
 
 if TYPE_CHECKING:
     from .core import QuantAIEngine
@@ -202,45 +202,45 @@ class ModelPredictor:
         if df_market_clean.empty or prob_market_safe_series.empty:
             return prob_market_safe_series
 
+        if len(df_market_clean) > 1:
+            dbg.error(f"len(df_market_clean) = {len(df_market_clean)} > 1")
+            return prob_market_safe_series
+
         sox_crash = False
         vix_panic = False
 
         # ====================================================================
         # 費半 (SOX) 暴跌檢查
         # ====================================================================
-        sox_ret_1d: str = "sox_ret_1d"
         if MarketFeatureCol.SOX_CLOSE in df_market_clean.columns and len(df_market_clean) > 1:
-            sox_ret = df_market_clean[MarketFeatureCol.SOX_CLOSE].pct_change().iloc[-1]
-            if pd.notna(sox_ret):
+            sox_valid = df_market_clean[MarketFeatureCol.SOX_CLOSE].dropna()
+            if len(sox_valid) > 1:
+                sox_ret = sox_valid.pct_change().iloc[-1]
                 sox_crash = float(sox_ret) < CircuitBreakerConfig.SOX_CRASH_THRESHOLD
-
-        # 降級備援：萬一找不到價格，才試著找找看有沒有已經算好的加工特徵
-        elif sox_ret_1d in df_market_clean.columns:
-            sox_crash = float(df_market_clean[sox_ret_1d].iloc[-1]) < CircuitBreakerConfig.SOX_CRASH_THRESHOLD
-
         else:
-            dbg.error(f"{sox_crash}無法計算也找不到")
+            dbg.error(f"{MarketFeatureCol.SOX_CLOSE}不在{df_market_clean.columns}")
 
         # ====================================================================
         # 恐慌指數 (VIX) 飆升檢查
         # ====================================================================
-        vix_surge: str = "vix_surge"
         if MarketFeatureCol.VIX_CLOSE in df_market_clean.columns and len(df_market_clean) > 1:
-            vix_ret = df_market_clean[MarketFeatureCol.VIX_CLOSE].pct_change().iloc[-1]
-            if pd.notna(vix_ret):
+            vix_valid = df_market_clean[MarketFeatureCol.VIX_CLOSE].dropna()
+            if len(vix_valid) > 1:
+                vix_ret = vix_valid.pct_change().iloc[-1]
                 vix_panic = float(vix_ret) > CircuitBreakerConfig.VIX_PANIC_THRESHOLD
-
-        elif vix_surge in df_market_clean.columns:
-            vix_panic = float(df_market_clean[vix_surge].iloc[-1]) > CircuitBreakerConfig.VIX_PANIC_THRESHOLD
         else:
-            dbg.error(f"{vix_surge}無法計算也找不到")
+            dbg.error(f"{MarketFeatureCol.VIX_CLOSE}不在{df_market_clean.columns}")
 
         # ====================================================================
         # 斷路器一錘定音
         # ====================================================================
         if sox_crash or vix_panic:
             prob_market_safe_series.iloc[-1] = 0.0
-            dbg.war(f"🚨 [核彈級警報] 觸發斷路器！(SOX崩跌或VIX失控)！大盤安全度強行歸零！")
+
+            trigger_reasons = []
+            if sox_crash: trigger_reasons.append("費半崩跌")
+            if vix_panic: trigger_reasons.append("VIX失控")
+            dbg.war(f"🚨 [核彈級警報] 觸發斷路器 ({' / '.join(trigger_reasons)})！大盤安全度強行歸零！")
 
         return prob_market_safe_series
 
