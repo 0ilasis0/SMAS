@@ -64,10 +64,10 @@ def render_portfolio_page(db_manager=None):
 
         if sp_pnl >= 0:
             pnl_str = f"獲利: +${sp_pnl:,.0f}"
-            icon = "🟢"
+            icon = "🔴"
         else:
             pnl_str = f"虧損: -${abs(sp_pnl):,.0f}"
-            icon = "🔴"
+            icon = "🟢"
 
         gap = "\u3000\u3000|\u3000\u3000"
         expander_title = f"📦 名稱：{sp.name}{gap}市值: ${sp_market_val:,.0f}{gap}{icon} {pnl_str}"
@@ -122,7 +122,7 @@ def render_portfolio_page(db_manager=None):
                     pnl = market_val - cost_val
                     pnl_pct = (pnl / cost_val) if cost_val > 0 else 0.0
 
-                    pnl_color = "#00cc66" if pnl >= 0 else "#ff4b4b"
+                    pnl_color = "#ff4b4b" if pnl >= 0 else "#00cc66"
                     pnl_text = f"<span style='color: {pnl_color}; font-weight: bold;'>${pnl:,.0f} ({pnl_pct:.2%})</span>"
                     ch_name = name_map.get(ticker, "")
 
