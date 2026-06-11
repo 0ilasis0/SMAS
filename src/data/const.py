@@ -39,11 +39,13 @@ class MacroTicker(StrEnum):
     SKEW = "^SKEW"
     VIX = "^VIX"
     USDTWD = "TWD=X"
+    HYG = "HYG"
+    IEF = "IEF"
 
     @classmethod
     def get_overseas_tickers(cls) -> list[str]:
         """回傳需要進行 T-1 時差處理的海外標的"""
-        return [cls.SOX, cls.VIX, cls.SKEW]
+        return [cls.SOX, cls.VIX, cls.SKEW, cls.HYG, cls.IEF]
 
     @classmethod
     def get_auxiliary_tickers(cls) -> list[str]:

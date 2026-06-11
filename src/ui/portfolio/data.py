@@ -49,33 +49,6 @@ def load_portfolio() -> Account:
     return account
 
 
-# TODO，如果最近都沒事就刪除
-# def _migrate_legacy_to_v2(legacy_data: dict) -> Account:
-#     account = Account()
-#     # 舊版的 GLOBAL_CASH 變成新版的 total_cash
-#     account.total_cash = legacy_data.get(PortfolioCol.GLOBAL_CASH.value, 0.0)
-
-#     # 建立一個「預設組合包」來收留舊資產
-#     legacy_sp = SubPortfolio(
-#         name="預設組合",
-#         use_shared_cash=True, # 預設使用共用總資金
-#         allocated_cash=0.0
-#     )
-
-#     legacy_sp.watch_tickers = []
-
-#     # 轉移庫存
-#     positions_data = legacy_data.get(PortfolioCol.POSITIONS.value, {})
-#     for ticker, pos_dict in positions_data.items():
-#         legacy_sp.positions[ticker] = Position(
-#             shares=pos_dict.get(PortfolioCol.SHARES.value, 0),
-#             avg_cost=pos_dict.get(PortfolioCol.AVG_COST.value, 0.0),
-#             history=pos_dict.get(PortfolioCol.HISTORY.value, [])
-#         )
-
-#     account.sub_portfolios["Legacy_Portfolio_01"] = legacy_sp
-#     return account
-
 def save_portfolio(account: Account):
     """將 Account 物件序列化回 JSON 儲存 (v2 格式)"""
     try:

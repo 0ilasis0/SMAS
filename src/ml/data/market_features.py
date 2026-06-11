@@ -139,21 +139,23 @@ class MarketFeatureEngine:
             dbg.war("未偵測到 'adl_value' 欄位，廣度背離特徵補 0")
             data[MarketFeatureCol.TWII_ADL_DIVERGENCE] = 0.0
 
-        # FRED 信用利差動能計算 (Surge)
-        if MacroRawCol.US_CREDIT_SPREAD in data.columns:
-            # 直接保留絕對數值作為特徵之一
-            data[MarketFeatureCol.US_CREDIT_SPREAD] = data[MacroRawCol.US_CREDIT_SPREAD]
+        # 由 yfinance 組裝的信用風險動能
 
-            # 計算 Surge (暴衝指標)：今天的利差 減去 20 天前的利差
+        hyg_col = self._get_ticker_col_name(MacroTicker.HYG)
+        ief_col = self._get_ticker_col_name(MacroTicker.IEF)
+        if hyg_col in data.columns and ief_col in data.columns:
+            dbg.log(f"✅ [特徵偵錯] 成功找到 {hyg_col} 與 {ief_col}，開始計算信用風險比值...")
+
+            # 計算這個比值的 20 日變動率 (Surge)
             lookback_days = 20
+            data[MarketFeatureCol.US_CREDIT_SPREAD] = data[hyg_col] / data[ief_col]
             data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = (
-                data[MacroRawCol.US_CREDIT_SPREAD] - data[MacroRawCol.US_CREDIT_SPREAD].shift(lookback_days)
+                data[MarketFeatureCol.US_CREDIT_SPREAD] - data[MarketFeatureCol.US_CREDIT_SPREAD].shift(lookback_days)
             )
-
-            # 處理剛開始 N 天沒有歷史資料導致的 NaN
             data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE].fillna(0)
         else:
-            dbg.war("未偵測到 'US_CREDIT_SPREAD' 欄位，廣度背離特徵補 0")
+            dbg.war(f"❌ [特徵偵錯] 找不到 {hyg_col} 或 {ief_col}！跳過計算，特徵補 0。")
+            data[MarketFeatureCol.US_CREDIT_SPREAD] = 0.0
             data[MarketFeatureCol.US_CREDIT_SPREAD_SURGE] = 0.0
 
         # ==========================================
@@ -167,7 +169,7 @@ class MarketFeatureEngine:
             # 計算未來 N 天的累積漲跌幅
             future_ret_nd = data[ai_vision_col].pct_change(self.lookahead).shift(-self.lookahead)
 
-            # 🟢 嚴苛化黑天鵝定義：
+            # 嚴苛化黑天鵝定義：
             # 條件 A (暴跌)：未來 N 天內，累積跌幅超過 4% (這在台指期代表超過 800 點的回檔)
             condition_a = (future_ret_nd < -0.04)
 

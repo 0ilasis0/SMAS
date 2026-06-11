@@ -139,8 +139,6 @@ class MarketTrainer:
         # 1. 訓練模型 (這時候讓它看全部資料)
         # ==========================================
         final_model = lgb.LGBMClassifier(**lgbm_params, scale_pos_weight=scale_weight)
-        # TODO
-        dbg.error(f"🚨 [訓練集防護檢查] X_train 的實質形狀為: {X.shape}，其中 Target=1 的樣本數為: {np.sum(y == 1)}")
         final_model.fit(X, y)
 
         # ==========================================
@@ -157,7 +155,7 @@ class MarketTrainer:
 
         final_model.train_scale_weight = float(scale_weight)
 
-        dbg.log(f"✅ 已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
+        dbg.log(f"已將真實 OOF 門檻 [{final_model.dynamic_threshold:.4f}] 寫入模型基因中 (AUC: {final_model.val_auc:.4f})。")
 
         # ==========================================
         # 3. 儲存具備最強權重與真實防禦參數的終極模型
