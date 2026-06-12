@@ -1,19 +1,15 @@
-import os
 import time
 from datetime import datetime, timedelta
-from io import StringIO
 
 import pandas as pd
 import requests
 import yfinance as yf
-from dotenv import load_dotenv
 
-from const import GlobalCol
+from base import KeyManager
 from data.const import StockCol
 from data.params import DataLimit
 from debug import dbg
 from ml.const import MacroRawCol
-from path import PathConfig
 
 try:
     _ = yf.Ticker("SPY").history(period="1d")
@@ -26,38 +22,79 @@ class MacroFetcher:
     FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 
     def __init__(self) -> None:
-        load_dotenv(PathConfig.ENV_FILE)
-        self.finmind_token = os.getenv(GlobalCol.FINMIND_API_KEYS)
+        self.current_key_index = 0
+
+        self.finmind_keys_pool = KeyManager.get_finmind_keys()
+        if not self.finmind_keys_pool:
+            dbg.war("⚠️ 找不到任何 FinMind 金鑰，將以無金鑰模式運行 (受限速保護)。")
+
+    def _rotate_key(self) -> bool:
+        """
+        切換到下一把金鑰。
+        回傳 True 代表切換成功；回傳 False 代表所有金鑰都用盡了。
+        """
+        if not self.finmind_keys_pool:
+            return False
+
+        self.current_key_index += 1
+
+        # 如果索引超出清單長度，代表整把鑰匙串都試過了
+        if self.current_key_index >= len(self.finmind_keys_pool):
+            dbg.error("❌ 所有 FinMind 金鑰皆已耗盡或遭到限制！本次管線將中斷。")
+            return False
+
+        dbg.log(f"🔄 偵測到 FinMind Token 受限，已自動切換至備用金鑰 (目前使用第 {self.current_key_index + 1}/{len(self.finmind_keys_pool)} 把)")
+        return True
 
     # 共用的底層 API 抓取與重試引擎
     def _fetch_from_finmind(self, params: dict, api_name: str, timeout: int = 10) -> list:
         """
-        統一處理 FinMind API 的連線、重試、防爆與資料提取邏輯。
+        統一處理 FinMind API 的連線、重試、Token 輪替與資料提取邏輯。
         回傳 JSON 內的 'data' 陣列；若徹底失敗則回傳空陣列 []。
         """
-        # 自動補上 Token 防呆
-        if "token" not in params:
-            params["token"] = self.finmind_token
+        # 決定最大重試次數：取預設網路重試次數與金鑰池大小的最大值
+        max_attempts = max(self.MAX_RETRIES, len(self.finmind_keys_pool) if self.finmind_keys_pool else 1)
+        attempt = 0
 
-        for attempt in range(self.MAX_RETRIES):
+        while attempt < max_attempts:
+            # 動態綁定目前生效的 Token (如果在無金鑰模式，則留空)
+            if self.finmind_keys_pool:
+                params["token"] = self.finmind_keys_pool[self.current_key_index]
+
             try:
                 response = requests.get(self.FINMIND_URL, params=params, timeout=timeout)
                 response.raise_for_status()
                 data = response.json()
 
-                if data.get("msg") == "success" or "data" in data:
+                if data.get("msg") == "You have reached your daily limit" or data.get("status") == 403:
+                    dbg.war(f"[{api_name}] ⚠️ Token 遭拒或已達上限 (回應碼: {data.get('status')})")
+
+                    if self._rotate_key():
+                        attempt += 1
+                        continue # 帶著新金鑰，重新發送請求
+                    else:
+                        break # 金鑰全數陣亡，跳出迴圈
+
+                # 正常取得資料
+                elif data.get("msg") == "success" or "data" in data:
                     return data.get("data", [])
+
+                # 其他 API 格式異常
                 else:
                     dbg.war(f"[{api_name}] API 回傳格式異常: {data}")
                     return []
 
-            except Exception as e:
-                dbg.war(f"[{api_name}] 抓取失敗 (嘗試 {attempt + 1}/{self.MAX_RETRIES}): {e}")
+            except requests.exceptions.RequestException as e:
+                dbg.war(f"[{api_name}] 網路連線或讀取失敗 (嘗試 {attempt + 1}/{max_attempts}): {e}")
+                # 網路異常時，觸發時間退避 (Exponential Backoff) 而不急著換金鑰
+                if attempt < max_attempts - 1:
+                    time.sleep(self.BACKOFF_FACTOR ** attempt)
+                    attempt += 1
+                    continue
+                else:
+                    break
 
-            if attempt < self.MAX_RETRIES - 1:
-                time.sleep(self.BACKOFF_FACTOR ** attempt)
-
-        dbg.error(f"❌ [{api_name}] 連線重試耗盡，放棄抓取。")
+        dbg.error(f"❌ [{api_name}] 連線重試與金鑰皆耗盡，放棄抓取。")
         return []
 
     # ==========================================
