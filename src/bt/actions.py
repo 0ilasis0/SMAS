@@ -10,9 +10,10 @@ from bt.params import TaxRate
 from debug import dbg
 
 
+# 用於買賣限制倍率(單位：股)
 @dataclass(frozen=True)
 class ActionVar:
-    TRADE_UNIT: int = 1000
+    TRADE_UNIT: int = 1
 
 # ==========================================
 # 交易動作節點 (虛擬交易執行)
