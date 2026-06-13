@@ -8,7 +8,6 @@ import pandas as pd
 import torch
 from sklearn.metrics import accuracy_score, roc_auc_score
 
-from app import sync_market_data
 from bt.backtest import BacktestEngine
 from bt.strategy_config import PersonaFactory, TradingPersona
 from data.const import MacroTicker, StockCol
@@ -17,6 +16,7 @@ from ml.const import DLModelType, FeatureCol, RNNType, SignalCol
 from ml.data.xgb_features import XGBFeatureEngine
 from ml.engine import QuantAIEngine
 from path import PathConfig
+from ui.utils import sync_market_data
 
 dbg.toggle()
 

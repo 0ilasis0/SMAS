@@ -326,16 +326,3 @@ class IDSSController:
 
             APIKey.REPORT.value: bb.gemini_reasoning if bb.gemini_reasoning else f"系統決策為: {action_str}"
         }
-
-    # def sync_market_data(self) -> bool:
-    #     dbg.log(f"[{self.ticker}] 接收 UI 指令：啟動例行市場資料同步...")
-    #     try:
-    #         updater = DataUpdater(self.engine.db)
-    #         success = updater.update_market_data(ticker=self.ticker, force_sync=True)
-
-    #         if success: dbg.log(f"[{self.ticker}] 資料庫同步完成！最新收盤資料已就緒。")
-    #         else: dbg.error(f"[{self.ticker}] 同步失敗，請檢查網路連線或 API 狀態。")
-    #         return success
-    #     except Exception as e:
-    #         dbg.error(f"[{self.ticker}] 資料同步過程中發生未預期錯誤: {e}")
-    #         return False

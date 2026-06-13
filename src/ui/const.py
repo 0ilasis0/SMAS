@@ -36,6 +36,8 @@ class SessionKey(StrEnum):
     UI_MODE = "ui_mode"
     LAST_RESULT = "last_result"
     CURRENT_SUB_PORTFOLIO = "current_sub_portfolio"
+    BATCH_DF_SUMMARY = "batch_df_summary"
+    BATCH_ALL_REPORTS = "batch_all_reports"
 
 
 class APIKey(StrEnum):

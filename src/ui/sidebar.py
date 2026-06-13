@@ -94,7 +94,7 @@ def render_sidebar() -> tuple[TradingPersona, TradingMode]:
                             msg_placeholder.warning(f"⚠️ {smart_ticker} 已經在此組合包中了！")
                         else:
                             current_sp.watch_tickers.append(smart_ticker)
-                            save_portfolio(account) # 存檔！
+                            save_portfolio(account)
                             st.session_state[SessionKey.PORTFOLIO.value] = account
 
                             if st.session_state.get(SessionKey.CURRENT_TICKER.value) is None:

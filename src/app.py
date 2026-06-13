@@ -14,54 +14,26 @@ from bt.const import TradeDecision
 from const import StatusCol
 from controller import IDSSController
 from data.manager import DataManager
-from data.updater import DataUpdater
 from debug import dbg
 from ml.const import MetricsCol, ModelAttr
 from ml.engine import QuantAIEngine
 from ml.params import MLDefault
+from pipeline.batch_report_pipeline import BatchReportPipeline
 from ui.backtest import render_backtest_tab
 from ui.chart import render_chart
 from ui.const import APIKey, Page, SessionKey
 from ui.params import BacktestParams
-from ui.portfolio import (load_portfolio, render_portfolio_page,
-                          save_portfolio, trade_dialog)
+from ui.portfolio import load_portfolio, render_portfolio_page, trade_dialog
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
+from ui.utils import sync_market_data
 
 if TYPE_CHECKING:
     from bt.account import Account
 
 class APPCol(StrEnum):
     HAS_AUTO_UPDATED_KEY = "has_auto_updated"
-
-
-def sync_market_data(ticker: str, force_wipe: bool = False, force_sync: bool = False) -> bool:
-    """
-    獨立的資料同步管線：負責抓取個股、大盤與企業事件 (法說會/除權息)
-    force_wipe：本地端舊資料要不要刪除
-    force_sync：今天明明已經抓過資料了，還要不要強行去網路再抓一次（覆蓋）
-    """
-    dbg.log(f"[{ticker}] 啟動後台獨立資料同步管線 (Wipe={force_wipe}, Sync={force_sync})...")
-
-    try:
-        data_mg = DataManager()
-        updater = DataUpdater(data_mg)
-
-        success = updater.update_market_data(ticker=ticker, force_wipe=force_wipe, force_sync=force_sync)
-
-        if success:
-            dbg.log(f"[{ticker}] 後台管線同步成功！資料庫已為最新狀態。")
-        else:
-            dbg.error(f"[{ticker}] 後台管線同步失敗，請檢查網路連線或 API 流量限制。")
-
-        return success
-
-    except Exception as e:
-        error_details = traceback.format_exc()
-        dbg.error(f"[{ticker}] 獨立資料同步過程中發生未預期崩潰: {e}\n追蹤:\n{error_details}")
-
-        return False
 
 
 def run_mlops_pipeline(ticker: str):
@@ -215,6 +187,41 @@ def main():
 
         if db_manager is None:
             db_manager = DataManager()
+
+        account: "Account" = st.session_state.get(SessionKey.PORTFOLIO.value)
+        current_sp_name = st.session_state.get(SessionKey.CURRENT_SUB_PORTFOLIO.value)
+
+        if account and current_sp_name:
+            current_sp = account.get_sub_portfolio(current_sp_name)
+
+            if current_sp.watch_tickers:
+                st.markdown("### ⚡ 量化作戰指揮中心")
+
+                if st.button("🚀 一鍵生成今日作戰總表 (掃描當前組合包關注清單)", type="primary"):
+                    with st.spinner(f"正在批次分析 {len(current_sp.watch_tickers)} 檔標的..."):
+                        pipeline = BatchReportPipeline(
+                            account=account,
+                            sp_id=current_sp_name,
+                            persona=selected_persona
+                        )
+                        df_summary, all_reports = pipeline.run(sync_data=False)
+
+                        # 2. 將結果存入 Session
+                        st.session_state[SessionKey.BATCH_DF_SUMMARY] = df_summary
+                        st.session_state[SessionKey.BATCH_ALL_REPORTS] = all_reports
+                    st.rerun()
+
+                # 3. 呼叫 UI 模組負責渲染畫面 (完全把畫 UI 的髒活交給 View)
+                if SessionKey.BATCH_DF_SUMMARY in st.session_state and not st.session_state[SessionKey.BATCH_DF_SUMMARY].empty:
+                    from ui.batch_report_view import render_batch_report
+                    render_batch_report(
+                        df_summary=st.session_state[SessionKey.BATCH_DF_SUMMARY],
+                        all_reports=st.session_state[SessionKey.BATCH_ALL_REPORTS]
+                    )
+                st.markdown("---")
+
+            render_portfolio_page(db_manager)
+            return
 
         render_portfolio_page(db_manager)
         return  # 渲染完資產管理就直接結束，不往下跑決策大廳的邏輯
