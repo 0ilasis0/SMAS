@@ -199,11 +199,7 @@ class ModelPredictor:
         [黑天鵝防禦模組] 終極防爆斷路器
         直接抓原始收盤價現場計算，絕不引發 KeyError。
         """
-        if df_market_clean.empty or prob_market_safe_series.empty:
-            return prob_market_safe_series
-
-        if len(df_market_clean) > 1:
-            dbg.error(f"len(df_market_clean) = {len(df_market_clean)} > 1")
+        if df_market_clean.empty or prob_market_safe_series.empty or len(df_market_clean) < 2:
             return prob_market_safe_series
 
         sox_crash = False

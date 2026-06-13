@@ -231,21 +231,16 @@ def main():
     current_sp = account.get_sub_portfolio(current_sp_name)
     current_ticker = st.session_state.get(SessionKey.CURRENT_TICKER.value)
 
-    active_tickers = list(set(current_sp.watch_tickers) | set(current_sp.positions.keys()))
+    active_tickers = current_sp.watch_tickers
 
     if current_ticker not in active_tickers:
         if active_tickers:
-            # 如果組合包有股票 (不管是自選還是庫存)，強制切換成第一檔
+            # 強制切換成自選單內的第一檔
             current_ticker = sorted(active_tickers)[0]
             st.session_state[SessionKey.CURRENT_TICKER.value] = current_ticker
             st.session_state[SessionKey.CTRL_LIVE.value] = None
-
-            # 如果這檔股票有庫存，卻不在自選單裡，順手幫您補回去並存檔
-            if current_ticker not in current_sp.watch_tickers:
-                current_sp.watch_tickers.append(current_ticker)
-                save_portfolio(account)
         else:
-            # 如果組合包真的完全沒有自選股也沒有庫存，強制變成 None
+            # 如果自選單全空
             current_ticker = None
             st.session_state[SessionKey.CURRENT_TICKER.value] = None
             st.session_state[SessionKey.CTRL_LIVE.value] = None
