@@ -41,7 +41,7 @@ def render_batch_report(df_summary: pd.DataFrame, all_reports: list, name_map: d
     st.markdown("### 🎯 今日作戰建議總表")
 
     # 1. 渲染頂部智慧排序與高亮的總結表格
-    styled_df = df_summary.style.apply(highlight_action, axis=1)
+    styled_df = display_df.style.apply(highlight_action, axis=1)
     st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
     st.markdown("---")

@@ -209,12 +209,10 @@ def main():
                         )
                         df_summary, all_reports = pipeline.run(sync_data=False)
 
-                        # 2. 將結果存入 Session
                         st.session_state[SessionKey.BATCH_DF_SUMMARY] = df_summary
                         st.session_state[SessionKey.BATCH_ALL_REPORTS] = all_reports
                     st.rerun()
 
-                # 3. 呼叫 UI 模組負責渲染畫面 (完全把畫 UI 的髒活交給 View)
                 if SessionKey.BATCH_DF_SUMMARY in st.session_state and not st.session_state[SessionKey.BATCH_DF_SUMMARY].empty:
                     render_batch_report(
                         df_summary=st.session_state[SessionKey.BATCH_DF_SUMMARY],
@@ -227,7 +225,7 @@ def main():
             return
 
         render_portfolio_page(db_manager=db_manager)
-        return  # 渲染完資產管理就直接結束，不往下跑決策大廳的邏輯
+        return
 
     # ==========================================
     # 進入 IDSS 決策大廳 (Dashboard)
