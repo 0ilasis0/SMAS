@@ -287,6 +287,7 @@ def main():
 
     # 從「當前組合包」提取該股票的部位狀態
     pos_obj = current_sp.get_position(current_ticker)
+    ch_name = name_map.get(current_ticker, "")
     my_shares = pos_obj.shares
     my_avg_cost = pos_obj.avg_cost
 
@@ -294,7 +295,7 @@ def main():
 
     title_col, btn_col = st.columns([3, 1])
     with title_col:
-        st.title(f"📊 IDSS 決策大廳 - {current_ticker}")
+        st.title(f"📊 IDSS 決策大廳 - [{ch_name}  {current_ticker}]")
         st.caption(f"📂 目前操作組合包：**【{current_sp.name}】**")
 
     with btn_col:
