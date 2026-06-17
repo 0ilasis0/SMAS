@@ -20,6 +20,7 @@ from ml.engine import QuantAIEngine
 from ml.params import MLDefault
 from pipeline.batch_report_pipeline import BatchReportPipeline
 from ui.backtest import render_backtest_tab
+from ui.batch_report_view import render_batch_report
 from ui.chart import render_chart
 from ui.const import APIKey, Page, SessionKey
 from ui.params import BacktestParams
@@ -27,6 +28,7 @@ from ui.portfolio import load_portfolio, render_portfolio_page, trade_dialog
 from ui.report import render_report
 from ui.sidebar import render_sidebar
 from ui.state import init_session_state
+from ui.stock_names import get_tw_stock_mapping
 from ui.utils import sync_market_data
 
 if TYPE_CHECKING:
@@ -139,7 +141,8 @@ def run_global_mlops_pipeline():
 # ==========================================
 def main():
     init_session_state()
-    selected_persona = render_sidebar()
+    name_map = get_tw_stock_mapping()
+    selected_persona = render_sidebar(name_map=name_map)
 
     if not st.session_state.get(APPCol.HAS_AUTO_UPDATED_KEY, False):
         st.toast("🔄 系統首次啟動：正在檢查並同步最新市場收盤資料...", icon="⏳")
@@ -213,17 +216,17 @@ def main():
 
                 # 3. 呼叫 UI 模組負責渲染畫面 (完全把畫 UI 的髒活交給 View)
                 if SessionKey.BATCH_DF_SUMMARY in st.session_state and not st.session_state[SessionKey.BATCH_DF_SUMMARY].empty:
-                    from ui.batch_report_view import render_batch_report
                     render_batch_report(
                         df_summary=st.session_state[SessionKey.BATCH_DF_SUMMARY],
-                        all_reports=st.session_state[SessionKey.BATCH_ALL_REPORTS]
+                        all_reports=st.session_state[SessionKey.BATCH_ALL_REPORTS],
+                        name_map=name_map
                     )
                 st.markdown("---")
 
-            render_portfolio_page(db_manager)
+            render_portfolio_page(db_manager=db_manager)
             return
 
-        render_portfolio_page(db_manager)
+        render_portfolio_page(db_manager=db_manager)
         return  # 渲染完資產管理就直接結束，不往下跑決策大廳的邏輯
 
     # ==========================================

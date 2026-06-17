@@ -3,7 +3,6 @@ import streamlit as st
 from bt.account import Account
 from data.const import StockCol
 from ui.const import SessionKey
-from ui.stock_names import get_tw_stock_mapping
 
 from .data import load_portfolio
 from .dialogs import (cash_operation_dialog, create_sub_portfolio_dialog,
@@ -11,7 +10,7 @@ from .dialogs import (cash_operation_dialog, create_sub_portfolio_dialog,
                       sub_portfolio_settings_dialog, trade_dialog)
 
 
-def render_portfolio_page(db_manager=None):
+def render_portfolio_page(db_manager = None, name_map: dict = None):
     st.title("💼 資產管理中心")
 
     account: Account = st.session_state.get(SessionKey.PORTFOLIO.value, load_portfolio())
@@ -51,8 +50,6 @@ def render_portfolio_page(db_manager=None):
     if not account.sub_portfolios:
         st.info("目前尚無任何組合包。點擊右上方「➕ 新增組合包」開始建立您的第一個投資組合！")
         return
-
-    name_map = get_tw_stock_mapping()
 
     # ==========================================
     # 迴圈渲染每個組合包

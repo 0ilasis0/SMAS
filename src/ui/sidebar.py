@@ -9,15 +9,12 @@ from ui.base import get_smart_tw_ticker
 from ui.const import Page, SessionKey
 from ui.portfolio import load_portfolio, save_portfolio
 from ui.state import on_ticker_change, reset_result, save_settings
-from ui.stock_names import get_tw_stock_mapping
 
 
-def render_sidebar() -> tuple[TradingPersona, TradingMode]:
+def render_sidebar(name_map: dict) -> tuple[TradingPersona, TradingMode]:
     # 讀取當前的鎖定狀態
     is_locked = st.session_state.get(SessionKey.IS_TRAINING.value, False) or \
                 st.session_state.get(SessionKey.IS_GLOBAL_TRAINING.value, False)
-
-    name_map = get_tw_stock_mapping()
 
     if SessionKey.PORTFOLIO.value not in st.session_state:
         st.session_state[SessionKey.PORTFOLIO.value] = load_portfolio()

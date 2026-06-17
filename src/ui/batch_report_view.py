@@ -24,13 +24,19 @@ def highlight_action(row):
     return [bg_color] * len(row)
 
 
-def render_batch_report(df_summary: pd.DataFrame, all_reports: list):
+def render_batch_report(df_summary: pd.DataFrame, all_reports: list, name_map: dict):
     """
     渲染批次決策總表與各標的詳細摺疊財報
     """
     if df_summary.empty or not all_reports:
         st.info("目前尚無批次報告資料。")
         return
+
+    display_df = df_summary.copy()
+    if "標的" in display_df.columns:
+        display_df["標的"] = display_df["標的"].apply(
+            lambda x: f"{x} {name_map.get(x, '')}".strip()
+        )
 
     st.markdown("### 🎯 今日作戰建議總表")
 
@@ -46,8 +52,10 @@ def render_batch_report(df_summary: pd.DataFrame, all_reports: list):
         ticker = rep['ticker']
         action = rep['action']
 
+        ch_name = name_map.get(ticker, "")
         icon = "🛒" if action == TradeDecision.BUY.value else "💸" if action == TradeDecision.SELL.value else "🛡️"
 
-        with st.expander(f"{icon} 【{ticker}】 AI 決策：{action}"):
-            # 直接將單檔數據塞入原有的渲染引擎，畫面完全一致
+        title = f"{icon} 【{ticker} {ch_name}】 AI 決策：{action}"
+
+        with st.expander(title.strip()):
             render_report(rep['raw_result'])
