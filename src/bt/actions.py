@@ -1,19 +1,13 @@
-from dataclasses import dataclass
-
 import pandas as pd
 
 from base import MathTool
 from bt.blackboard import Blackboard
+from bt.config import OrderRule
 from bt.const import BlackboardKey, BTAction, TradeDecision
 from bt.core import ActionNode, NodeState
 from bt.params import TaxRate
 from debug import dbg
 
-
-# 用於買賣限制倍率(單位：股)
-@dataclass(frozen=True)
-class ActionVar:
-    TRADE_UNIT: int = 1
 
 # ==========================================
 # 交易動作節點 (虛擬交易執行)
@@ -54,7 +48,7 @@ class ExecuteBuyNode(ActionNode):
         max_liquidity_shares = int(vol * 0.05)
         raw_shares = min(raw_shares, max_liquidity_shares)
 
-        shares_to_buy = (raw_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
+        shares_to_buy = (raw_shares // OrderRule.LOT_SIZE) * OrderRule.LOT_SIZE
 
         if shares_to_buy <= 0:
             dbg.war(f"買進失敗: 欲買 0 股。預算={usable_cash:.0f}, 股價={price:.2f}, 流動性上限={max_liquidity_shares}股")
@@ -108,9 +102,9 @@ class ExecuteSellNode(ActionNode):
             shares_to_sell = position
         else:
             raw_shares = int(position * self.position_ratio)
-            shares_to_sell = (raw_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
+            shares_to_sell = (raw_shares // OrderRule.LOT_SIZE) * OrderRule.LOT_SIZE
             if shares_to_sell == 0 and raw_shares > 0:
-                shares_to_sell = min(position, ActionVar.TRADE_UNIT)
+                shares_to_sell = min(position, OrderRule.LOT_SIZE)
 
         drop_rate = (price - blackboard.current_price) / blackboard.current_price
         if drop_rate <= -0.095:
@@ -120,7 +114,7 @@ class ExecuteSellNode(ActionNode):
         max_liquidity_shares = int(blackboard.daily_volume * 0.05)
         if shares_to_sell > max_liquidity_shares:
             dbg.war(f"賣出量 ({shares_to_sell}) 超過市場流動性上限 ({max_liquidity_shares})，僅能部分成交！")
-            shares_to_sell = (max_liquidity_shares // ActionVar.TRADE_UNIT) * ActionVar.TRADE_UNIT
+            shares_to_sell = (max_liquidity_shares // OrderRule.LOT_SIZE) * OrderRule.LOT_SIZE
 
         if shares_to_sell <= 0:
             return NodeState.FAILURE
