@@ -71,21 +71,21 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str, ma
         # 激進型：容忍深跌、買進門檻極低、無視大盤
         sl_bounds = (-0.20, -0.08)
         buy_bounds = (0.45, 0.6)
-        safe_bounds = (0.35, 0.55)
+        safe_bounds = (0.6, 0.7)
         profit_bounds = (0.15, 0.35)
 
     elif persona_mode == TradingPersona.MODERATE:
         # 穩健型 (MODERATE)
         sl_bounds = (-0.12, -0.05)
         buy_bounds = (0.48, 0.58)
-        safe_bounds = (0.43, 0.51)
+        safe_bounds = (0.6, 0.8)
         profit_bounds = (0.1, 0.25)
 
     elif persona_mode == TradingPersona.CONSERVATIVE:
         # 保守型：嚴格停損、要求極高勝率、大盤必須安全
         sl_bounds = (-0.08, -0.02)
         buy_bounds = (0.52, 0.62)
-        safe_bounds = (0.45, 0.55)
+        safe_bounds = (0.6, 0.85)
         profit_bounds = (0.03, 0.15)
 
     # [防守參數]
@@ -252,7 +252,14 @@ def objective(trial, data_dict: dict, initial_cash: float, persona_mode: str, ma
 
     return final_score
 
-def run_optimization(test_tickers: list, target_persona: str, target_total_trials: int, initial_cash: int = 2_000_000, oos_days: int = 240):
+def run_optimization(
+        test_tickers: list,
+        target_persona: str,
+        target_total_trials: int,
+        path: Path,
+        initial_cash: int = 2_000_000,
+        oos_days: int = 240
+    ):
     print("="*60)
     print(f"🚀 IDSS 全維度尋優引擎啟動 | 目標性格: [{target_persona.upper()}]")
     print("="*60)
@@ -262,11 +269,9 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
 
     optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-    PathConfig.REPORT_RESULT.mkdir(parents=True, exist_ok=True)
-    db_path = PathConfig.REPORT_RESULT / "idss_optuna_study.db"
-    db_url = f"sqlite:///{db_path.absolute().as_posix()}?timeout=60"
+    db_url = f"sqlite:///{path.absolute().as_posix()}?timeout=60"
 
-    print(f"📁 尋優資料庫連結至: {db_path.name}")
+    print(f"📁 尋優資料庫連結至: {path.name}")
 
     # 根據選擇的性格，建立不同的 Study Name，這樣資料庫才不會混在一起
     study_name = f"IDSS_{target_persona.capitalize()}_Baseline"
@@ -316,9 +321,10 @@ def run_optimization(test_tickers: list, target_persona: str, target_total_trial
     print("="*60)
 
 if __name__ == "__main__":
+    db_path = PathConfig.REPORT_RESULT / "idss_optuna_study.db"
     # 這裡設定您這次想要找哪一種性格！
     # 可以填入: TradingPersona.AGGRESSIVE, TradingPersona.MODERATE, 或 TradingPersona.CONSERVATIVE
-    target_persona = TradingPersona.CONSERVATIVE
+    target_persona = TradingPersona.MODERATE
     target_total_trials = 1250
     initial_cash: int = 2_000_000
 
@@ -340,5 +346,6 @@ if __name__ == "__main__":
         test_tickers=train_tickers,
         target_persona = target_persona,
         target_total_trials=target_total_trials,
+        path=db_path,
         initial_cash=initial_cash
     )

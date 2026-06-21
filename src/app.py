@@ -221,10 +221,10 @@ def main():
                     )
                 st.markdown("---")
 
-            render_portfolio_page(db_manager=db_manager)
+            render_portfolio_page(db_manager=db_manager, name_map=name_map)
             return
 
-        render_portfolio_page(db_manager=db_manager)
+        render_portfolio_page(db_manager=db_manager, name_map=name_map)
         return
 
     # ==========================================

@@ -35,11 +35,11 @@ class StrategyConfig:
     strong_buy_threshold: float = 0.52         # 強烈買進門檻 (原: 0.52)
     conservative_buy_threshold: float = 0.48   # 保守買進門檻 (原: 0.49)
 
-    strong_buy_capital_ratio: float = 0.8     # 強勢滿倉重壓 (原: 1.0)
+    strong_buy_capital_ratio: float = 0.8      # 強勢滿倉重壓 (原: 1.0)
     conservative_buy_capital_ratio: float = 0.5# 保守買進比例 (原: 0.5)
 
     # ================= [大盤防禦雷達門檻] =================
-    safe_threshold: float = 0.55               # 大盤安全度 (原: 0.54)
+    safe_threshold: float = 0.63                # 大盤安全度 (原: 0.54)
     cooldown_days: int = 1                     # 交易冷卻天數 (原: 2)
 
     max_return_5d: float = 0.27                # 5日漲幅上限 (原: 0.16)
@@ -119,33 +119,34 @@ class PersonaFactory:
             # 激進型：策略特徵：單次重擊不加碼、超寬的停利空間讓利潤奔跑、遇到危險分批撤退。
             return StrategyConfig(
                 # ================= [防守參數] =================
-                stop_loss_tolerance=-0.20,        # 容忍 8% 虧損 (原: -0.19)
-                trailing_stop_drawdown=-0.17,     # 高檔回落 17% 就跑 (原: -0.16)
-                take_profit_target=0.23,          # 賺 23% 開始分批停利 (原: 0.24)
-                take_profit_sell_ratio=0.70,      # 停利時賣 70% (原: 0.3)
-                stop_loss_sell_ratio=1.00,        # 停損時賣 100% (原: 0.8)
-                sell_signal_threshold=0.32,       # AI 預警門檻 (原: 0.31)
-                warning_sell_ratio=0.50,          # AI 預警時減碼 50% (原: 0.7)
+                stop_loss_tolerance=-0.19,         # 容忍 19% 虧損
+                trailing_stop_drawdown=-0.19,      # 高檔回落 19% 就跑
+                take_profit_target=0.28,           # 賺 28% 開始分批停利
+                take_profit_sell_ratio=0.7,        # 停利時賣 70%
+                stop_loss_sell_ratio=1.0,          # 停損時賣 100%
+                sell_signal_threshold=0.35,        # AI 預警門檻
+                warning_sell_ratio=1.0,            # AI 預警時減碼 100%
 
                 # ================= [進攻參數] =================
-                max_entries=2,                    # 限制進場次數 (原: 3)
-                max_gap_ratio=0.04,               # 容忍 4% 缺口 (原: 0.10)
+                max_entries=2,                     # 限制進場次數
+                max_gap_ratio=0.07,                # 容忍 7% 缺口
 
-                strong_buy_threshold=0.49,        # 強勢買進門檻 (原: 0.49)
-                conservative_buy_threshold=0.46,  # 保守買進門檻 (原: 0.46)
+                # 註：此處依據新參數將原 strong/conservative 門檻統一為 0.46
+                strong_buy_threshold=0.46,         # 強勢買進門檻
+                conservative_buy_threshold=0.5,   # 保守買進門檻
 
-                strong_buy_capital_ratio=1.00,    # 強勢重壓 100% (原: 1.0)
-                conservative_buy_capital_ratio=0.5,# 保守買進 50% (原: 0.6)
+                strong_buy_capital_ratio=1.0,      # 強勢重壓 100%
+                conservative_buy_capital_ratio=0.7,# 保守買進 70%
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.47,              # 大盤安全度 (原: 0.53)
-                cooldown_days=2,                  # 停損後冷卻天數 (原: 1)
-                max_return_5d=0.29,               # 5日漲幅上限 (原: 0.32)
-                max_bias_20=0.15,                 # 20日乖離上限 (原: 0.28)
+                safe_threshold=0.6,                # 大盤安全度
+                cooldown_days=2,                   # 停損後冷卻天數
+                max_return_5d=0.15,                # 5日漲幅上限
+                max_bias_20=0.26,                  # 20日乖離上限
 
                 # ================= [動態風控水位參數] =================
-                buy_risk=RiskWeights(heavy=0.15, light=0.09), # 買進懲罰 (原: heavy=0.25, light=0.09)
-                sell_risk=RiskWeights(heavy=0.06, light=0.04), # 賣出敏感度 (原: heavy=0.14, light=0.09)
+                buy_risk=RiskWeights(heavy=0.1, light=0.08),   # 買進懲罰
+                sell_risk=RiskWeights(heavy=0.1, light=0.1),   # 賣出敏感度
 
                 # ================= [智慧定價參數 (手動設定維持不變)] =================
                 buy_panic_discount_atr=0.5,
@@ -182,7 +183,7 @@ class PersonaFactory:
                 conservative_buy_capital_ratio=0.60, # 保守買進資金比例 (原: 0.4)
 
                 # ================= [大盤防禦參數] =================
-                safe_threshold=0.55,              # 大盤安全度 (原: 0.54)
+                safe_threshold=0.63,              # 大盤安全度 (原: 0.54)
                 cooldown_days=1,                  # 停損後冷卻天數 (原: 5)
                 max_return_5d=0.26,               # 5日漲幅上限 (原: 0.23)
                 max_bias_20=0.14,                 # 20日乖離率上限 (原: 0.27)
